@@ -166,6 +166,31 @@ impl Client {
         self.send(|| Ok(self.req(reqwest::Method::DELETE, &format!("/transcriptions/{id}")))).map(drop)
     }
 
+    /// Usage log entries (one per request) between two moments, at most 31 days apart.
+    pub fn usage_logs(&self, from: std::time::SystemTime, to: std::time::SystemTime) -> Result<Vec<Value>> {
+        let (from, to) = (humantime::format_rfc3339_seconds(from).to_string(), humantime::format_rfc3339_seconds(to).to_string());
+        let mut out = Vec::new();
+        let mut cursor: Option<String> = None;
+        loop {
+            let v: Value = self
+                .send(|| {
+                    let mut r = self
+                        .req(reqwest::Method::GET, "/usage-logs")
+                        .query(&[("start_time", from.as_str()), ("end_time", to.as_str()), ("limit", "1000")]);
+                    if let Some(c) = &cursor {
+                        r = r.query(&[("cursor", c)]);
+                    }
+                    Ok(r)
+                })?
+                .json()?;
+            out.extend(v["usage_logs"].as_array().into_iter().flatten().cloned());
+            match v["next_page_cursor"].as_str() {
+                Some(c) if !c.is_empty() => cursor = Some(c.to_string()),
+                _ => return Ok(out),
+            }
+        }
+    }
+
     /// All ids of a paginated collection ("files" or "transcriptions"), with a short description each.
     pub fn list(&self, what: &str) -> Result<Vec<(String, String)>> {
         let mut out = Vec::new();
@@ -204,13 +229,14 @@ pub fn transcription_config(
     strict: bool,
     diarization: bool,
     context: Option<&str>,
+    reference: &str,
 ) -> Value {
     let mut cfg = json!({
         "model": model,
         "file_id": file_id,
         "enable_speaker_diarization": diarization,
         "enable_language_identification": langs.len() != 1,
-        "client_reference_id": "sonisub",
+        "client_reference_id": reference,
     });
     let langs: Vec<&String> = langs.iter().filter(|l| !l.is_empty()).collect();
     if !langs.is_empty() {

@@ -40,6 +40,8 @@ pub struct Options {
     pub poll: Duration,
     /// Printed before progress lines, e.g. "[2/5]".
     pub prefix: String,
+    /// Sent to Soniox as `client_reference_id`, to find this run's cost in the usage logs.
+    pub reference: String,
 }
 
 impl Default for Options {
@@ -58,6 +60,7 @@ impl Default for Options {
             layout: srt::Layout::default(),
             poll: Duration::from_secs(3),
             prefix: String::new(),
+            reference: "sonisub".into(),
         }
     }
 }
@@ -65,7 +68,8 @@ impl Default for Options {
 #[derive(Debug)]
 pub enum Outcome {
     /// Subtitles written. `cached`: the transcript came from an existing `.soniox.json`, no API call.
-    Written { srt: PathBuf, cues: usize, json: Option<PathBuf>, cached: bool },
+    /// `uploaded_s`: seconds of audio sent to Soniox (what is paid for).
+    Written { srt: PathBuf, cues: usize, json: Option<PathBuf>, cached: bool, uploaded_s: Option<f64> },
     /// The .srt already exists and `force` is off.
     Skipped { srt: PathBuf },
     /// Nothing to transcribe: no audio track, or a track without samples.
@@ -73,7 +77,17 @@ pub enum Outcome {
     /// Audio is there but has no words: digital silence (detected locally, never uploaded),
     /// or Soniox found nothing. No .srt is written; in the latter case the empty transcript is kept
     /// as `marker` so later runs don't pay for the same file again.
-    NoSpeech { marker: Option<PathBuf>, cached: bool },
+    NoSpeech { marker: Option<PathBuf>, cached: bool, uploaded_s: Option<f64> },
+}
+
+impl Outcome {
+    /// Seconds of audio this call sent to Soniox.
+    pub fn uploaded_s(&self) -> Option<f64> {
+        match self {
+            Outcome::Written { uploaded_s, .. } | Outcome::NoSpeech { uploaded_s, .. } => *uploaded_s,
+            _ => None,
+        }
+    }
 }
 
 /// Where the transcript for `output` is kept: `clip.srt` -> `clip.soniox.json`.
@@ -82,8 +96,8 @@ pub fn transcript_path(output: &Path) -> PathBuf {
 }
 
 enum Source {
-    /// Fresh from Soniox.
-    Api(Value),
+    /// Fresh from Soniox, with the seconds of audio sent.
+    Api(Value, f64),
     /// Saved earlier next to the output.
     Cache(Value, PathBuf),
     /// The input itself is a transcript.
@@ -115,8 +129,8 @@ pub fn process(input: &Path, output: &Path, opts: &Options, client: Option<&Clie
     } else {
         let client = client.ok_or_else(soniox::missing_key)?;
         match transcribe(input, opts, client) {
-            Ok(Some(t)) => Source::Api(t),
-            Ok(None) => return Ok(Outcome::NoSpeech { marker: None, cached: false }),
+            Ok(Some((t, secs))) => Source::Api(t, secs),
+            Ok(None) => return Ok(Outcome::NoSpeech { marker: None, cached: false, uploaded_s: None }),
             Err(e) => match e.downcast::<audio::NoAudio>() {
                 Ok(no) => return Ok(Outcome::NoAudio { reason: no.0 }),
                 Err(e) => return Err(e),
@@ -124,27 +138,27 @@ pub fn process(input: &Path, output: &Path, opts: &Options, client: Option<&Clie
         }
     };
 
-    let (transcript, json, cached) = match source {
-        Source::Input(t) => (t, None, false),
-        Source::Cache(t, path) => (t, Some(path), true),
-        Source::Api(t) => {
+    let (transcript, json, cached, uploaded_s) = match source {
+        Source::Input(t) => (t, None, false, None),
+        Source::Cache(t, path) => (t, Some(path), true, None),
+        Source::Api(t, secs) => {
             // An empty transcript is always kept: it is the "already checked, no speech" marker.
             let keep = opts.keep_json || !srt::has_speech(&t);
             if keep {
                 std::fs::write(&cache, serde_json::to_string_pretty(&t)?)
                     .with_context(|| format!("cannot write {}", cache.display()))?;
             }
-            (t, keep.then_some(cache), false)
+            (t, keep.then_some(cache), false, Some(secs))
         }
     };
 
     if !srt::has_speech(&transcript) {
-        return Ok(Outcome::NoSpeech { marker: json, cached });
+        return Ok(Outcome::NoSpeech { marker: json, cached, uploaded_s });
     }
     let layout = srt::Layout { by_speaker: opts.diarization, ..opts.layout.clone() };
     let (text, cues) = srt::build(&transcript, &layout);
     std::fs::write(output, text).with_context(|| format!("cannot write {}", output.display()))?;
-    Ok(Outcome::Written { srt: output.to_path_buf(), cues, json, cached })
+    Ok(Outcome::Written { srt: output.to_path_buf(), cues, json, cached, uploaded_s })
 }
 
 fn read_transcript(path: &Path) -> Result<Value> {
@@ -159,9 +173,9 @@ fn read_transcript(path: &Path) -> Result<Value> {
     Ok(v)
 }
 
-/// Media file -> Soniox transcript JSON; `None` if the audio is digital silence (nothing is uploaded then).
-/// Fails with [`audio::NoAudio`] when there is no audio at all.
-pub fn transcribe(input: &Path, opts: &Options, client: &Client) -> Result<Option<Value>> {
+/// Media file -> Soniox transcript JSON and the seconds of audio sent; `None` if the audio is digital
+/// silence (nothing is uploaded then). Fails with [`audio::NoAudio`] when there is no audio at all.
+pub fn transcribe(input: &Path, opts: &Options, client: &Client) -> Result<Option<(Value, f64)>> {
     // The temp dir (and the audio inside) is removed when it goes out of scope, whatever happens.
     let mut tmp = match &opts.temp_dir {
         Some(d) => tempfile::Builder::new().prefix("sonisub-").tempdir_in(d),
@@ -197,6 +211,7 @@ pub fn transcribe(input: &Path, opts: &Options, client: &Client) -> Result<Optio
         opts.strict_languages,
         opts.diarization,
         opts.context.as_deref(),
+        &opts.reference,
     );
     let id = client.create(&cfg)?;
     remote.transcription_id = Some(id.clone());
@@ -220,7 +235,7 @@ pub fn transcribe(input: &Path, opts: &Options, client: &Client) -> Result<Optio
     pb.finish_with_message("transcribed");
 
     remote.cleanup();
-    Ok(Some(transcript))
+    Ok(Some((transcript, audio.duration_s)))
 }
 
 /// Default .srt path: next to the input (or in `out_dir`), same name; `clip.soniox.json` -> `clip.srt`.

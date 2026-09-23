@@ -41,7 +41,7 @@ fn video_to_srt_and_everything_cleaned_up() {
 
     let out = job::process(&common::fixture("dialog.mp4"), &s.srt, &options(&s.temp), Some(&client)).unwrap();
 
-    assert!(matches!(out, Outcome::Written { cues: 10, json: None, .. }), "{out:?}");
+    assert!(matches!(out, Outcome::Written { cues: 10, json: None, uploaded_s: Some(s), .. } if (s - 29.25).abs() < 0.1), "{out:?}");
     assert_eq!(common::normalize(&std::fs::read_to_string(&s.srt).unwrap()), common::golden_srt());
     assert_eq!(
         mock.calls(),
@@ -293,7 +293,7 @@ fn digital_silence_is_not_uploaded() {
     let mock = MockSoniox::happy(common::transcript());
     let client = Client::new(&mock.url, "key").unwrap();
     let out = job::process(&common::fixture("silence.m4a"), &s.srt, &options(&s.temp), Some(&client)).unwrap();
-    assert!(matches!(out, Outcome::NoSpeech { marker: None, cached: false }), "{out:?}");
+    assert!(matches!(out, Outcome::NoSpeech { marker: None, cached: false, uploaded_s: None }), "{out:?}");
     assert!(mock.calls().is_empty());
     assert!(!s.srt.exists());
     assert_empty(&s.temp);
@@ -310,7 +310,7 @@ fn no_speech_leaves_a_marker_and_is_not_paid_for_twice() {
 
     let first = job::process(&input, &srt, &options(&s.temp), Some(&client)).unwrap();
     let marker = s.dir.path().join("nospeech.soniox.json");
-    assert!(matches!(&first, Outcome::NoSpeech { marker: Some(m), cached: false } if *m == marker), "{first:?}");
+    assert!(matches!(&first, Outcome::NoSpeech { marker: Some(m), cached: false, uploaded_s: Some(_) } if *m == marker), "{first:?}");
     assert!(!srt.exists(), "no .srt for a file without speech");
     let saved: Value = serde_json::from_str(&std::fs::read_to_string(&marker).unwrap()).unwrap();
     assert_eq!(saved["tokens"], json!([]));
@@ -318,7 +318,7 @@ fn no_speech_leaves_a_marker_and_is_not_paid_for_twice() {
     assert!(mock.calls().contains(&"POST /v1/files".to_string()));
 
     let second = job::process(&input, &srt, &options(&s.temp), Some(&client)).unwrap();
-    assert!(matches!(second, Outcome::NoSpeech { marker: Some(_), cached: true }), "{second:?}");
+    assert!(matches!(second, Outcome::NoSpeech { marker: Some(_), cached: true, uploaded_s: None }), "{second:?}");
     assert_eq!(mock.calls().len(), paid, "second run must not call Soniox");
 
     // --force asks Soniox again.
@@ -336,7 +336,7 @@ fn saved_transcript_next_to_the_output_is_reused() {
     let client = Client::new(&mock.url, "key").unwrap();
 
     let out = job::process(&input, &s.srt, &options(&s.temp), Some(&client)).unwrap();
-    assert!(matches!(out, Outcome::Written { cues: 10, cached: true, .. }), "{out:?}");
+    assert!(matches!(out, Outcome::Written { cues: 10, cached: true, uploaded_s: None, .. }), "{out:?}");
     assert!(mock.calls().is_empty(), "{:?}", mock.calls());
     assert_eq!(common::normalize(&std::fs::read_to_string(&s.srt).unwrap()), common::golden_srt());
 }
@@ -345,6 +345,6 @@ fn saved_transcript_next_to_the_output_is_reused() {
 fn transcript_input_without_words_writes_nothing() {
     let s = setup();
     let out = job::process(&common::fixture("nospeech.soniox.json"), &s.srt, &options(&s.temp), None).unwrap();
-    assert!(matches!(out, Outcome::NoSpeech { marker: None, cached: false }), "{out:?}");
+    assert!(matches!(out, Outcome::NoSpeech { marker: None, cached: false, uploaded_s: None }), "{out:?}");
     assert!(!s.srt.exists());
 }

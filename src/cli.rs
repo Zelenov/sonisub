@@ -20,6 +20,15 @@ pub struct Cli {
 
 #[derive(Subcommand, Debug)]
 pub enum Command {
+    /// What Soniox usage cost: per model, today, price per hour of audio.
+    Usage {
+        /// How many days back (Soniox keeps 91).
+        #[arg(long, default_value_t = 30, value_parser = clap::value_parser!(u64).range(1..=91))]
+        days: u64,
+
+        #[command(flatten)]
+        api: ApiArgs,
+    },
     /// List (and with --yes delete) all files and transcriptions stored in the Soniox account.
     Purge {
         /// Actually delete. Without it only prints what would be deleted.
@@ -175,6 +184,7 @@ impl RunArgs {
             },
             poll: Duration::from_secs_f64(self.poll.max(0.2)),
             prefix: String::new(),
+            reference: "sonisub".into(),
         }
     }
 }

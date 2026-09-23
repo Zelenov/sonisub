@@ -42,6 +42,7 @@ sonisub clip.MP4 -s                       # "Speaker 1: ..." when the speaker ch
 sonisub clip.MP4 --speaker-names Eugene,Sasha
 sonisub clip.soniox.json -f --max-line 32 # re-cut subtitles from a saved transcript, no API call
 sonisub purge                             # list leftovers in the Soniox account (--yes deletes)
+sonisub usage                             # what Soniox cost: last 30 days, today, price per hour
 ```
 
 ## How subtitles are cut
@@ -61,6 +62,13 @@ sonisub purge                             # list leftovers in the Soniox account
 - Soniox finds no words: no `.srt`; the empty transcript is kept as `clip.soniox.json` — a marker.
 - Any `clip.soniox.json` next to the output is used instead of calling Soniox again (`--force` re-transcribes),
   so a file is never paid for twice, with or without speech.
+
+## Spending
+
+After a run that sent audio to Soniox: `this run: 3:31 audio, $0.0057`, the exact cost from the Soniox usage
+logs (each run tags its requests with a `client_reference_id`), or an estimate at your recent price if the
+logs are late. `sonisub usage [--days N]` sums up to 91 days per model. Soniox has no API for the remaining
+balance; see the console for that.
 
 ## Errors
 

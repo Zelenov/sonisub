@@ -6,7 +6,7 @@ use std::fs::OpenOptions;
 use std::io::Write;
 use std::path::Path;
 use std::process::ExitCode;
-use std::time::{Instant, SystemTime};
+use std::time::{Duration, Instant, SystemTime};
 
 use anyhow::{Context, Result, anyhow, bail};
 use clap::Parser;
@@ -15,6 +15,7 @@ use cli::{ApiArgs, Cli, Command, RunArgs};
 use sonisub::cancel::{interrupt, interrupted};
 use sonisub::job::{self, Outcome};
 use sonisub::soniox::{self, Client, api_error};
+use sonisub::usage::{self, Summary};
 
 fn main() -> ExitCode {
     let _ = ctrlc::set_handler(|| {
@@ -28,6 +29,7 @@ fn main() -> ExitCode {
     let cli = Cli::parse();
     let result = match cli.command {
         Some(Command::Purge { yes, api }) => purge(&api, yes).map(|_| ExitCode::SUCCESS),
+        Some(Command::Usage { days, api }) => show_usage(&api, days).map(|_| ExitCode::SUCCESS),
         None => run(&cli.run),
     };
     result.unwrap_or_else(|e| {
@@ -54,6 +56,13 @@ fn run(args: &RunArgs) -> Result<ExitCode> {
     }
 
     let mut opts = args.job_options();
+    // Tags this run's requests in Soniox usage logs, to report what it cost.
+    let run_started = SystemTime::now();
+    opts.reference = format!(
+        "sonisub-{}",
+        run_started.duration_since(SystemTime::UNIX_EPOCH).unwrap_or_default().as_millis()
+    );
+    let (mut uploaded_s, mut uploads) = (0.0, 0usize);
     let total = args.inputs.len();
     let (mut ok, mut failed, mut skipped, mut empty) = (0, 0, 0, 0);
     for (i, input) in args.inputs.iter().enumerate() {
@@ -67,8 +76,13 @@ fn run(args: &RunArgs) -> Result<ExitCode> {
         let log = args.log.clone().unwrap_or_else(|| input.parent().unwrap_or(Path::new(".")).join("sonisub.log"));
         let started = Instant::now();
 
-        match job::process(input, &output, &opts, client.as_ref()) {
-            Ok(Outcome::Written { srt, cues, json, cached }) => {
+        let result = job::process(input, &output, &opts, client.as_ref());
+        if let Some(secs) = result.as_ref().ok().and_then(Outcome::uploaded_s) {
+            uploaded_s += secs;
+            uploads += 1;
+        }
+        match result {
+            Ok(Outcome::Written { srt, cues, json, cached, .. }) => {
                 ok += 1;
                 match (json, cached) {
                     (Some(j), true) => eprintln!("  using saved transcript {} (--force to transcribe again)", j.display()),
@@ -87,7 +101,7 @@ fn run(args: &RunArgs) -> Result<ExitCode> {
                 eprintln!("  no audio: {reason}, nothing to do");
                 log_line(&log, input, &format!("NO AUDIO ({reason})"));
             }
-            Ok(Outcome::NoSpeech { marker, cached }) => {
+            Ok(Outcome::NoSpeech { marker, cached, .. }) => {
                 empty += 1;
                 let note = match (&marker, cached) {
                     (Some(m), true) => format!("checked before, see {} (--force to try again)", m.display()),
@@ -111,6 +125,7 @@ fn run(args: &RunArgs) -> Result<ExitCode> {
                     if rest > 0 {
                         eprintln!("stopping: {} — {rest} remaining file(s) not processed", api.error_type);
                     }
+                    report_run_cost(client.as_ref(), &opts.reference, run_started, uploaded_s, uploads);
                     return Ok(ExitCode::from(2));
                 }
             }
@@ -119,6 +134,7 @@ fn run(args: &RunArgs) -> Result<ExitCode> {
     if total > 1 {
         eprintln!("done: {ok} ok, {empty} without speech, {skipped} skipped, {failed} failed");
     }
+    report_run_cost(client.as_ref(), &opts.reference, run_started, uploaded_s, uploads);
     Ok(if interrupted() {
         ExitCode::from(130)
     } else if failed > 0 {
@@ -126,6 +142,54 @@ fn run(args: &RunArgs) -> Result<ExitCode> {
     } else {
         ExitCode::SUCCESS
     })
+}
+
+/// "this run: 3:31 audio, $0.0057" — exact from the usage logs (they lag a few seconds, so wait a
+/// little), otherwise estimated from the price seen in the last 30 days.
+fn report_run_cost(client: Option<&Client>, reference: &str, started: SystemTime, uploaded_s: f64, uploads: usize) {
+    let Some(client) = client.filter(|_| uploads > 0) else { return };
+    let audio = usage::fmt_minutes((uploaded_s * 1000.0) as u64);
+    let mut exact = None;
+    for attempt in 0..5 {
+        if attempt > 0 {
+            std::thread::sleep(Duration::from_secs(2));
+        }
+        let now = SystemTime::now();
+        let Ok(logs) = client.usage_logs(started - Duration::from_secs(60), now + Duration::from_secs(60)) else { break };
+        let mine: Vec<_> = usage::of_run(&logs, reference).into_iter().cloned().collect();
+        if mine.len() >= uploads {
+            exact = Some(Summary::of(&mine));
+            break;
+        }
+    }
+    let now = SystemTime::now();
+    match exact {
+        Some(s) => eprintln!("this run: {audio} audio, {}", usage::fmt_usd(s.cost_usd)),
+        None => {
+            let price = usage::fetch(client, now - Duration::from_secs(30 * 86_400), now)
+                .ok()
+                .and_then(|logs| Summary::of(&logs).stt_usd_per_hour())
+                .unwrap_or(usage::FALLBACK_USD_PER_HOUR);
+            eprintln!("this run: {audio} audio, ≈ {} (estimate)", usage::fmt_usd(price * uploaded_s / 3600.0));
+        }
+    }
+}
+
+fn show_usage(api: &ApiArgs, days: u64) -> Result<()> {
+    let key = api.api_key.as_deref().filter(|k| !k.trim().is_empty()).ok_or_else(soniox::missing_key)?;
+    let client = Client::new(&api.api_url, key.trim())?;
+    let now = SystemTime::now();
+    let logs = usage::fetch(&client, now - Duration::from_secs(days * 86_400), now)?;
+    let day_start = now - Duration::from_secs(now.duration_since(SystemTime::UNIX_EPOCH)?.as_secs() % 86_400);
+    let today: Vec<_> = logs
+        .iter()
+        .filter(|e| {
+            e["end_time"].as_str().and_then(|t| humantime::parse_rfc3339_weak(t.trim_end_matches('Z')).ok()).is_some_and(|t| t >= day_start)
+        })
+        .cloned()
+        .collect();
+    print!("{}", usage::report(&Summary::of(&logs), &Summary::of(&today), days));
+    Ok(())
 }
 
 fn purge(api: &ApiArgs, yes: bool) -> Result<()> {
