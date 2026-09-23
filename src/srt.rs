@@ -27,6 +27,9 @@ pub struct Layout {
     pub speaker_labels: bool,
     /// Names for speakers 1, 2, ... used instead of "Speaker N".
     pub speaker_names: Vec<String>,
+    /// Break a cue's text into up to `max_lines` lines of `max_line` chars. Off: one line per cue,
+    /// up to `max_line × max_lines` chars.
+    pub wrap_lines: bool,
 }
 
 impl Default for Layout {
@@ -40,6 +43,7 @@ impl Default for Layout {
             by_speaker: true,
             speaker_labels: false,
             speaker_names: Vec::new(),
+            wrap_lines: false,
         }
     }
 }
@@ -307,10 +311,19 @@ fn wrap(text: &str, max_line: usize, max_lines: usize) -> Option<Vec<String>> {
     None
 }
 
+/// The lines of a cue's text under the layout, or `None` if it doesn't fit.
+fn lay_out(text: &str, s: &Layout) -> Option<Vec<String>> {
+    if s.wrap_lines {
+        return wrap(text, s.max_line, s.max_lines.max(1));
+    }
+    let fits = s.max_line == 0 || text.chars().count() <= s.max_line * s.max_lines.max(1);
+    fits.then(|| vec![text.to_string()])
+}
+
 /// Cost of words `ws` as one cue with `prefix` in front, or `None` if it breaks the layout.
 fn cue_cost(ws: &[Word], prefix: &str, s: &Layout) -> Option<f64> {
     let text = format!("{prefix}{}", join(ws));
-    wrap(&text, s.max_line, s.max_lines.max(1))?;
+    lay_out(&text, s)?;
     let dur = ws.last().expect("non-empty").end.saturating_sub(ws[0].start) as f64 / 1000.0;
     if s.max_duration > 0.0 && dur > s.max_duration {
         return None;
@@ -436,7 +449,7 @@ pub fn build(transcript: &Value, s: &Layout) -> (String, usize) {
             let next = cues.get(i + 1).map_or(u64::MAX, |n| n.start);
             end = (start + min_ms).min(next.saturating_sub(1)).max(end);
         }
-        let lines = wrap(&cues[i].text, s.max_line, s.max_lines.max(1)).unwrap_or_else(|| vec![cues[i].text.clone()]);
+        let lines = lay_out(&cues[i].text, s).unwrap_or_else(|| vec![cues[i].text.clone()]);
         out.push_str(&format!("{}\n{} --> {}\n{}\n\n", i + 1, timestamp(start), timestamp(end), lines.join("\n")));
     }
     (out, cues.len())

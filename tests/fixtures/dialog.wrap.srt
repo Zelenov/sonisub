@@ -8,7 +8,8 @@ Great.
 
 3
 00:00:04,590 --> 00:00:07,470
-I've prepared a very long sentence with plenty of commas
+I've prepared a very long
+sentence with plenty of commas
 
 4
 00:00:07,890 --> 00:00:10,470
@@ -16,7 +17,8 @@ so we can check how the tool splits it into parts,
 
 5
 00:00:10,770 --> 00:00:14,850
-without breaking a phrase in the middle, and without exceeding the line length.
+without breaking a phrase in the middle,
+and without exceeding the line length.
 
 6
 00:00:15,450 --> 00:00:18,450

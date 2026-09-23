@@ -91,6 +91,8 @@ finished file leaves one line: `✓` subtitled, `·` skipped, `∅` no speech, `
   (`, ; : — ... (`) first. Only a piece that still doesn't fit is cut at a pause, and only if that fails too,
   between words. Lines inside a cue break by the same preference.
 - Silence longer than `--gap` always ends a cue; a sentence's short tail after such a pause stays with it.
+- A cue is one line of up to `--max-line` × `--max-lines` characters (100 by default); `-w` / `--wrap`
+  breaks it into up to `--max-lines` lines of `--max-line` characters instead.
 - `-u` / `--max-line 0 --max-duration 0`: no limits, every cue is one whole sentence on one line.
 
 ## Nothing to transcribe

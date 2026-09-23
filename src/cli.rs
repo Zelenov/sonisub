@@ -137,7 +137,7 @@ pub struct RunArgs {
 #[derive(Args, Debug, Clone)]
 #[command(next_help_heading = "Subtitle layout")]
 pub struct SegArgs {
-    /// Max characters per subtitle line; 0 = no limit.
+    /// Max characters per line (with --wrap); a cue holds up to --max-line × --max-lines characters. 0 = no limit.
     /// Sentences are cut at punctuation first, between words only if that can't fit.
     #[arg(long, default_value_t = 50)]
     pub max_line: usize,
@@ -149,6 +149,10 @@ pub struct SegArgs {
     /// Max cue duration, seconds; 0 = no limit.
     #[arg(long, default_value_t = 8.0)]
     pub max_duration: f64,
+
+    /// Break each cue's text into lines (up to --max-lines of --max-line chars). By default a cue is one line.
+    #[arg(long, short = 'w')]
+    pub wrap: bool,
 
     /// No length or duration limit: one cue per sentence (same as --max-line 0 --max-duration 0).
     #[arg(long, short = 'u')]
@@ -194,6 +198,7 @@ impl RunArgs {
                 by_speaker: !self.no_diarization,
                 speaker_labels: self.seg.speakers || !self.seg.speaker_names.is_empty(),
                 speaker_names: self.seg.speaker_names.clone(),
+                wrap_lines: self.seg.wrap,
             },
             poll: Duration::from_secs_f64(self.poll.max(0.2)),
             prefix: String::new(),

@@ -10,7 +10,7 @@
 #   silence.m4a    digital silence                      (never reaches Soniox)
 #
 # For each TTS fixture: <name>.mp4 (AAC 48 kHz stereo, like camera files), <name>.soniox.json
-# (real transcript), <name>.srt (default layout), <name>.unlimited.srt, <name>.speakers.srt.
+# (real transcript), <name>.srt (default layout), <name>.unlimited.srt, <name>.speakers.srt, <name>.wrap.srt.
 set -euo pipefail
 
 cd "$(dirname "$0")/.."
@@ -65,6 +65,7 @@ transcribe() {
   "$sonisub" "$out/$name.mp4" -f -j -l "$langs" --log "$work/sonisub.log"
   "$sonisub" "$out/$name.soniox.json" -f -u -o "$out/$name.unlimited.srt" --log "$work/sonisub.log"
   "$sonisub" "$out/$name.soniox.json" -f -s -o "$out/$name.speakers.srt" --log "$work/sonisub.log"
+  "$sonisub" "$out/$name.soniox.json" -f -w -o "$out/$name.wrap.srt" --log "$work/sonisub.log"
 }
 
 video dialog en,ru,es \

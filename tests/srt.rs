@@ -77,6 +77,11 @@ fn words(s: &str) -> Vec<String> {
 
 // ---------------------------------------------------------------- real transcripts
 
+/// Two lines of 50, broken inside the cue (`--wrap`).
+fn wrapped() -> Layout {
+    Layout { wrap_lines: true, ..Layout::default() }
+}
+
 #[test]
 fn golden_subtitles_for_real_transcripts() {
     let speakers = Layout { speaker_labels: true, ..Layout::default() };
@@ -85,6 +90,17 @@ fn golden_subtitles_for_real_transcripts() {
         assert_eq!(build(&t, &Layout::default()).0, common::golden(&format!("{name}.srt")), "{name}.srt");
         assert_eq!(build(&t, &Layout::unlimited()).0, common::golden(&format!("{name}.unlimited.srt")), "{name}.unlimited");
         assert_eq!(build(&t, &speakers).0, common::golden(&format!("{name}.speakers.srt")), "{name}.speakers");
+        assert_eq!(build(&t, &wrapped()).0, common::golden(&format!("{name}.wrap.srt")), "{name}.wrap");
+    }
+}
+
+#[test]
+fn by_default_a_cue_is_one_line_of_up_to_100_chars() {
+    for name in ["dialog", "punctuation"] {
+        for c in cues(&build(&common::transcript_of(name), &Layout::default()).0) {
+            assert_eq!(c.lines.len(), 1, "{name}: {:?}", c.lines);
+            assert!(c.lines[0].chars().count() <= 100, "{name}: {:?}", c.lines);
+        }
     }
 }
 
@@ -114,7 +130,7 @@ fn real_unpunctuated_clause_is_the_only_thing_cut_between_words() {
 #[test]
 fn real_punctuation_text_breaks_lines_at_commas() {
     let t = common::transcript_of("punctuation");
-    let c = cues(&build(&t, &Layout::default()).0);
+    let c = cues(&build(&t, &wrapped()).0);
     let kenya = c.iter().find(|c| c.text().starts_with("For example")).unwrap();
     assert_eq!(kenya.lines, ["For example, for the videos from Kenya,", "Nairobi, and Mombasa."]);
     let plan = &c[0];
@@ -126,11 +142,14 @@ fn real_transcripts_respect_every_layout() {
     for name in ["dialog", "punctuation"] {
         let t = common::transcript_of(name);
         for (max_line, max_lines) in [(50, 2), (42, 2), (32, 2), (24, 3), (70, 1)] {
-            let layout = Layout { max_line, max_lines, ..Layout::default() };
-            for c in cues(&build(&t, &layout).0) {
-                assert!(c.lines.len() <= max_lines, "{name} {max_line}x{max_lines}: {:?}", c.lines);
-                for l in &c.lines {
-                    assert!(l.chars().count() <= max_line, "{name} {max_line}x{max_lines}: {l:?}");
+            for wrap_lines in [true, false] {
+                let layout = Layout { max_line, max_lines, wrap_lines, ..Layout::default() };
+                let (lines, width) = if wrap_lines { (max_lines, max_line) } else { (1, max_line * max_lines) };
+                for c in cues(&build(&t, &layout).0) {
+                    assert!(c.lines.len() <= lines, "{name} {max_line}x{max_lines}: {:?}", c.lines);
+                    for l in &c.lines {
+                        assert!(l.chars().count() <= width, "{name} {max_line}x{max_lines}: {l:?}");
+                    }
                 }
             }
         }
@@ -320,7 +339,7 @@ fn punctuation_wins_over_even_length() {
 #[test]
 fn lines_inside_a_cue_break_at_punctuation_when_possible() {
     let s = "Well, here's the plan: first we record, then we transcribe.";
-    let c = cues(&build(&say(s, 150), &Layout { max_line: 40, max_duration: 0.0, ..Layout::default() }).0);
+    let c = cues(&build(&say(s, 150), &Layout { max_line: 40, max_duration: 0.0, ..wrapped() }).0);
     assert_eq!(c.len(), 1);
     assert!(ends_with_punctuation(&c[0].lines[0]), "{:?}", c[0].lines);
 }
@@ -410,7 +429,7 @@ fn no_labels_for_a_single_speaker() {
 #[test]
 fn speaker_label_counts_towards_line_length() {
     let t = say_as(&[("1", "This sentence is exactly long enough to fill a line."), ("2", "Ok.")], 150);
-    let layout = Layout { speaker_labels: true, max_line: 52, max_lines: 1, max_duration: 0.0, ..Layout::default() };
+    let layout = Layout { speaker_labels: true, max_line: 52, max_lines: 1, max_duration: 0.0, ..wrapped() };
     for c in cues(&build(&t, &layout).0) {
         assert!(c.lines.iter().all(|l| l.chars().count() <= 52), "{:?}", c.lines);
     }
