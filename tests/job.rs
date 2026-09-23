@@ -293,8 +293,12 @@ fn digital_silence_is_not_uploaded() {
     let mock = MockSoniox::happy(common::transcript());
     let client = Client::new(&mock.url, "key").unwrap();
     let out = job::process(&common::fixture("silence.m4a"), &s.srt, &options(&s.temp), Some(&client)).unwrap();
-    assert!(matches!(out, Outcome::NoSpeech { marker: None, cached: false, uploaded_s: None }), "{out:?}");
+    let marker = job::transcript_path(&s.srt);
+    assert!(matches!(&out, Outcome::NoSpeech { marker: Some(m), cached: false, uploaded_s: None } if *m == marker), "{out:?}");
     assert!(mock.calls().is_empty());
+    // Next time it is known without decoding.
+    let again = job::process(&common::fixture("silence.m4a"), &s.srt, &options(&s.temp), Some(&client)).unwrap();
+    assert!(matches!(again, Outcome::NoSpeech { cached: true, .. }), "{again:?}");
     assert!(!s.srt.exists());
     assert_empty(&s.temp);
 }

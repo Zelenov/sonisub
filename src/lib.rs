@@ -1,10 +1,11 @@
 //! sonisub: subtitles for media files via Soniox speech-to-text.
 //!
-//! - [`job`] runs the whole pipeline for one file.
+//! - [`job`] runs the whole pipeline for one file; [`batch`] turns folders into a list of files and a plan.
 //! - [`usage`] reads what was spent.
 //! - [`audio`] extracts audio, [`soniox`] talks to the API, [`srt`] turns a transcript into subtitles.
 
 pub mod audio;
+pub mod batch;
 pub mod cancel;
 pub mod job;
 pub mod soniox;

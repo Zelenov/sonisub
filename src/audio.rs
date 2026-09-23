@@ -55,6 +55,30 @@ impl std::error::Error for NoAudio {}
 /// Peak below this (about -60 dBFS) is treated as digital silence.
 pub const SILENCE_PEAK: f32 = 0.001;
 
+/// What a file's header says about its audio.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub enum Probe {
+    NoAudio,
+    /// Length in seconds, when the header has it.
+    Audio(Option<f64>),
+}
+
+/// Reads only the container header: is there an audio track, and how long is it. No decoding.
+pub fn probe(input: &Path) -> Result<Probe> {
+    let file = File::open(input).with_context(|| format!("cannot open {}", input.display()))?;
+    let mss = MediaSourceStream::new(Box::new(file), Default::default());
+    let mut hint = Hint::new();
+    if let Some(ext) = input.extension().and_then(|e| e.to_str()) {
+        hint.with_extension(ext);
+    }
+    let format = symphonia::default::get_probe()
+        .probe(&hint, mss, FormatOptions::default(), MetadataOptions::default())
+        .context("unsupported container")?;
+    let Some(track) = format.default_track(TrackType::Audio) else { return Ok(Probe::NoAudio) };
+    let rate = track.codec_params.as_ref().and_then(|p| p.audio()).and_then(|a| a.sample_rate);
+    Ok(Probe::Audio(track.num_frames.zip(rate).map(|(n, r)| n as f64 / r as f64)))
+}
+
 pub fn extract(input: &Path, out: &Path, backend: Backend, pb: &ProgressBar) -> Result<Extracted> {
     let ffmpeg = || which::which("ffmpeg").ok();
     match backend {

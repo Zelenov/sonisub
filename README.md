@@ -7,6 +7,23 @@ One self-contained binary: no Python, no ffmpeg required.
 sonisub clip.MP4
 ```
 
+![sonisub in a terminal](docs/sonisub-screenshot.png)
+
+## Download
+
+Get the build for your system from [Releases](https://github.com/Zelenov/sonisub/releases/latest):
+
+| System | File |
+|---|---|
+| Windows x64 | `sonisub-windows-x64-vX.Y.Z.zip` |
+| Linux x64 | `sonisub-linux-x64-vX.Y.Z.tar.gz` |
+| macOS (Apple Silicon) | `sonisub-macos-arm64-vX.Y.Z.tar.gz` |
+
+Unpack it and put `sonisub` / `sonisub.exe` anywhere on `PATH`. On macOS, if the binary is blocked as
+downloaded from the internet, run `xattr -d com.apple.quarantine sonisub` once.
+
+## How it works
+
 Pipeline per file:
 
 1. **Extract** the audio track (MP4/MOV/M4A/MKV with AAC, plus MP3, WAV, FLAC, OGG...) with the built-in
@@ -17,7 +34,7 @@ Pipeline per file:
    lines are balanced; nothing exceeds `--max-line` × `--max-lines`.
 4. **Clean up**: the temp audio and the Soniox file and transcription are deleted — also on errors and Ctrl+C.
 
-## Install
+## Build from source
 
 ```
 cargo install --path .
@@ -32,6 +49,8 @@ Set `SONIOX_API_KEY` (or pass `--api-key`). The key is checked before any file i
 ## Examples
 
 ```sh
+sonisub .                                 # every media file in this folder
+sonisub E:/Kenya -r -F "*.MP4" -n         # subfolders too, only .MP4, show the plan and cost, change nothing
 sonisub *.MP4                             # .srt next to every video, existing ones skipped
 sonisub clip.MP4 -f -o subs/clip.srt      # overwrite, explicit output
 sonisub *.MOV -d subs -l en --strict-lang # English only, into ./subs
@@ -44,6 +63,26 @@ sonisub clip.soniox.json -f --max-line 32 # re-cut subtitles from a saved transc
 sonisub purge                             # list leftovers in the Soniox account (--yes deletes)
 sonisub usage                             # what Soniox cost: last 30 days, today, price per hour
 ```
+
+## Folders
+
+A folder means all media files in it (mp4, mov, m4v, mkv, webm, m4a, mp3, wav, flac, ogg, opus, aac), sorted
+by name; `-r` adds subfolders, `-F` filters names (`*.MP4`, `DJI_2025080?_*`, or plain text contained in the
+name; repeatable, case-insensitive). Hidden and `._` files are ignored. With `-d` the subfolder structure is
+kept under the output folder.
+
+Before anything is uploaded, sonisub reads the headers and shows the plan:
+
+```
+165 file(s):
+   157  to transcribe: 4:03:41 audio, ≈ $0.41 (at $0.10/h)
+     4  no audio track
+     4  .srt exists, skipped (--force to redo)
+```
+
+`-n` / `--dry-run` also lists every file and stops there. While running, one bar tracks the whole batch by
+audio length (files sent, minutes done, cost so far, ETA) with the current file's stages under it, and each
+finished file leaves one line: `✓` subtitled, `·` skipped, `∅` no speech, `–` no audio, `✗` error.
 
 ## How subtitles are cut
 
@@ -113,3 +152,14 @@ cargo build --release --target aarch64-apple-darwin     # build on a Mac
 ```
 
 TLS is rustls, so there is no OpenSSL dependency.
+
+## Releases
+
+`.github/workflows/release.yml` runs when `version.md` changes. The first line of `version.md` (`# 0.1.0`)
+is the version and must match `version` in `Cargo.toml`; the section under it becomes the release notes.
+The workflow runs the tests and builds Windows x64, Linux x64 and macOS arm64.
+
+- Push to `main`: a published release `vX.Y.Z` (skipped if that release already exists).
+- Push to any other branch: a draft `vX.Y.Z-<branch>`, rebuilt on every push.
+
+To release: bump `version` in `Cargo.toml`, add a new `# X.Y.Z` section at the top of `version.md`, commit, push.

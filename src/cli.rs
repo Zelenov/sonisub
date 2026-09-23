@@ -53,10 +53,23 @@ pub struct ApiArgs {
 
 #[derive(Args, Debug)]
 pub struct RunArgs {
-    /// Input media files (mp4, mov, m4a, mp3, wav, flac, ogg, mkv...).
-    /// A `.soniox.json` transcript saved earlier with --keep-json is re-segmented without calling the API.
+    /// Media files or folders (mp4, mov, m4a, mp3, wav, flac, ogg, mkv...). A folder means all media files in it.
+    /// A `.soniox.json` transcript saved earlier is re-segmented without calling the API.
     #[arg(required = true)]
     pub inputs: Vec<PathBuf>,
+
+    /// Only files in folders whose name matches: "*.MP4", "Interview*", "DJI_2025080?_*". Repeatable;
+    /// without * or ? it matches names containing the text. Case-insensitive.
+    #[arg(short = 'F', long = "filter", value_name = "PATTERN")]
+    pub filters: Vec<String>,
+
+    /// Also look into subfolders.
+    #[arg(short, long)]
+    pub recursive: bool,
+
+    /// Show what would be done (and roughly what it would cost), change nothing.
+    #[arg(short = 'n', long)]
+    pub dry_run: bool,
 
     #[command(flatten)]
     pub api: ApiArgs,
@@ -185,6 +198,7 @@ impl RunArgs {
             poll: Duration::from_secs_f64(self.poll.max(0.2)),
             prefix: String::new(),
             reference: "sonisub".into(),
+            progress: None,
         }
     }
 }

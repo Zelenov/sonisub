@@ -6,8 +6,8 @@ use std::thread::sleep;
 use std::time::Duration;
 
 use anyhow::{Context, Result, anyhow, bail};
-use indicatif::{ProgressBar, ProgressStyle};
-use serde_json::Value;
+use indicatif::{MultiProgress, ProgressBar, ProgressStyle};
+use serde_json::{Value, json};
 
 use crate::audio;
 use crate::cancel::interrupted;
@@ -42,6 +42,8 @@ pub struct Options {
     pub prefix: String,
     /// Sent to Soniox as `client_reference_id`, to find this run's cost in the usage logs.
     pub reference: String,
+    /// Draw stage bars here, under a batch's overall bar; they are cleared when the file is done.
+    pub progress: Option<MultiProgress>,
 }
 
 impl Default for Options {
@@ -61,6 +63,7 @@ impl Default for Options {
             poll: Duration::from_secs(3),
             prefix: String::new(),
             reference: "sonisub".into(),
+            progress: None,
         }
     }
 }
@@ -74,9 +77,9 @@ pub enum Outcome {
     Skipped { srt: PathBuf },
     /// Nothing to transcribe: no audio track, or a track without samples.
     NoAudio { reason: String },
-    /// Audio is there but has no words: digital silence (detected locally, never uploaded),
-    /// or Soniox found nothing. No .srt is written; in the latter case the empty transcript is kept
-    /// as `marker` so later runs don't pay for the same file again.
+    /// Audio is there but has no words: digital silence (detected locally, `uploaded_s` is `None`),
+    /// or Soniox found nothing. No .srt is written; an empty transcript is kept as `marker` so later
+    /// runs (and plans) know the file is checked and nothing is paid for twice.
     NoSpeech { marker: Option<PathBuf>, cached: bool, uploaded_s: Option<f64> },
 }
 
@@ -130,7 +133,13 @@ pub fn process(input: &Path, output: &Path, opts: &Options, client: Option<&Clie
         let client = client.ok_or_else(soniox::missing_key)?;
         match transcribe(input, opts, client) {
             Ok(Some((t, secs))) => Source::Api(t, secs),
-            Ok(None) => return Ok(Outcome::NoSpeech { marker: None, cached: false, uploaded_s: None }),
+            Ok(None) => {
+                // Digital silence: nothing was sent; the marker still tells later runs (and plans) it's checked.
+                let marker = json!({"text": "", "tokens": [], "sonisub": "digital silence, not sent to Soniox"});
+                std::fs::write(&cache, serde_json::to_string_pretty(&marker)?)
+                    .with_context(|| format!("cannot write {}", cache.display()))?;
+                return Ok(Outcome::NoSpeech { marker: Some(cache), cached: false, uploaded_s: None });
+            }
             Err(e) => match e.downcast::<audio::NoAudio>() {
                 Ok(no) => return Ok(Outcome::NoAudio { reason: no.0 }),
                 Err(e) => return Err(e),
@@ -185,9 +194,9 @@ pub fn transcribe(input: &Path, opts: &Options, client: &Client) -> Result<Optio
     let stem = input.file_stem().map_or("audio".into(), |s| s.to_string_lossy().into_owned());
     let audio_path = tmp.path().join(format!("{stem}.flac"));
 
-    let pb = bar(&opts.prefix, "extract", "{prefix} {msg:9} [{bar:30.cyan/blue}] {percent:>3}%  {elapsed}");
+    let pb = bar(opts, "extract", "{prefix} {msg:9} [{bar:30.cyan/blue}] {percent:>3}%  {elapsed}");
     let audio = audio::extract(input, &audio_path, opts.audio, &pb).inspect_err(|_| pb.finish_and_clear())?;
-    pb.finish_with_message(format!("extracted {} ({})", fmt_dur(audio.duration_s), fmt_size(&audio.path)));
+    finish(opts, &pb, format!("extracted {} ({})", fmt_dur(audio.duration_s), fmt_size(&audio.path)));
     if opts.keep_audio {
         tmp.disable_cleanup(true);
         pb.println(format!("  audio kept: {}", audio.path.display()));
@@ -199,10 +208,10 @@ pub fn transcribe(input: &Path, opts: &Options, client: &Client) -> Result<Optio
     // Deletes the uploaded file and the transcription on drop, including on `?` returns below.
     let mut remote = RemoteGuard { client, file_id: None, transcription_id: None, warnings: Vec::new() };
 
-    let pb = bar(&opts.prefix, "upload", "{prefix} {msg:9} [{bar:30.cyan/blue}] {bytes}/{total_bytes}  {bytes_per_sec}");
-    let file_id = client.upload(&audio.path, &pb)?;
+    let pb = bar(opts, "upload", "{prefix} {msg:9} [{bar:30.cyan/blue}] {bytes}/{total_bytes}  {bytes_per_sec}");
+    let file_id = client.upload(&audio.path, &pb).inspect_err(|_| pb.finish_and_clear())?;
     remote.file_id = Some(file_id.clone());
-    pb.finish_with_message("uploaded");
+    finish(opts, &pb, "uploaded".into());
 
     let cfg = soniox::transcription_config(
         &opts.model,
@@ -216,9 +225,11 @@ pub fn transcribe(input: &Path, opts: &Options, client: &Client) -> Result<Optio
     let id = client.create(&cfg)?;
     remote.transcription_id = Some(id.clone());
 
-    let pb = ProgressBar::new_spinner().with_prefix(opts.prefix.clone());
+    let pb = attach(opts, ProgressBar::new_spinner().with_prefix(opts.prefix.clone()));
     pb.set_style(ProgressStyle::with_template("{prefix} {spinner} {msg}  {elapsed}").unwrap());
     pb.enable_steady_tick(Duration::from_millis(120));
+    // Clears the spinner however this loop is left.
+    let _clear = ClearOnDrop(&pb);
     loop {
         if interrupted() {
             bail!("interrupted");
@@ -232,7 +243,7 @@ pub fn transcribe(input: &Path, opts: &Options, client: &Client) -> Result<Optio
     }
     pb.set_message("downloading transcript");
     let transcript = client.transcript(&id)?;
-    pb.finish_with_message("transcribed");
+    finish(opts, &pb, "transcribed".into());
 
     remote.cleanup();
     Ok(Some((transcript, audio.duration_s)))
@@ -254,10 +265,36 @@ pub fn is_transcript(p: &Path) -> bool {
     p.extension().is_some_and(|e| e.eq_ignore_ascii_case("json"))
 }
 
-fn bar(prefix: &str, msg: &str, template: &str) -> ProgressBar {
-    let pb = ProgressBar::new(0).with_prefix(prefix.to_string()).with_message(msg.to_string());
+fn bar(opts: &Options, msg: &str, template: &str) -> ProgressBar {
+    let pb = attach(opts, ProgressBar::new(0).with_prefix(opts.prefix.clone()).with_message(msg.to_string()));
     pb.set_style(ProgressStyle::with_template(template).unwrap().progress_chars("=> "));
     pb
+}
+
+fn attach(opts: &Options, pb: ProgressBar) -> ProgressBar {
+    match &opts.progress {
+        Some(m) => m.add(pb),
+        None => pb,
+    }
+}
+
+/// Alone, a finished stage stays on screen as a log line; in a batch it disappears (the batch prints a result line).
+fn finish(opts: &Options, pb: &ProgressBar, msg: String) {
+    if opts.progress.is_some() {
+        pb.finish_and_clear();
+    } else {
+        pb.finish_with_message(msg);
+    }
+}
+
+struct ClearOnDrop<'a>(&'a ProgressBar);
+
+impl Drop for ClearOnDrop<'_> {
+    fn drop(&mut self) {
+        if !self.0.is_finished() {
+            self.0.finish_and_clear();
+        }
+    }
 }
 
 fn fmt_dur(s: f64) -> String {
