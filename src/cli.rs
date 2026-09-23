@@ -1,6 +1,8 @@
 use std::path::PathBuf;
+use std::time::Duration;
 
-use clap::{Args, Parser, Subcommand, ValueEnum};
+use clap::{Args, Parser, Subcommand};
+use sonisub::{audio, job, srt};
 
 /// Generate .srt subtitles for video/audio files with Soniox speech-to-text.
 ///
@@ -87,8 +89,8 @@ pub struct RunArgs {
     pub keep_json: bool,
 
     /// How to extract audio.
-    #[arg(long, value_enum, default_value_t = AudioBackend::Auto)]
-    pub audio: AudioBackend,
+    #[arg(long, value_enum, default_value_t = audio::Backend::Auto)]
+    pub audio: audio::Backend,
 
     /// Directory for temporary audio. Default: system temp.
     #[arg(long)]
@@ -134,12 +136,30 @@ pub struct SegArgs {
     pub min_duration: f64,
 }
 
-#[derive(ValueEnum, Debug, Clone, Copy, PartialEq, Eq)]
-pub enum AudioBackend {
-    /// Built-in decoder, ffmpeg if it fails and is on PATH.
-    Auto,
-    /// Built-in decoder only.
-    Native,
-    /// ffmpeg only.
-    Ffmpeg,
+impl RunArgs {
+    /// Per-file options for [`job::process`].
+    pub fn job_options(&self) -> job::Options {
+        job::Options {
+            model: self.model.clone(),
+            languages: self.lang.clone(),
+            strict_languages: self.strict_lang,
+            context: self.context.clone(),
+            diarization: !self.no_diarization,
+            audio: self.audio,
+            temp_dir: self.temp_dir.clone(),
+            keep_audio: self.keep_audio,
+            keep_json: self.keep_json,
+            force: self.force,
+            layout: srt::Layout {
+                max_line: self.seg.max_line,
+                max_lines: self.seg.max_lines,
+                max_duration: self.seg.max_duration,
+                gap: self.seg.gap,
+                min_duration: self.seg.min_duration,
+                by_speaker: !self.no_diarization,
+            },
+            poll: Duration::from_secs_f64(self.poll.max(0.2)),
+            prefix: String::new(),
+        }
+    }
 }

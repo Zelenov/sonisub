@@ -1,0 +1,1266 @@
+{
+  "id": "21fc3a5f-2493-41f1-9a70-5b6b2dcbf74b",
+  "text": "Привет, сегодня мы проверяем генератор субтитров. Отлично. Я подготовил очень длинное предложение, в котором много запятых, чтобы проверить, как утилита разрезает реплики на части, не превышая длину строки. А что будет, если я сделаю паузу и потом продолжу? And now, a short sentence in English. Да. Всё, конец теста.",
+  "tokens": [
+    {
+      "confidence": 0.9994679689407348,
+      "end_ms": 690,
+      "is_audio_event": null,
+      "language": "ru",
+      "speaker": "1",
+      "start_ms": 630,
+      "text": "При",
+      "translation_status": null
+    },
+    {
+      "confidence": 0.9996147751808168,
+      "end_ms": 810,
+      "is_audio_event": null,
+      "language": "ru",
+      "speaker": "1",
+      "start_ms": 750,
+      "text": "вет",
+      "translation_status": null
+    },
+    {
+      "confidence": 0.9483951926231384,
+      "end_ms": 1110,
+      "is_audio_event": null,
+      "language": "ru",
+      "speaker": "1",
+      "start_ms": 1050,
+      "text": ",",
+      "translation_status": null
+    },
+    {
+      "confidence": 0.997931182384491,
+      "end_ms": 1590,
+      "is_audio_event": null,
+      "language": "ru",
+      "speaker": "1",
+      "start_ms": 1530,
+      "text": " се",
+      "translation_status": null
+    },
+    {
+      "confidence": 0.9999523162841796,
+      "end_ms": 1650,
+      "is_audio_event": null,
+      "language": "ru",
+      "speaker": "1",
+      "start_ms": 1590,
+      "text": "год",
+      "translation_status": null
+    },
+    {
+      "confidence": 0.9999923706054688,
+      "end_ms": 1770,
+      "is_audio_event": null,
+      "language": "ru",
+      "speaker": "1",
+      "start_ms": 1710,
+      "text": "ня",
+      "translation_status": null
+    },
+    {
+      "confidence": 0.9999743700027466,
+      "end_ms": 1890,
+      "is_audio_event": null,
+      "language": "ru",
+      "speaker": "1",
+      "start_ms": 1830,
+      "text": " м",
+      "translation_status": null
+    },
+    {
+      "confidence": 0.9999987483024596,
+      "end_ms": 1950,
+      "is_audio_event": null,
+      "language": "ru",
+      "speaker": "1",
+      "start_ms": 1890,
+      "text": "ы",
+      "translation_status": null
+    },
+    {
+      "confidence": 0.999042272567749,
+      "end_ms": 2070,
+      "is_audio_event": null,
+      "language": "ru",
+      "speaker": "1",
+      "start_ms": 2010,
+      "text": " про",
+      "translation_status": null
+    },
+    {
+      "confidence": 0.9999313354492188,
+      "end_ms": 2250,
+      "is_audio_event": null,
+      "language": "ru",
+      "speaker": "1",
+      "start_ms": 2190,
+      "text": "вер",
+      "translation_status": null
+    },
+    {
+      "confidence": 0.9999942779541016,
+      "end_ms": 2310,
+      "is_audio_event": null,
+      "language": "ru",
+      "speaker": "1",
+      "start_ms": 2250,
+      "text": "я",
+      "translation_status": null
+    },
+    {
+      "confidence": 0.9999771118164062,
+      "end_ms": 2430,
+      "is_audio_event": null,
+      "language": "ru",
+      "speaker": "1",
+      "start_ms": 2370,
+      "text": "ем",
+      "translation_status": null
+    },
+    {
+      "confidence": 0.999536633491516,
+      "end_ms": 2730,
+      "is_audio_event": null,
+      "language": "ru",
+      "speaker": "1",
+      "start_ms": 2670,
+      "text": " гене",
+      "translation_status": null
+    },
+    {
+      "confidence": 0.9999561309814452,
+      "end_ms": 2910,
+      "is_audio_event": null,
+      "language": "ru",
+      "speaker": "1",
+      "start_ms": 2850,
+      "text": "ра",
+      "translation_status": null
+    },
+    {
+      "confidence": 0.9999637603759766,
+      "end_ms": 3090,
+      "is_audio_event": null,
+      "language": "ru",
+      "speaker": "1",
+      "start_ms": 3030,
+      "text": "тор",
+      "translation_status": null
+    },
+    {
+      "confidence": 0.9999847412109376,
+      "end_ms": 3270,
+      "is_audio_event": null,
+      "language": "ru",
+      "speaker": "1",
+      "start_ms": 3210,
+      "text": " су",
+      "translation_status": null
+    },
+    {
+      "confidence": 0.9999675750732422,
+      "end_ms": 3330,
+      "is_audio_event": null,
+      "language": "ru",
+      "speaker": "1",
+      "start_ms": 3270,
+      "text": "б",
+      "translation_status": null
+    },
+    {
+      "confidence": 0.9999275207519532,
+      "end_ms": 3510,
+      "is_audio_event": null,
+      "language": "ru",
+      "speaker": "1",
+      "start_ms": 3450,
+      "text": "ти",
+      "translation_status": null
+    },
+    {
+      "confidence": 0.99897438287735,
+      "end_ms": 3630,
+      "is_audio_event": null,
+      "language": "ru",
+      "speaker": "1",
+      "start_ms": 3570,
+      "text": "тро",
+      "translation_status": null
+    },
+    {
+      "confidence": 0.9999561309814452,
+      "end_ms": 3810,
+      "is_audio_event": null,
+      "language": "ru",
+      "speaker": "1",
+      "start_ms": 3750,
+      "text": "в.",
+      "translation_status": null
+    },
+    {
+      "confidence": 0.9998455047607422,
+      "end_ms": 4410,
+      "is_audio_event": null,
+      "language": "ru",
+      "speaker": "2",
+      "start_ms": 4350,
+      "text": " От",
+      "translation_status": null
+    },
+    {
+      "confidence": 0.9999961853027344,
+      "end_ms": 4530,
+      "is_audio_event": null,
+      "language": "ru",
+      "speaker": "2",
+      "start_ms": 4470,
+      "text": "ли",
+      "translation_status": null
+    },
+    {
+      "confidence": 0.9999446868896484,
+      "end_ms": 4650,
+      "is_audio_event": null,
+      "language": "ru",
+      "speaker": "2",
+      "start_ms": 4590,
+      "text": "чно",
+      "translation_status": null
+    },
+    {
+      "confidence": 0.7769195437431335,
+      "end_ms": 4890,
+      "is_audio_event": null,
+      "language": "ru",
+      "speaker": "2",
+      "start_ms": 4830,
+      "text": ".",
+      "translation_status": null
+    },
+    {
+      "confidence": 0.99941086769104,
+      "end_ms": 5190,
+      "is_audio_event": null,
+      "language": "ru",
+      "speaker": "2",
+      "start_ms": 5130,
+      "text": " Я",
+      "translation_status": null
+    },
+    {
+      "confidence": 0.9998035430908204,
+      "end_ms": 5370,
+      "is_audio_event": null,
+      "language": "ru",
+      "speaker": "2",
+      "start_ms": 5310,
+      "text": " под",
+      "translation_status": null
+    },
+    {
+      "confidence": 0.9999923706054688,
+      "end_ms": 5550,
+      "is_audio_event": null,
+      "language": "ru",
+      "speaker": "2",
+      "start_ms": 5490,
+      "text": "го",
+      "translation_status": null
+    },
+    {
+      "confidence": 0.9999637603759766,
+      "end_ms": 5670,
+      "is_audio_event": null,
+      "language": "ru",
+      "speaker": "2",
+      "start_ms": 5610,
+      "text": "то",
+      "translation_status": null
+    },
+    {
+      "confidence": 0.9999961853027344,
+      "end_ms": 5790,
+      "is_audio_event": null,
+      "language": "ru",
+      "speaker": "2",
+      "start_ms": 5730,
+      "text": "ви",
+      "translation_status": null
+    },
+    {
+      "confidence": 0.9999656677246094,
+      "end_ms": 5910,
+      "is_audio_event": null,
+      "language": "ru",
+      "speaker": "2",
+      "start_ms": 5850,
+      "text": "л",
+      "translation_status": null
+    },
+    {
+      "confidence": 0.9999351501464844,
+      "end_ms": 5970,
+      "is_audio_event": null,
+      "language": "ru",
+      "speaker": "2",
+      "start_ms": 5910,
+      "text": " о",
+      "translation_status": null
+    },
+    {
+      "confidence": 0.9999866485595704,
+      "end_ms": 6090,
+      "is_audio_event": null,
+      "language": "ru",
+      "speaker": "2",
+      "start_ms": 6030,
+      "text": "чен",
+      "translation_status": null
+    },
+    {
+      "confidence": 0.9999980926513672,
+      "end_ms": 6150,
+      "is_audio_event": null,
+      "language": "ru",
+      "speaker": "2",
+      "start_ms": 6090,
+      "text": "ь",
+      "translation_status": null
+    },
+    {
+      "confidence": 0.9999828338623048,
+      "end_ms": 6210,
+      "is_audio_event": null,
+      "language": "ru",
+      "speaker": "2",
+      "start_ms": 6150,
+      "text": " д",
+      "translation_status": null
+    },
+    {
+      "confidence": 0.9999637603759766,
+      "end_ms": 6330,
+      "is_audio_event": null,
+      "language": "ru",
+      "speaker": "2",
+      "start_ms": 6270,
+      "text": "лин",
+      "translation_status": null
+    },
+    {
+      "confidence": 0.9999313354492188,
+      "end_ms": 6630,
+      "is_audio_event": null,
+      "language": "ru",
+      "speaker": "2",
+      "start_ms": 6570,
+      "text": "ное",
+      "translation_status": null
+    },
+    {
+      "confidence": 0.9995233416557312,
+      "end_ms": 6750,
+      "is_audio_event": null,
+      "language": "ru",
+      "speaker": "2",
+      "start_ms": 6690,
+      "text": " пред",
+      "translation_status": null
+    },
+    {
+      "confidence": 0.9997387528419496,
+      "end_ms": 6870,
+      "is_audio_event": null,
+      "language": "ru",
+      "speaker": "2",
+      "start_ms": 6810,
+      "text": "ло",
+      "translation_status": null
+    },
+    {
+      "confidence": 0.999887466430664,
+      "end_ms": 6990,
+      "is_audio_event": null,
+      "language": "ru",
+      "speaker": "2",
+      "start_ms": 6930,
+      "text": "жение",
+      "translation_status": null
+    },
+    {
+      "confidence": 0.999481439590454,
+      "end_ms": 7350,
+      "is_audio_event": null,
+      "language": "ru",
+      "speaker": "2",
+      "start_ms": 7290,
+      "text": ",",
+      "translation_status": null
+    },
+    {
+      "confidence": 0.9999870657920836,
+      "end_ms": 7470,
+      "is_audio_event": null,
+      "language": "ru",
+      "speaker": "2",
+      "start_ms": 7410,
+      "text": " в",
+      "translation_status": null
+    },
+    {
+      "confidence": 0.9997273087501526,
+      "end_ms": 7590,
+      "is_audio_event": null,
+      "language": "ru",
+      "speaker": "2",
+      "start_ms": 7530,
+      "text": " кото",
+      "translation_status": null
+    },
+    {
+      "confidence": 0.99993896484375,
+      "end_ms": 7770,
+      "is_audio_event": null,
+      "language": "ru",
+      "speaker": "2",
+      "start_ms": 7710,
+      "text": "ром",
+      "translation_status": null
+    },
+    {
+      "confidence": 0.9999691247940063,
+      "end_ms": 7950,
+      "is_audio_event": null,
+      "language": "ru",
+      "speaker": "2",
+      "start_ms": 7890,
+      "text": " много",
+      "translation_status": null
+    },
+    {
+      "confidence": 0.9997711181640624,
+      "end_ms": 8370,
+      "is_audio_event": null,
+      "language": "ru",
+      "speaker": "2",
+      "start_ms": 8310,
+      "text": " за",
+      "translation_status": null
+    },
+    {
+      "confidence": 0.9999504089355468,
+      "end_ms": 8490,
+      "is_audio_event": null,
+      "language": "ru",
+      "speaker": "2",
+      "start_ms": 8430,
+      "text": "п",
+      "translation_status": null
+    },
+    {
+      "confidence": 0.9999675750732422,
+      "end_ms": 8610,
+      "is_audio_event": null,
+      "language": "ru",
+      "speaker": "2",
+      "start_ms": 8550,
+      "text": "я",
+      "translation_status": null
+    },
+    {
+      "confidence": 0.999969482421875,
+      "end_ms": 8730,
+      "is_audio_event": null,
+      "language": "ru",
+      "speaker": "2",
+      "start_ms": 8670,
+      "text": "ты",
+      "translation_status": null
+    },
+    {
+      "confidence": 0.9992621541023254,
+      "end_ms": 8850,
+      "is_audio_event": null,
+      "language": "ru",
+      "speaker": "2",
+      "start_ms": 8790,
+      "text": "х,",
+      "translation_status": null
+    },
+    {
+      "confidence": 0.9999752044677734,
+      "end_ms": 9030,
+      "is_audio_event": null,
+      "language": "ru",
+      "speaker": "2",
+      "start_ms": 8970,
+      "text": " что",
+      "translation_status": null
+    },
+    {
+      "confidence": 0.999990463256836,
+      "end_ms": 9150,
+      "is_audio_event": null,
+      "language": "ru",
+      "speaker": "2",
+      "start_ms": 9090,
+      "text": "бы",
+      "translation_status": null
+    },
+    {
+      "confidence": 0.9999408721923828,
+      "end_ms": 9330,
+      "is_audio_event": null,
+      "language": "ru",
+      "speaker": "2",
+      "start_ms": 9270,
+      "text": " про",
+      "translation_status": null
+    },
+    {
+      "confidence": 0.9999256134033204,
+      "end_ms": 9510,
+      "is_audio_event": null,
+      "language": "ru",
+      "speaker": "2",
+      "start_ms": 9450,
+      "text": "в",
+      "translation_status": null
+    },
+    {
+      "confidence": 0.9999923706054688,
+      "end_ms": 9630,
+      "is_audio_event": null,
+      "language": "ru",
+      "speaker": "2",
+      "start_ms": 9570,
+      "text": "ери",
+      "translation_status": null
+    },
+    {
+      "confidence": 0.999980926513672,
+      "end_ms": 9750,
+      "is_audio_event": null,
+      "language": "ru",
+      "speaker": "2",
+      "start_ms": 9690,
+      "text": "ть",
+      "translation_status": null
+    },
+    {
+      "confidence": 0.9995003938674928,
+      "end_ms": 9870,
+      "is_audio_event": null,
+      "language": "ru",
+      "speaker": "2",
+      "start_ms": 9810,
+      "text": ",",
+      "translation_status": null
+    },
+    {
+      "confidence": 0.9999771118164062,
+      "end_ms": 9930,
+      "is_audio_event": null,
+      "language": "ru",
+      "speaker": "2",
+      "start_ms": 9870,
+      "text": " как",
+      "translation_status": null
+    },
+    {
+      "confidence": 0.996831238269806,
+      "end_ms": 10110,
+      "is_audio_event": null,
+      "language": "ru",
+      "speaker": "2",
+      "start_ms": 10050,
+      "text": " у",
+      "translation_status": null
+    },
+    {
+      "confidence": 0.9994012713432312,
+      "end_ms": 10230,
+      "is_audio_event": null,
+      "language": "ru",
+      "speaker": "2",
+      "start_ms": 10170,
+      "text": "ти",
+      "translation_status": null
+    },
+    {
+      "confidence": 0.9975767731666564,
+      "end_ms": 10410,
+      "is_audio_event": null,
+      "language": "ru",
+      "speaker": "2",
+      "start_ms": 10350,
+      "text": "ли",
+      "translation_status": null
+    },
+    {
+      "confidence": 0.9895323514938354,
+      "end_ms": 10530,
+      "is_audio_event": null,
+      "language": "ru",
+      "speaker": "2",
+      "start_ms": 10470,
+      "text": "та",
+      "translation_status": null
+    },
+    {
+      "confidence": 0.9998855590820312,
+      "end_ms": 10650,
+      "is_audio_event": null,
+      "language": "ru",
+      "speaker": "2",
+      "start_ms": 10590,
+      "text": " раз",
+      "translation_status": null
+    },
+    {
+      "confidence": 0.9999790191650392,
+      "end_ms": 10770,
+      "is_audio_event": null,
+      "language": "ru",
+      "speaker": "2",
+      "start_ms": 10710,
+      "text": "ре",
+      "translation_status": null
+    },
+    {
+      "confidence": 0.9999923706054688,
+      "end_ms": 10890,
+      "is_audio_event": null,
+      "language": "ru",
+      "speaker": "2",
+      "start_ms": 10830,
+      "text": "за",
+      "translation_status": null
+    },
+    {
+      "confidence": 0.9999866485595704,
+      "end_ms": 10950,
+      "is_audio_event": null,
+      "language": "ru",
+      "speaker": "2",
+      "start_ms": 10890,
+      "text": "ет",
+      "translation_status": null
+    },
+    {
+      "confidence": 0.9999828338623048,
+      "end_ms": 11190,
+      "is_audio_event": null,
+      "language": "ru",
+      "speaker": "2",
+      "start_ms": 11130,
+      "text": " ре",
+      "translation_status": null
+    },
+    {
+      "confidence": 0.99993896484375,
+      "end_ms": 11310,
+      "is_audio_event": null,
+      "language": "ru",
+      "speaker": "2",
+      "start_ms": 11250,
+      "text": "пли",
+      "translation_status": null
+    },
+    {
+      "confidence": 0.9997959136962892,
+      "end_ms": 11490,
+      "is_audio_event": null,
+      "language": "ru",
+      "speaker": "2",
+      "start_ms": 11430,
+      "text": "ки",
+      "translation_status": null
+    },
+    {
+      "confidence": 0.9999561309814452,
+      "end_ms": 11670,
+      "is_audio_event": null,
+      "language": "ru",
+      "speaker": "2",
+      "start_ms": 11610,
+      "text": " на",
+      "translation_status": null
+    },
+    {
+      "confidence": 0.9993917346000672,
+      "end_ms": 11790,
+      "is_audio_event": null,
+      "language": "ru",
+      "speaker": "2",
+      "start_ms": 11730,
+      "text": " части",
+      "translation_status": null
+    },
+    {
+      "confidence": 0.9999771118164062,
+      "end_ms": 12210,
+      "is_audio_event": null,
+      "language": "ru",
+      "speaker": "2",
+      "start_ms": 12150,
+      "text": ",",
+      "translation_status": null
+    },
+    {
+      "confidence": 0.9999885559082032,
+      "end_ms": 12450,
+      "is_audio_event": null,
+      "language": "ru",
+      "speaker": "2",
+      "start_ms": 12390,
+      "text": " не",
+      "translation_status": null
+    },
+    {
+      "confidence": 0.9999408721923828,
+      "end_ms": 12570,
+      "is_audio_event": null,
+      "language": "ru",
+      "speaker": "2",
+      "start_ms": 12510,
+      "text": " пре",
+      "translation_status": null
+    },
+    {
+      "confidence": 0.9999771118164062,
+      "end_ms": 12690,
+      "is_audio_event": null,
+      "language": "ru",
+      "speaker": "2",
+      "start_ms": 12630,
+      "text": "вы",
+      "translation_status": null
+    },
+    {
+      "confidence": 0.9999942779541016,
+      "end_ms": 12810,
+      "is_audio_event": null,
+      "language": "ru",
+      "speaker": "2",
+      "start_ms": 12750,
+      "text": "ша",
+      "translation_status": null
+    },
+    {
+      "confidence": 0.9999961853027344,
+      "end_ms": 12930,
+      "is_audio_event": null,
+      "language": "ru",
+      "speaker": "2",
+      "start_ms": 12870,
+      "text": "я",
+      "translation_status": null
+    },
+    {
+      "confidence": 0.9999771118164062,
+      "end_ms": 13050,
+      "is_audio_event": null,
+      "language": "ru",
+      "speaker": "2",
+      "start_ms": 12990,
+      "text": " д",
+      "translation_status": null
+    },
+    {
+      "confidence": 0.9988181591033936,
+      "end_ms": 13170,
+      "is_audio_event": null,
+      "language": "ru",
+      "speaker": "2",
+      "start_ms": 13110,
+      "text": "ли",
+      "translation_status": null
+    },
+    {
+      "confidence": 0.9999961853027344,
+      "end_ms": 13290,
+      "is_audio_event": null,
+      "language": "ru",
+      "speaker": "2",
+      "start_ms": 13230,
+      "text": "ну",
+      "translation_status": null
+    },
+    {
+      "confidence": 0.9999046921730042,
+      "end_ms": 13470,
+      "is_audio_event": null,
+      "language": "ru",
+      "speaker": "2",
+      "start_ms": 13410,
+      "text": " ст",
+      "translation_status": null
+    },
+    {
+      "confidence": 0.9999923706054688,
+      "end_ms": 13590,
+      "is_audio_event": null,
+      "language": "ru",
+      "speaker": "2",
+      "start_ms": 13530,
+      "text": "ро",
+      "translation_status": null
+    },
+    {
+      "confidence": 0.998206913471222,
+      "end_ms": 13770,
+      "is_audio_event": null,
+      "language": "ru",
+      "speaker": "2",
+      "start_ms": 13710,
+      "text": "ки.",
+      "translation_status": null
+    },
+    {
+      "confidence": 0.946694314479828,
+      "end_ms": 14670,
+      "is_audio_event": null,
+      "language": "ru",
+      "speaker": "1",
+      "start_ms": 14610,
+      "text": " А",
+      "translation_status": null
+    },
+    {
+      "confidence": 0.999754011631012,
+      "end_ms": 14790,
+      "is_audio_event": null,
+      "language": "ru",
+      "speaker": "1",
+      "start_ms": 14730,
+      "text": " что",
+      "translation_status": null
+    },
+    {
+      "confidence": 0.999980926513672,
+      "end_ms": 15030,
+      "is_audio_event": null,
+      "language": "ru",
+      "speaker": "1",
+      "start_ms": 14970,
+      "text": " бу",
+      "translation_status": null
+    },
+    {
+      "confidence": 0.9999923706054688,
+      "end_ms": 15150,
+      "is_audio_event": null,
+      "language": "ru",
+      "speaker": "1",
+      "start_ms": 15090,
+      "text": "де",
+      "translation_status": null
+    },
+    {
+      "confidence": 0.9947647452354432,
+      "end_ms": 15270,
+      "is_audio_event": null,
+      "language": "ru",
+      "speaker": "1",
+      "start_ms": 15210,
+      "text": "т,",
+      "translation_status": null
+    },
+    {
+      "confidence": 0.9999923706054688,
+      "end_ms": 15690,
+      "is_audio_event": null,
+      "language": "ru",
+      "speaker": "1",
+      "start_ms": 15630,
+      "text": " е",
+      "translation_status": null
+    },
+    {
+      "confidence": 0.999990463256836,
+      "end_ms": 15750,
+      "is_audio_event": null,
+      "language": "ru",
+      "speaker": "1",
+      "start_ms": 15690,
+      "text": "сли",
+      "translation_status": null
+    },
+    {
+      "confidence": 0.999980926513672,
+      "end_ms": 15930,
+      "is_audio_event": null,
+      "language": "ru",
+      "speaker": "1",
+      "start_ms": 15870,
+      "text": " я",
+      "translation_status": null
+    },
+    {
+      "confidence": 0.999980926513672,
+      "end_ms": 16110,
+      "is_audio_event": null,
+      "language": "ru",
+      "speaker": "1",
+      "start_ms": 16050,
+      "text": " с",
+      "translation_status": null
+    },
+    {
+      "confidence": 0.9999942779541016,
+      "end_ms": 16170,
+      "is_audio_event": null,
+      "language": "ru",
+      "speaker": "1",
+      "start_ms": 16110,
+      "text": "де",
+      "translation_status": null
+    },
+    {
+      "confidence": 0.999969482421875,
+      "end_ms": 16290,
+      "is_audio_event": null,
+      "language": "ru",
+      "speaker": "1",
+      "start_ms": 16230,
+      "text": "ла",
+      "translation_status": null
+    },
+    {
+      "confidence": 0.9999523162841796,
+      "end_ms": 16410,
+      "is_audio_event": null,
+      "language": "ru",
+      "speaker": "1",
+      "start_ms": 16350,
+      "text": "ю",
+      "translation_status": null
+    },
+    {
+      "confidence": 0.997812807559967,
+      "end_ms": 16770,
+      "is_audio_event": null,
+      "language": "ru",
+      "speaker": "1",
+      "start_ms": 16710,
+      "text": " па",
+      "translation_status": null
+    },
+    {
+      "confidence": 0.999025821685791,
+      "end_ms": 16890,
+      "is_audio_event": null,
+      "language": "ru",
+      "speaker": "1",
+      "start_ms": 16830,
+      "text": "у",
+      "translation_status": null
+    },
+    {
+      "confidence": 0.9987552762031556,
+      "end_ms": 17010,
+      "is_audio_event": null,
+      "language": "ru",
+      "speaker": "1",
+      "start_ms": 16950,
+      "text": "зу",
+      "translation_status": null
+    },
+    {
+      "confidence": 0.7922134399414062,
+      "end_ms": 17550,
+      "is_audio_event": null,
+      "language": "ru",
+      "speaker": "1",
+      "start_ms": 17490,
+      "text": " и",
+      "translation_status": null
+    },
+    {
+      "confidence": 0.9997139573097228,
+      "end_ms": 17670,
+      "is_audio_event": null,
+      "language": "ru",
+      "speaker": "1",
+      "start_ms": 17610,
+      "text": " по",
+      "translation_status": null
+    },
+    {
+      "confidence": 0.9999446868896484,
+      "end_ms": 17790,
+      "is_audio_event": null,
+      "language": "ru",
+      "speaker": "1",
+      "start_ms": 17730,
+      "text": "том",
+      "translation_status": null
+    },
+    {
+      "confidence": 0.999980926513672,
+      "end_ms": 18090,
+      "is_audio_event": null,
+      "language": "ru",
+      "speaker": "1",
+      "start_ms": 18030,
+      "text": " про",
+      "translation_status": null
+    },
+    {
+      "confidence": 0.9999675750732422,
+      "end_ms": 18210,
+      "is_audio_event": null,
+      "language": "ru",
+      "speaker": "1",
+      "start_ms": 18150,
+      "text": "дол",
+      "translation_status": null
+    },
+    {
+      "confidence": 0.999948501586914,
+      "end_ms": 18450,
+      "is_audio_event": null,
+      "language": "ru",
+      "speaker": "1",
+      "start_ms": 18390,
+      "text": "жу",
+      "translation_status": null
+    },
+    {
+      "confidence": 0.8874565362930298,
+      "end_ms": 18690,
+      "is_audio_event": null,
+      "language": "ru",
+      "speaker": "1",
+      "start_ms": 18630,
+      "text": "?",
+      "translation_status": null
+    },
+    {
+      "confidence": 0.998056411743164,
+      "end_ms": 20730,
+      "is_audio_event": null,
+      "language": "en",
+      "speaker": "3",
+      "start_ms": 20670,
+      "text": " And",
+      "translation_status": null
+    },
+    {
+      "confidence": 0.9998435974121094,
+      "end_ms": 20970,
+      "is_audio_event": null,
+      "language": "en",
+      "speaker": "3",
+      "start_ms": 20910,
+      "text": " now",
+      "translation_status": null
+    },
+    {
+      "confidence": 0.49322378635406494,
+      "end_ms": 21750,
+      "is_audio_event": null,
+      "language": "en",
+      "speaker": "3",
+      "start_ms": 21690,
+      "text": ",",
+      "translation_status": null
+    },
+    {
+      "confidence": 0.999916136264801,
+      "end_ms": 21750,
+      "is_audio_event": null,
+      "language": "en",
+      "speaker": "3",
+      "start_ms": 21750,
+      "text": " a",
+      "translation_status": null
+    },
+    {
+      "confidence": 0.9999771118164062,
+      "end_ms": 21930,
+      "is_audio_event": null,
+      "language": "en",
+      "speaker": "3",
+      "start_ms": 21870,
+      "text": " short",
+      "translation_status": null
+    },
+    {
+      "confidence": 0.9999370574951172,
+      "end_ms": 22290,
+      "is_audio_event": null,
+      "language": "en",
+      "speaker": "3",
+      "start_ms": 22230,
+      "text": " sent",
+      "translation_status": null
+    },
+    {
+      "confidence": 0.9999790191650392,
+      "end_ms": 22530,
+      "is_audio_event": null,
+      "language": "en",
+      "speaker": "3",
+      "start_ms": 22470,
+      "text": "ence",
+      "translation_status": null
+    },
+    {
+      "confidence": 0.999946653842926,
+      "end_ms": 22710,
+      "is_audio_event": null,
+      "language": "en",
+      "speaker": "3",
+      "start_ms": 22650,
+      "text": " in",
+      "translation_status": null
+    },
+    {
+      "confidence": 0.9979155659675598,
+      "end_ms": 22950,
+      "is_audio_event": null,
+      "language": "en",
+      "speaker": "3",
+      "start_ms": 22890,
+      "text": " English",
+      "translation_status": null
+    },
+    {
+      "confidence": 0.9943533539772034,
+      "end_ms": 23310,
+      "is_audio_event": null,
+      "language": "en",
+      "speaker": "3",
+      "start_ms": 23250,
+      "text": ".",
+      "translation_status": null
+    },
+    {
+      "confidence": 0.998734414577484,
+      "end_ms": 24150,
+      "is_audio_event": null,
+      "language": "ru",
+      "speaker": "2",
+      "start_ms": 24090,
+      "text": " Да",
+      "translation_status": null
+    },
+    {
+      "confidence": 0.9960368871688844,
+      "end_ms": 24330,
+      "is_audio_event": null,
+      "language": "ru",
+      "speaker": "2",
+      "start_ms": 24270,
+      "text": ".",
+      "translation_status": null
+    },
+    {
+      "confidence": 0.9973371028900146,
+      "end_ms": 25470,
+      "is_audio_event": null,
+      "language": "ru",
+      "speaker": "1",
+      "start_ms": 25410,
+      "text": " В",
+      "translation_status": null
+    },
+    {
+      "confidence": 0.9578920006752014,
+      "end_ms": 25530,
+      "is_audio_event": null,
+      "language": "ru",
+      "speaker": "1",
+      "start_ms": 25470,
+      "text": "с",
+      "translation_status": null
+    },
+    {
+      "confidence": 0.9999771118164062,
+      "end_ms": 25650,
+      "is_audio_event": null,
+      "language": "ru",
+      "speaker": "1",
+      "start_ms": 25590,
+      "text": "ё",
+      "translation_status": null
+    },
+    {
+      "confidence": 0.9996204972267152,
+      "end_ms": 25830,
+      "is_audio_event": null,
+      "language": "ru",
+      "speaker": "1",
+      "start_ms": 25770,
+      "text": ",",
+      "translation_status": null
+    },
+    {
+      "confidence": 0.9999313354492188,
+      "end_ms": 26010,
+      "is_audio_event": null,
+      "language": "ru",
+      "speaker": "1",
+      "start_ms": 25950,
+      "text": " ко",
+      "translation_status": null
+    },
+    {
+      "confidence": 0.9999980926513672,
+      "end_ms": 26130,
+      "is_audio_event": null,
+      "language": "ru",
+      "speaker": "1",
+      "start_ms": 26070,
+      "text": "не",
+      "translation_status": null
+    },
+    {
+      "confidence": 0.999908447265625,
+      "end_ms": 26250,
+      "is_audio_event": null,
+      "language": "ru",
+      "speaker": "1",
+      "start_ms": 26190,
+      "text": "ц",
+      "translation_status": null
+    },
+    {
+      "confidence": 0.9999732971191406,
+      "end_ms": 26490,
+      "is_audio_event": null,
+      "language": "ru",
+      "speaker": "1",
+      "start_ms": 26430,
+      "text": " те",
+      "translation_status": null
+    },
+    {
+      "confidence": 0.9998722076416016,
+      "end_ms": 26670,
+      "is_audio_event": null,
+      "language": "ru",
+      "speaker": "1",
+      "start_ms": 26610,
+      "text": "ста",
+      "translation_status": null
+    },
+    {
+      "confidence": 0.9616872668266296,
+      "end_ms": 26910,
+      "is_audio_event": null,
+      "language": "ru",
+      "speaker": "1",
+      "start_ms": 26850,
+      "text": ".",
+      "translation_status": null
+    }
+  ]
+}

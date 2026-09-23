@@ -52,6 +52,27 @@ Network errors, 429 and 5xx are retried with backoff.
 
 Exit codes: `0` ok, `1` some files failed, `2` fatal (key/balance/usage), `130` interrupted.
 
+## Code layout
+
+| Module | Does |
+|---|---|
+| `src/job.rs` | **one file**: media → audio → Soniox → `.srt`, cleanup. `job::process(input, output, &Options, client)` |
+| `src/audio.rs` | audio track → 16 kHz mono FLAC (built-in decoder or ffmpeg) |
+| `src/soniox.rs` | Soniox REST client, error types, remote cleanup guard |
+| `src/srt.rs` | transcript tokens → cues → SRT text (`srt::Layout`) |
+| `src/main.rs`, `src/cli.rs` | command line only: arguments, the list of files, log, stopping on fatal errors |
+
+## Tests
+
+```sh
+cargo test                            # offline: subtitles, audio, the whole job against a mock Soniox
+cargo test --test live -- --ignored   # real Soniox round trip (needs SONIOX_API_KEY)
+```
+
+`tests/fixtures/dialog.*` is real Soniox output: a two-voice Russian/English dialog made with Soniox TTS
+(`dialog.mp4`), its transcript (`dialog.soniox.json`) and the expected subtitles (`dialog.srt`).
+`scripts/make-fixture.sh` regenerates all three; review the `.srt` diff before committing it.
+
 ## Building for other platforms
 
 ```sh

@@ -23,3 +23,8 @@ which = "8.0.6"
 lto = true
 codegen-units = 1
 strip = true
+
+[dev-dependencies]
+symphonia = { version = "0.6.1", features = ["aac", "isomp4", "flac"] }
+tempfile = "3.27.0"
+which = "8.0.6"

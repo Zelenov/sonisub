@@ -13,7 +13,7 @@ use reqwest::blocking::{Client as Http, RequestBuilder, Response, multipart};
 use serde::Deserialize;
 use serde_json::{Value, json};
 
-use crate::interrupted;
+use crate::cancel::interrupted;
 
 /// An error reported by Soniox, either as an HTTP error or as a failed transcription job.
 #[derive(Debug, Clone)]
@@ -230,7 +230,7 @@ fn check(r: Response) -> Result<Response> {
     let code = r.status().as_u16();
     let text = r.text().unwrap_or_default();
     let v: Value = serde_json::from_str(&text).unwrap_or(Value::Null);
-    let mut message = v["message"].as_str().map(str::to_string).unwrap_or_else(|| text.trim().chars().take(300).collect());
+    let mut message = v["message"].as_str().or(v["error_message"].as_str()).map(str::to_string).unwrap_or_else(|| text.trim().chars().take(300).collect());
     if let Some(errs) = v["validation_errors"].as_array().filter(|e| !e.is_empty()) {
         let details: Vec<String> = errs
             .iter()

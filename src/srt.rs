@@ -2,7 +2,28 @@
 
 use serde_json::Value;
 
-use crate::cli::SegArgs;
+/// Subtitle layout rules.
+#[derive(Debug, Clone)]
+pub struct Layout {
+    /// Max characters per line.
+    pub max_line: usize,
+    /// Max lines per cue.
+    pub max_lines: usize,
+    /// Max cue duration, seconds.
+    pub max_duration: f64,
+    /// A pause longer than this (seconds) starts a new cue.
+    pub gap: f64,
+    /// Minimum cue duration, seconds (extended into following silence when possible).
+    pub min_duration: f64,
+    /// A speaker change starts a new cue.
+    pub by_speaker: bool,
+}
+
+impl Default for Layout {
+    fn default() -> Self {
+        Self { max_line: 42, max_lines: 2, max_duration: 6.0, gap: 0.7, min_duration: 0.5, by_speaker: true }
+    }
+}
 
 #[derive(Debug, Clone)]
 struct Word {
@@ -52,7 +73,8 @@ fn text(c: &[Word]) -> String {
     c.iter().map(|w| w.text.as_str()).collect::<Vec<_>>().join(" ")
 }
 
-fn segment(words: Vec<Word>, s: &SegArgs, by_speaker: bool) -> Vec<Cue> {
+fn segment(words: Vec<Word>, s: &Layout) -> Vec<Cue> {
+    let by_speaker = s.by_speaker;
     let (max_ms, gap_ms) = ((s.max_duration * 1000.0) as u64, (s.gap * 1000.0) as u64);
     let mut cues: Vec<Cue> = Vec::new();
     let mut cur: Cue = Vec::new();
@@ -132,7 +154,7 @@ fn wrap(t: &str, max_line: usize, lines: usize) -> String {
 }
 
 /// Whether the text wraps into the allowed number of lines without overflowing any of them.
-fn fits(t: &str, s: &SegArgs) -> bool {
+fn fits(t: &str, s: &Layout) -> bool {
     let w = wrap(t, s.max_line, s.max_lines);
     w.lines().count() <= s.max_lines.max(1) && w.lines().all(|l| l.chars().count() <= s.max_line)
 }
@@ -141,8 +163,9 @@ fn timestamp(ms: u64) -> String {
     format!("{:02}:{:02}:{:02},{:03}", ms / 3_600_000, ms / 60_000 % 60, ms / 1000 % 60, ms % 1000)
 }
 
-pub fn build(transcript: &Value, s: &SegArgs, by_speaker: bool) -> (String, usize) {
-    let cues = segment(words(transcript), s, by_speaker);
+/// Builds SRT text from a Soniox transcript; returns the text and the number of cues.
+pub fn build(transcript: &Value, s: &Layout) -> (String, usize) {
+    let cues = segment(words(transcript), s);
     let min_ms = (s.min_duration * 1000.0) as u64;
     let mut out = String::new();
     for (i, c) in cues.iter().enumerate() {

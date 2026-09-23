@@ -16,25 +16,36 @@ use symphonia::core::formats::{FormatOptions, TrackType};
 use symphonia::core::io::MediaSourceStream;
 use symphonia::core::meta::MetadataOptions;
 
-use crate::cli::AudioBackend;
-use crate::interrupted;
+use crate::cancel::interrupted;
 
 pub const RATE: u32 = 16_000;
+
+/// How to extract audio.
+#[derive(clap::ValueEnum, Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum Backend {
+    /// Built-in decoder, ffmpeg if it fails and is on PATH.
+    #[default]
+    Auto,
+    /// Built-in decoder only.
+    Native,
+    /// ffmpeg only.
+    Ffmpeg,
+}
 
 pub struct Extracted {
     pub path: PathBuf,
     pub duration_s: f64,
 }
 
-pub fn extract(input: &Path, out: &Path, backend: AudioBackend, pb: &ProgressBar) -> Result<Extracted> {
+pub fn extract(input: &Path, out: &Path, backend: Backend, pb: &ProgressBar) -> Result<Extracted> {
     let ffmpeg = || which::which("ffmpeg").ok();
     match backend {
-        AudioBackend::Native => native(input, out, pb),
-        AudioBackend::Ffmpeg => {
+        Backend::Native => native(input, out, pb),
+        Backend::Ffmpeg => {
             let exe = ffmpeg().ok_or_else(|| anyhow!("ffmpeg not found on PATH"))?;
             with_ffmpeg(&exe, input, out, pb)
         }
-        AudioBackend::Auto => match native(input, out, pb) {
+        Backend::Auto => match native(input, out, pb) {
             Ok(x) => Ok(x),
             Err(e) if interrupted() => Err(e),
             Err(e) => match ffmpeg() {
@@ -133,7 +144,14 @@ fn write_flac(samples: &[i16], out: &Path) -> Result<()> {
         .map_err(|e| anyhow!("flac encoding failed: {e:?}"))?;
     let mut sink = flacenc::bitsink::ByteSink::new();
     stream.write(&mut sink).map_err(|e| anyhow!("flac encoding failed: {e:?}"))?;
-    std::fs::write(out, sink.as_slice()).with_context(|| format!("cannot write {}", out.display()))
+    let mut bytes = sink.as_slice().to_vec();
+    // flacenc counts the short last block in STREAMINFO's minimum block size; the spec excludes it,
+    // and strict decoders (symphonia) then take the stream for variable-blocksize and fail.
+    // Layout: "fLaC", 4-byte block header, min block size (u16 BE), max block size (u16 BE).
+    if bytes.len() > 12 && &bytes[..4] == b"fLaC" {
+        bytes.copy_within(10..12, 8);
+    }
+    std::fs::write(out, bytes).with_context(|| format!("cannot write {}", out.display()))
 }
 
 fn with_ffmpeg(exe: &Path, input: &Path, out: &Path, pb: &ProgressBar) -> Result<Extracted> {
