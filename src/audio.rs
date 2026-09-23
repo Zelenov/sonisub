@@ -1,0 +1,247 @@
+//! Audio extraction: any supported container -> 16 kHz mono FLAC in a temp file.
+
+use std::fs::File;
+use std::io::{BufRead, BufReader};
+use std::path::{Path, PathBuf};
+use std::process::{Command, Stdio};
+
+use anyhow::{Context, Result, anyhow, bail};
+use flacenc::component::BitRepr;
+use flacenc::error::Verify;
+use indicatif::ProgressBar;
+use symphonia::core::codecs::audio::AudioDecoderOptions;
+use symphonia::core::errors::Error as SymError;
+use symphonia::core::formats::probe::Hint;
+use symphonia::core::formats::{FormatOptions, TrackType};
+use symphonia::core::io::MediaSourceStream;
+use symphonia::core::meta::MetadataOptions;
+
+use crate::cli::AudioBackend;
+use crate::interrupted;
+
+pub const RATE: u32 = 16_000;
+
+pub struct Extracted {
+    pub path: PathBuf,
+    pub duration_s: f64,
+}
+
+pub fn extract(input: &Path, out: &Path, backend: AudioBackend, pb: &ProgressBar) -> Result<Extracted> {
+    let ffmpeg = || which::which("ffmpeg").ok();
+    match backend {
+        AudioBackend::Native => native(input, out, pb),
+        AudioBackend::Ffmpeg => {
+            let exe = ffmpeg().ok_or_else(|| anyhow!("ffmpeg not found on PATH"))?;
+            with_ffmpeg(&exe, input, out, pb)
+        }
+        AudioBackend::Auto => match native(input, out, pb) {
+            Ok(x) => Ok(x),
+            Err(e) if interrupted() => Err(e),
+            Err(e) => match ffmpeg() {
+                Some(exe) => {
+                    pb.println(format!("  built-in decoder failed ({e:#}), falling back to ffmpeg"));
+                    with_ffmpeg(&exe, input, out, pb)
+                }
+                None => Err(e.context("built-in decoder failed and ffmpeg is not on PATH")),
+            },
+        },
+    }
+}
+
+fn native(input: &Path, out: &Path, pb: &ProgressBar) -> Result<Extracted> {
+    let file = File::open(input).with_context(|| format!("cannot open {}", input.display()))?;
+    let mss = MediaSourceStream::new(Box::new(file), Default::default());
+    let mut hint = Hint::new();
+    if let Some(ext) = input.extension().and_then(|e| e.to_str()) {
+        hint.with_extension(ext);
+    }
+    let mut format = symphonia::default::get_probe()
+        .probe(&hint, mss, FormatOptions::default(), MetadataOptions::default())
+        .context("unsupported container")?;
+    let track = format.default_track(TrackType::Audio).ok_or_else(|| anyhow!("no audio track"))?;
+    let track_id = track.id;
+    let params = track
+        .codec_params
+        .as_ref()
+        .and_then(|p| p.audio())
+        .ok_or_else(|| anyhow!("audio track has no codec parameters"))?
+        .clone();
+    // Track length in frames, for the progress bar (time base is 1/sample_rate for audio tracks).
+    let total = track.num_frames.filter(|_| params.sample_rate.is_some());
+    let mut decoder = symphonia::default::get_codecs()
+        .make_audio_decoder(&params, &AudioDecoderOptions::default())
+        .context("unsupported audio codec")?;
+
+    if let Some(n) = total {
+        pb.set_length(n);
+    }
+    let mut resampler: Option<Resampler> = None;
+    let mut interleaved: Vec<f32> = Vec::new();
+    let mut mono: Vec<f32> = Vec::new();
+    let mut out_samples: Vec<i16> = Vec::new();
+    let mut decoded_frames = 0u64;
+
+    loop {
+        if interrupted() {
+            bail!("interrupted");
+        }
+        let packet = match format.next_packet() {
+            Ok(Some(p)) => p,
+            Ok(None) => break,
+            Err(SymError::IoError(e)) if e.kind() == std::io::ErrorKind::UnexpectedEof => break,
+            Err(e) => return Err(e).context("reading media"),
+        };
+        if packet.track_id != track_id {
+            continue;
+        }
+        let buf = match decoder.decode(&packet) {
+            Ok(b) => b,
+            Err(SymError::DecodeError(_)) | Err(SymError::IoError(_)) => continue,
+            Err(e) => return Err(e).context("decoding audio"),
+        };
+        let channels = buf.spec().channels().count().max(1);
+        let rate = buf.spec().rate();
+        let frames = buf.frames();
+        interleaved.resize(buf.samples_interleaved(), 0.0);
+        buf.copy_to_slice_interleaved(&mut interleaved);
+
+        mono.clear();
+        mono.extend(interleaved.chunks_exact(channels).map(|f| f.iter().sum::<f32>() / channels as f32));
+        let rs = resampler.get_or_insert_with(|| Resampler::new(rate, RATE));
+        rs.push(&mono, &mut out_samples);
+
+        decoded_frames += frames as u64;
+        pb.set_position(decoded_frames);
+    }
+    let mut rs = resampler.ok_or_else(|| anyhow!("audio track contains no decodable audio"))?;
+    rs.finish(&mut out_samples);
+    if out_samples.is_empty() {
+        bail!("audio track is empty");
+    }
+    pb.set_message("encoding FLAC");
+    write_flac(&out_samples, out)?;
+    Ok(Extracted { path: out.to_path_buf(), duration_s: out_samples.len() as f64 / RATE as f64 })
+}
+
+fn write_flac(samples: &[i16], out: &Path) -> Result<()> {
+    let signal: Vec<i32> = samples.iter().map(|&s| s as i32).collect();
+    let config = flacenc::config::Encoder::default()
+        .into_verified()
+        .map_err(|(_, e)| anyhow!("flac config: {e:?}"))?;
+    let source = flacenc::source::MemSource::from_samples(&signal, 1, 16, RATE as usize);
+    let stream = flacenc::encode_with_fixed_block_size(&config, source, config.block_size)
+        .map_err(|e| anyhow!("flac encoding failed: {e:?}"))?;
+    let mut sink = flacenc::bitsink::ByteSink::new();
+    stream.write(&mut sink).map_err(|e| anyhow!("flac encoding failed: {e:?}"))?;
+    std::fs::write(out, sink.as_slice()).with_context(|| format!("cannot write {}", out.display()))
+}
+
+fn with_ffmpeg(exe: &Path, input: &Path, out: &Path, pb: &ProgressBar) -> Result<Extracted> {
+    let duration = probe_duration(exe, input);
+    if let Some(d) = duration {
+        pb.set_length((d * 1000.0) as u64);
+    }
+    pb.set_message("ffmpeg");
+    let mut child = Command::new(exe)
+        .args(["-hide_banner", "-nostats", "-loglevel", "error", "-y", "-i"])
+        .arg(input)
+        .args(["-vn", "-ac", "1", "-ar", &RATE.to_string(), "-c:a", "flac", "-progress", "pipe:1"])
+        .arg(out)
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .spawn()
+        .context("cannot start ffmpeg")?;
+    let stdout = child.stdout.take().expect("piped stdout");
+    let mut last_ms = 0u64;
+    for line in BufReader::new(stdout).lines().map_while(Result::ok) {
+        if interrupted() {
+            let _ = child.kill();
+            bail!("interrupted");
+        }
+        if let Some(v) = line.strip_prefix("out_time_us=").and_then(|v| v.trim().parse::<u64>().ok()) {
+            last_ms = v / 1000;
+            pb.set_position(last_ms);
+        }
+    }
+    let output = child.wait_with_output().context("ffmpeg failed")?;
+    if !output.status.success() {
+        let err = String::from_utf8_lossy(&output.stderr);
+        bail!("ffmpeg exited with {}: {}", output.status, err.trim());
+    }
+    Ok(Extracted { path: out.to_path_buf(), duration_s: duration.unwrap_or(last_ms as f64 / 1000.0) })
+}
+
+fn probe_duration(ffmpeg: &Path, input: &Path) -> Option<f64> {
+    let ffprobe = ffmpeg.with_file_name(if cfg!(windows) { "ffprobe.exe" } else { "ffprobe" });
+    let out = Command::new(ffprobe)
+        .args(["-v", "error", "-show_entries", "format=duration", "-of", "csv=p=0"])
+        .arg(input)
+        .output()
+        .ok()?;
+    String::from_utf8_lossy(&out.stdout).trim().parse().ok()
+}
+
+/// Streaming windowed-sinc resampler (polyphase table, Blackman window).
+struct Resampler {
+    step: f64,
+    half: usize,
+    table: Vec<Vec<f32>>,
+    buf: Vec<f32>,
+    pos: f64,
+}
+
+const PHASES: usize = 256;
+
+impl Resampler {
+    fn new(from: u32, to: u32) -> Self {
+        let ratio = from as f64 / to as f64;
+        // Cutoff a bit below the output Nyquist, 16 zero crossings of the output-rate sinc per side.
+        let cutoff = 0.5 * 0.92 / ratio.max(1.0);
+        let half = (16.0 * ratio.max(1.0)).ceil() as usize;
+        let table = (0..=PHASES)
+            .map(|p| {
+                let frac = p as f64 / PHASES as f64;
+                let mut row: Vec<f64> = (0..2 * half)
+                    .map(|j| {
+                        let x = j as f64 - (half as f64 - 1.0) - frac;
+                        let s = if x == 0.0 { 1.0 } else { (std::f64::consts::PI * 2.0 * cutoff * x).sin() / (std::f64::consts::PI * 2.0 * cutoff * x) };
+                        let t = (x / half as f64).clamp(-1.0, 1.0);
+                        let w = 0.42 + 0.5 * (std::f64::consts::PI * t).cos() + 0.08 * (2.0 * std::f64::consts::PI * t).cos();
+                        s * w
+                    })
+                    .collect();
+                let sum: f64 = row.iter().sum();
+                row.iter_mut().for_each(|v| *v /= sum);
+                row.into_iter().map(|v| v as f32).collect()
+            })
+            .collect();
+        // Leading zeros so that output sample 0 is centred on input sample 0.
+        Self { step: ratio, half, table, buf: vec![0.0; half], pos: half as f64 }
+    }
+
+    fn push(&mut self, input: &[f32], out: &mut Vec<i16>) {
+        self.buf.extend_from_slice(input);
+        loop {
+            let i0 = self.pos.floor() as usize;
+            if i0 + self.half >= self.buf.len() {
+                break;
+            }
+            let frac = self.pos - i0 as f64;
+            let row = &self.table[(frac * PHASES as f64).round() as usize];
+            let start = i0 + 1 - self.half;
+            let acc: f32 = row.iter().zip(&self.buf[start..start + 2 * self.half]).map(|(a, b)| a * b).sum();
+            out.push((acc.clamp(-1.0, 1.0) * i16::MAX as f32) as i16);
+            self.pos += self.step;
+        }
+        let drop = (self.pos.floor() as usize).saturating_sub(self.half);
+        if drop > 0 {
+            self.buf.drain(..drop);
+            self.pos -= drop as f64;
+        }
+    }
+
+    fn finish(&mut self, out: &mut Vec<i16>) {
+        let tail = vec![0.0; self.half + 1];
+        self.push(&tail, out);
+    }
+}
