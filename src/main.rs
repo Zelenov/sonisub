@@ -55,7 +55,7 @@ fn run(args: &RunArgs) -> Result<ExitCode> {
 
     let mut opts = args.job_options();
     let total = args.inputs.len();
-    let (mut ok, mut failed, mut skipped) = (0, 0, 0);
+    let (mut ok, mut failed, mut skipped, mut empty) = (0, 0, 0, 0);
     for (i, input) in args.inputs.iter().enumerate() {
         if interrupted() {
             break;
@@ -68,13 +68,12 @@ fn run(args: &RunArgs) -> Result<ExitCode> {
         let started = Instant::now();
 
         match job::process(input, &output, &opts, client.as_ref()) {
-            Ok(Outcome::Written { srt, cues, json }) => {
+            Ok(Outcome::Written { srt, cues, json, cached }) => {
                 ok += 1;
-                if let Some(j) = json {
-                    eprintln!("  transcript: {}", j.display());
-                }
-                if cues == 0 {
-                    eprintln!("  warning: no speech recognized, the .srt is empty");
+                match (json, cached) {
+                    (Some(j), true) => eprintln!("  using saved transcript {} (--force to transcribe again)", j.display()),
+                    (Some(j), false) => eprintln!("  transcript: {}", j.display()),
+                    _ => {}
                 }
                 eprintln!("  {cues} cues -> {}", srt.display());
                 log_line(&log, input, &format!("OK -> {} ({:.0}s)", srt.display(), started.elapsed().as_secs_f64()));
@@ -82,6 +81,21 @@ fn run(args: &RunArgs) -> Result<ExitCode> {
             Ok(Outcome::Skipped { srt }) => {
                 skipped += 1;
                 eprintln!("  skip: {} exists (use --force to overwrite)", srt.display());
+            }
+            Ok(Outcome::NoAudio { reason }) => {
+                empty += 1;
+                eprintln!("  no audio: {reason}, nothing to do");
+                log_line(&log, input, &format!("NO AUDIO ({reason})"));
+            }
+            Ok(Outcome::NoSpeech { marker, cached }) => {
+                empty += 1;
+                let note = match (&marker, cached) {
+                    (Some(m), true) => format!("checked before, see {} (--force to try again)", m.display()),
+                    (Some(m), false) => format!("marker saved: {} - later runs skip this file", m.display()),
+                    (None, _) => "audio is silent, nothing uploaded".to_string(),
+                };
+                eprintln!("  no speech, no .srt written: {note}");
+                log_line(&log, input, &format!("NO SPEECH ({note})"));
             }
             Err(e) => {
                 failed += 1;
@@ -103,7 +117,7 @@ fn run(args: &RunArgs) -> Result<ExitCode> {
         }
     }
     if total > 1 {
-        eprintln!("done: {ok} ok, {skipped} skipped, {failed} failed");
+        eprintln!("done: {ok} ok, {empty} without speech, {skipped} skipped, {failed} failed");
     }
     Ok(if interrupted() {
         ExitCode::from(130)

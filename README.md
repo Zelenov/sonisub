@@ -37,9 +37,30 @@ sonisub clip.MP4 -f -o subs/clip.srt      # overwrite, explicit output
 sonisub *.MOV -d subs -l en --strict-lang # English only, into ./subs
 sonisub clip.MP4 -c "Nairobi, Maasai, UAT, QA"   # context terms improve recognition
 sonisub clip.MP4 -j                       # also keep clip.soniox.json
+sonisub clip.MP4 -u                       # no length limit: one cue per sentence
+sonisub clip.MP4 -s                       # "Speaker 1: ..." when the speaker changes
+sonisub clip.MP4 --speaker-names Eugene,Sasha
 sonisub clip.soniox.json -f --max-line 32 # re-cut subtitles from a saved transcript, no API call
 sonisub purge                             # list leftovers in the Soniox account (--yes deletes)
 ```
+
+## How subtitles are cut
+
+- A cue never mixes speakers and never runs past the end of a sentence (`Dr.`, `e.g.`, `3.5`, `...` are not ends).
+- A sentence that doesn't fit (`--max-line` × `--max-lines`, `--max-duration`) is cut at punctuation
+  (`, ; : — ... (`) first. Only a piece that still doesn't fit is cut at a pause, and only if that fails too,
+  between words. Lines inside a cue break by the same preference.
+- Silence longer than `--gap` always ends a cue; a sentence's short tail after such a pause stays with it.
+- `-u` / `--max-line 0 --max-duration 0`: no limits, every cue is one whole sentence on one line.
+
+## Nothing to transcribe
+
+- Empty file, empty or foreign JSON: an error.
+- No audio track, or a track without samples: reported as "no audio", not an error, nothing uploaded.
+- Digital silence: detected locally, nothing uploaded, no `.srt`.
+- Soniox finds no words: no `.srt`; the empty transcript is kept as `clip.soniox.json` — a marker.
+- Any `clip.soniox.json` next to the output is used instead of calling Soniox again (`--force` re-transcribes),
+  so a file is never paid for twice, with or without speech.
 
 ## Errors
 
@@ -69,9 +90,11 @@ cargo test                            # offline: subtitles, audio, the whole job
 cargo test --test live -- --ignored   # real Soniox round trip (needs SONIOX_API_KEY)
 ```
 
-`tests/fixtures/dialog.*` is real Soniox output: a two-voice Russian/English dialog made with Soniox TTS
-(`dialog.mp4`), its transcript (`dialog.soniox.json`) and the expected subtitles (`dialog.srt`).
-`scripts/make-fixture.sh` regenerates all three; review the `.srt` diff before committing it.
+`tests/fixtures` is real Soniox output, made with Soniox TTS by `scripts/make-fixture.sh`:
+`dialog` (English voices plus a Russian and a Spanish line), `punctuation` (dense punctuation, abbreviations,
+numbers, a sentence without commas), `nospeech` (noise and music: Soniox's empty transcript), plus `noaudio.mp4`
+and `silence.m4a`. Each has the video, the transcript and expected subtitles for the default, `-u` and `-s`
+layouts. Review the `.srt` diff before committing regenerated fixtures.
 
 ## Building for other platforms
 

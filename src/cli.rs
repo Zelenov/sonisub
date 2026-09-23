@@ -65,7 +65,7 @@ pub struct RunArgs {
     pub force: bool,
 
     /// Language hints, comma separated.
-    #[arg(short, long, value_delimiter = ',', default_value = "ru,en")]
+    #[arg(short, long, value_delimiter = ',', default_value = "en,ru")]
     pub lang: Vec<String>,
 
     /// Make Soniox stick to the hinted languages.
@@ -115,25 +115,38 @@ pub struct RunArgs {
 #[derive(Args, Debug, Clone)]
 #[command(next_help_heading = "Subtitle layout")]
 pub struct SegArgs {
-    /// Max characters per subtitle line.
-    #[arg(long, default_value_t = 42)]
+    /// Max characters per subtitle line; 0 = no limit.
+    /// Sentences are cut at punctuation first, between words only if that can't fit.
+    #[arg(long, default_value_t = 50)]
     pub max_line: usize,
 
     /// Max lines per cue.
     #[arg(long, default_value_t = 2)]
     pub max_lines: usize,
 
-    /// Max cue duration, seconds.
-    #[arg(long, default_value_t = 6.0)]
+    /// Max cue duration, seconds; 0 = no limit.
+    #[arg(long, default_value_t = 8.0)]
     pub max_duration: f64,
 
-    /// A pause longer than this (seconds) starts a new cue.
-    #[arg(long, default_value_t = 0.7)]
+    /// No length or duration limit: one cue per sentence (same as --max-line 0 --max-duration 0).
+    #[arg(long, short = 'u')]
+    pub unlimited: bool,
+
+    /// Silence longer than this (seconds) always ends a cue; 0 = never.
+    #[arg(long, default_value_t = 2.0)]
     pub gap: f64,
 
     /// Minimum cue duration, seconds (extended into following silence when possible).
     #[arg(long, default_value_t = 0.5)]
     pub min_duration: f64,
+
+    /// Prefix cues with the speaker when it changes: "Speaker 1: ...". Only if there are several speakers.
+    #[arg(long, short = 's')]
+    pub speakers: bool,
+
+    /// Speaker names instead of "Speaker N", comma separated in order of appearance: "Eugene,Sasha". Implies --speakers.
+    #[arg(long, value_delimiter = ',')]
+    pub speaker_names: Vec<String>,
 }
 
 impl RunArgs {
@@ -151,12 +164,14 @@ impl RunArgs {
             keep_json: self.keep_json,
             force: self.force,
             layout: srt::Layout {
-                max_line: self.seg.max_line,
+                max_line: if self.seg.unlimited { 0 } else { self.seg.max_line },
                 max_lines: self.seg.max_lines,
-                max_duration: self.seg.max_duration,
+                max_duration: if self.seg.unlimited { 0.0 } else { self.seg.max_duration },
                 gap: self.seg.gap,
                 min_duration: self.seg.min_duration,
                 by_speaker: !self.no_diarization,
+                speaker_labels: self.seg.speakers || !self.seg.speaker_names.is_empty(),
+                speaker_names: self.seg.speaker_names.clone(),
             },
             poll: Duration::from_secs_f64(self.poll.max(0.2)),
             prefix: String::new(),

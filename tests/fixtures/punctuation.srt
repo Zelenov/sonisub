@@ -1,0 +1,75 @@
+1
+00:00:00,630 --> 00:00:05,910
+Well, here's the plan: first we record,
+then we transcribe; finally—
+
+2
+00:00:05,910 --> 00:00:09,510
+and this is the tricky part—
+we cut the text into subtitles.
+
+3
+00:00:10,470 --> 00:00:11,790
+Wait, really?
+
+4
+00:00:12,210 --> 00:00:13,830
+You're doing all of that by hand?
+
+5
+00:00:14,550 --> 00:00:15,050
+No.
+
+6
+00:00:15,150 --> 00:00:19,530
+Dr. Smith wrote a tool, a small one,
+written in Rust, that does it for us.
+
+7
+00:00:19,830 --> 00:00:23,310
+For example, for the videos from Kenya,
+Nairobi, and Mombasa.
+
+8
+00:00:23,970 --> 00:00:26,190
+He said, "it just works."
+
+9
+00:00:26,850 --> 00:00:27,750
+I'm not so sure.
+
+10
+00:00:28,530 --> 00:00:33,810
+Version 3.5 costs $12.50 per hour,
+about 20 cents a minute.
+
+11
+00:00:34,470 --> 00:00:34,970
+Mm.
+
+12
+00:00:35,550 --> 00:00:36,050
+Well.
+
+13
+00:00:36,690 --> 00:00:37,190
+Okay.
+
+14
+00:00:37,830 --> 00:00:38,330
+Fine.
+
+15
+00:00:38,850 --> 00:00:39,350
+Deal.
+
+16
+00:00:40,050 --> 00:00:43,410
+And then we went down to the river
+and we sat there for a long time,
+
+17
+00:00:43,650 --> 00:00:48,090
+and we watched the boats go by until the sun
+went down and it got too cold to stay outside.
+

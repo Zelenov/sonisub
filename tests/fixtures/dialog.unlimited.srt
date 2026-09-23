@@ -7,36 +7,26 @@ Hi, today we're testing the subtitle generator.
 Great.
 
 3
-00:00:04,590 --> 00:00:07,470
-I've prepared a very long
-sentence with plenty of commas
+00:00:04,590 --> 00:00:14,850
+I've prepared a very long sentence with plenty of commas so we can check how the tool splits it into parts, without breaking a phrase in the middle, and without exceeding the line length.
 
 4
-00:00:07,890 --> 00:00:10,470
-so we can check how the tool splits it into parts,
-
-5
-00:00:10,770 --> 00:00:14,850
-without breaking a phrase in the middle,
-and without exceeding the line length.
-
-6
 00:00:15,450 --> 00:00:18,450
 What happens if I pause... and then continue?
 
-7
+5
 00:00:20,370 --> 00:00:22,110
 А теперь короткая фраза по-русски.
 
-8
+6
 00:00:22,890 --> 00:00:24,330
 Y una frase corta en español.
 
-9
+7
 00:00:25,110 --> 00:00:25,610
 Yes.
 
-10
+8
 00:00:26,550 --> 00:00:28,290
 Okay, that's the end of the test.
 

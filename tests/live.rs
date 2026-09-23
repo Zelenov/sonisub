@@ -15,13 +15,13 @@ fn fixture_video_through_real_soniox() {
 
     let dir = tempfile::tempdir().unwrap();
     let srt = dir.path().join("dialog.srt");
-    let opts = Options { keep_json: true, ..Options::default() };
+    let opts = Options { keep_json: true, languages: vec!["en".into(), "ru".into(), "es".into()], ..Options::default() };
     let out = job::process(&common::fixture("dialog.mp4"), &srt, &opts, Some(&client)).unwrap();
 
     let Outcome::Written { cues, .. } = out else { panic!("{out:?}") };
-    assert!((7..=12).contains(&cues), "{cues} cues");
+    assert!((8..=13).contains(&cues), "{cues} cues");
     let text = std::fs::read_to_string(&srt).unwrap().to_lowercase();
-    for word in ["привет", "субтитров", "запятых", "english", "конец теста"] {
+    for word in ["subtitle generator", "commas", "по-русски", "español", "end of the test"] {
         assert!(text.contains(word), "{word:?} missing in:\n{text}");
     }
     // Nothing of ours left in the account.

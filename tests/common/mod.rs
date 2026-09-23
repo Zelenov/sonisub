@@ -13,13 +13,22 @@ pub fn fixture(name: &str) -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures").join(name)
 }
 
-pub fn transcript() -> Value {
-    serde_json::from_str(&std::fs::read_to_string(fixture("dialog.soniox.json")).unwrap()).unwrap()
+/// Real Soniox transcript `tests/fixtures/<name>.soniox.json`.
+pub fn transcript_of(name: &str) -> Value {
+    serde_json::from_str(&std::fs::read_to_string(fixture(&format!("{name}.soniox.json"))).unwrap()).unwrap()
 }
 
-/// Golden subtitles, line endings normalised (git may check them out as CRLF).
+pub fn transcript() -> Value {
+    transcript_of("dialog")
+}
+
+/// Expected subtitles `tests/fixtures/<file>`, line endings normalised (git may check them out as CRLF).
+pub fn golden(file: &str) -> String {
+    normalize(&std::fs::read_to_string(fixture(file)).unwrap())
+}
+
 pub fn golden_srt() -> String {
-    normalize(&std::fs::read_to_string(fixture("dialog.srt")).unwrap())
+    golden("dialog.srt")
 }
 
 pub fn normalize(s: &str) -> String {

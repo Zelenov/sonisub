@@ -35,7 +35,25 @@ pub enum Backend {
 pub struct Extracted {
     pub path: PathBuf,
     pub duration_s: f64,
+    /// Peak level 0..1, when known (built-in decoder only).
+    pub peak: Option<f32>,
 }
+
+/// The input has nothing to transcribe: no audio track, or a track without samples.
+/// Not a failure of the tool, so callers can tell it apart from real errors.
+#[derive(Debug)]
+pub struct NoAudio(pub String);
+
+impl std::fmt::Display for NoAudio {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(&self.0)
+    }
+}
+
+impl std::error::Error for NoAudio {}
+
+/// Peak below this (about -60 dBFS) is treated as digital silence.
+pub const SILENCE_PEAK: f32 = 0.001;
 
 pub fn extract(input: &Path, out: &Path, backend: Backend, pb: &ProgressBar) -> Result<Extracted> {
     let ffmpeg = || which::which("ffmpeg").ok();
@@ -47,7 +65,7 @@ pub fn extract(input: &Path, out: &Path, backend: Backend, pb: &ProgressBar) -> 
         }
         Backend::Auto => match native(input, out, pb) {
             Ok(x) => Ok(x),
-            Err(e) if interrupted() => Err(e),
+            Err(e) if interrupted() || e.is::<NoAudio>() => Err(e),
             Err(e) => match ffmpeg() {
                 Some(exe) => {
                     pb.println(format!("  built-in decoder failed ({e:#}), falling back to ffmpeg"));
@@ -69,7 +87,7 @@ fn native(input: &Path, out: &Path, pb: &ProgressBar) -> Result<Extracted> {
     let mut format = symphonia::default::get_probe()
         .probe(&hint, mss, FormatOptions::default(), MetadataOptions::default())
         .context("unsupported container")?;
-    let track = format.default_track(TrackType::Audio).ok_or_else(|| anyhow!("no audio track"))?;
+    let track = format.default_track(TrackType::Audio).ok_or_else(|| NoAudio("no audio track".into()))?;
     let track_id = track.id;
     let params = track
         .codec_params
@@ -124,14 +142,15 @@ fn native(input: &Path, out: &Path, pb: &ProgressBar) -> Result<Extracted> {
         decoded_frames += frames as u64;
         pb.set_position(decoded_frames);
     }
-    let mut rs = resampler.ok_or_else(|| anyhow!("audio track contains no decodable audio"))?;
+    let mut rs = resampler.ok_or_else(|| NoAudio("audio track has no samples".into()))?;
     rs.finish(&mut out_samples);
     if out_samples.is_empty() {
-        bail!("audio track is empty");
+        return Err(NoAudio("audio track has no samples".into()).into());
     }
+    let peak = out_samples.iter().map(|s| s.unsigned_abs()).max().unwrap_or(0) as f32 / i16::MAX as f32;
     pb.set_message("encoding FLAC");
     write_flac(&out_samples, out)?;
-    Ok(Extracted { path: out.to_path_buf(), duration_s: out_samples.len() as f64 / RATE as f64 })
+    Ok(Extracted { path: out.to_path_buf(), duration_s: out_samples.len() as f64 / RATE as f64, peak: Some(peak) })
 }
 
 fn write_flac(samples: &[i16], out: &Path) -> Result<()> {
@@ -184,9 +203,12 @@ fn with_ffmpeg(exe: &Path, input: &Path, out: &Path, pb: &ProgressBar) -> Result
     let output = child.wait_with_output().context("ffmpeg failed")?;
     if !output.status.success() {
         let err = String::from_utf8_lossy(&output.stderr);
+        if err.contains("does not contain any stream") || err.contains("matches no streams") {
+            return Err(NoAudio("no audio track".into()).into());
+        }
         bail!("ffmpeg exited with {}: {}", output.status, err.trim());
     }
-    Ok(Extracted { path: out.to_path_buf(), duration_s: duration.unwrap_or(last_ms as f64 / 1000.0) })
+    Ok(Extracted { path: out.to_path_buf(), duration_s: duration.unwrap_or(last_ms as f64 / 1000.0), peak: None })
 }
 
 fn probe_duration(ffmpeg: &Path, input: &Path) -> Option<f64> {

@@ -41,7 +41,7 @@ fn video_to_srt_and_everything_cleaned_up() {
 
     let out = job::process(&common::fixture("dialog.mp4"), &s.srt, &options(&s.temp), Some(&client)).unwrap();
 
-    assert!(matches!(out, Outcome::Written { cues: 9, json: None, .. }), "{out:?}");
+    assert!(matches!(out, Outcome::Written { cues: 10, json: None, .. }), "{out:?}");
     assert_eq!(common::normalize(&std::fs::read_to_string(&s.srt).unwrap()), common::golden_srt());
     assert_eq!(
         mock.calls(),
@@ -212,7 +212,7 @@ fn existing_srt_is_skipped_without_force() {
 fn saved_transcript_needs_no_api() {
     let s = setup();
     let out = job::process(&common::fixture("dialog.soniox.json"), &s.srt, &options(&s.temp), None).unwrap();
-    assert!(matches!(out, Outcome::Written { cues: 9, .. }));
+    assert!(matches!(out, Outcome::Written { cues: 10, .. }));
     assert_eq!(common::normalize(&std::fs::read_to_string(&s.srt).unwrap()), common::golden_srt());
 }
 
@@ -236,4 +236,115 @@ fn default_output_paths() {
     assert_eq!(job::default_output(&p("a/clip.MP4"), None), p("a/clip.srt"));
     assert_eq!(job::default_output(&p("a/clip.soniox.json"), None), p("a/clip.srt"));
     assert_eq!(job::default_output(&p("a/v.1.mov"), Some(Path::new("out"))), p("out/v.1.srt"));
+}
+
+// ---------------------------------------------------------------- nothing to transcribe
+
+fn copy_fixture(s: &Setup, name: &str) -> std::path::PathBuf {
+    let to = s.dir.path().join(name);
+    std::fs::copy(common::fixture(name), &to).unwrap();
+    to
+}
+
+#[test]
+fn empty_media_file_is_an_error_without_api_calls() {
+    let s = setup();
+    let input = s.dir.path().join("empty.mp4");
+    std::fs::write(&input, b"").unwrap();
+    let mock = MockSoniox::happy(common::transcript());
+    let client = Client::new(&mock.url, "key").unwrap();
+    let err = job::process(&input, &s.srt, &options(&s.temp), Some(&client)).unwrap_err();
+    assert!(format!("{err}").contains("empty file"), "{err}");
+    assert!(mock.calls().is_empty());
+    assert!(!s.srt.exists());
+}
+
+#[test]
+fn empty_or_foreign_json_is_an_error() {
+    let s = setup();
+    for (name, body, expected) in [
+        ("blank.json", "  \n", "empty transcript"),
+        ("broken.json", "{\"tokens\": [", "not valid JSON"),
+        ("other.json", "{\"hello\": 1}", "not a Soniox transcript"),
+    ] {
+        let input = s.dir.path().join(name);
+        std::fs::write(&input, body).unwrap();
+        let err = job::process(&input, &s.srt, &options(&s.temp), None).unwrap_err();
+        assert!(format!("{err:#}").contains(expected), "{name}: {err:#}");
+        assert!(!s.srt.exists());
+    }
+}
+
+#[test]
+fn video_without_audio_track_is_reported_not_uploaded() {
+    let s = setup();
+    let mock = MockSoniox::happy(common::transcript());
+    let client = Client::new(&mock.url, "key").unwrap();
+    let out = job::process(&common::fixture("noaudio.mp4"), &s.srt, &options(&s.temp), Some(&client)).unwrap();
+    assert!(matches!(&out, Outcome::NoAudio { reason } if reason == "no audio track"), "{out:?}");
+    assert!(mock.calls().is_empty());
+    assert!(!s.srt.exists());
+    assert_empty(&s.temp);
+}
+
+#[test]
+fn digital_silence_is_not_uploaded() {
+    let s = setup();
+    let mock = MockSoniox::happy(common::transcript());
+    let client = Client::new(&mock.url, "key").unwrap();
+    let out = job::process(&common::fixture("silence.m4a"), &s.srt, &options(&s.temp), Some(&client)).unwrap();
+    assert!(matches!(out, Outcome::NoSpeech { marker: None, cached: false }), "{out:?}");
+    assert!(mock.calls().is_empty());
+    assert!(!s.srt.exists());
+    assert_empty(&s.temp);
+}
+
+#[test]
+fn no_speech_leaves_a_marker_and_is_not_paid_for_twice() {
+    let s = setup();
+    let input = copy_fixture(&s, "nospeech.mp4");
+    let srt = s.dir.path().join("nospeech.srt");
+    // Real Soniox answer for this video: no tokens.
+    let mock = MockSoniox::happy(common::transcript_of("nospeech"));
+    let client = Client::new(&mock.url, "key").unwrap();
+
+    let first = job::process(&input, &srt, &options(&s.temp), Some(&client)).unwrap();
+    let marker = s.dir.path().join("nospeech.soniox.json");
+    assert!(matches!(&first, Outcome::NoSpeech { marker: Some(m), cached: false } if *m == marker), "{first:?}");
+    assert!(!srt.exists(), "no .srt for a file without speech");
+    let saved: Value = serde_json::from_str(&std::fs::read_to_string(&marker).unwrap()).unwrap();
+    assert_eq!(saved["tokens"], json!([]));
+    let paid = mock.calls().len();
+    assert!(mock.calls().contains(&"POST /v1/files".to_string()));
+
+    let second = job::process(&input, &srt, &options(&s.temp), Some(&client)).unwrap();
+    assert!(matches!(second, Outcome::NoSpeech { marker: Some(_), cached: true }), "{second:?}");
+    assert_eq!(mock.calls().len(), paid, "second run must not call Soniox");
+
+    // --force asks Soniox again.
+    let force = Options { force: true, ..options(&s.temp) };
+    job::process(&input, &srt, &force, Some(&client)).unwrap();
+    assert!(mock.calls().len() > paid);
+}
+
+#[test]
+fn saved_transcript_next_to_the_output_is_reused() {
+    let s = setup();
+    let input = copy_fixture(&s, "dialog.mp4");
+    copy_fixture(&s, "dialog.soniox.json");
+    let mock = MockSoniox::happy(json!({"tokens": []}));
+    let client = Client::new(&mock.url, "key").unwrap();
+
+    let out = job::process(&input, &s.srt, &options(&s.temp), Some(&client)).unwrap();
+    assert!(matches!(out, Outcome::Written { cues: 10, cached: true, .. }), "{out:?}");
+    assert!(mock.calls().is_empty(), "{:?}", mock.calls());
+    assert_eq!(common::normalize(&std::fs::read_to_string(&s.srt).unwrap()), common::golden_srt());
+}
+
+#[test]
+fn transcript_input_without_words_writes_nothing() {
+    let s = setup();
+    let out = job::process(&common::fixture("nospeech.soniox.json"), &s.srt, &options(&s.temp), None).unwrap();
+    assert!(matches!(out, Outcome::NoSpeech { marker: None, cached: false }), "{out:?}");
+    assert!(!s.srt.exists());
 }
