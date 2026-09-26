@@ -19,7 +19,27 @@ use sonisub::job::{self, Outcome};
 use sonisub::soniox::{self, Client, api_error};
 use sonisub::usage::{self, Summary};
 
+/// Prints the library's warnings (e.g. an upload that could not be deleted on Soniox) to stderr.
+struct StderrLogger;
+
+impl log::Log for StderrLogger {
+    fn enabled(&self, metadata: &log::Metadata) -> bool {
+        metadata.level() <= log::Level::Warn
+    }
+
+    fn log(&self, record: &log::Record) {
+        if self.enabled(record.metadata()) {
+            eprintln!("warning: {}", record.args());
+        }
+    }
+
+    fn flush(&self) {}
+}
+
 fn main() -> ExitCode {
+    if log::set_logger(&StderrLogger).is_ok() {
+        log::set_max_level(log::LevelFilter::Warn);
+    }
     let _ = ctrlc::set_handler(|| {
         if interrupt() {
             // Second Ctrl+C: give up on cleanup.

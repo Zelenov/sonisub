@@ -1525,6 +1525,7 @@ dependencies = [
  "flacenc",
  "humantime",
  "indicatif",
+ "log",
  "reqwest",
  "serde",
  "serde_json",

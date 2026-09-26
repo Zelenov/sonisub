@@ -6,6 +6,7 @@ use std::path::Path;
 
 use indicatif::ProgressBar;
 use sonisub::audio::{Backend, NoAudio, RATE, SILENCE_PEAK, extract};
+use sonisub::cancel::{CancelToken, Cancelled};
 use symphonia::core::codecs::audio::AudioDecoderOptions;
 use symphonia::core::formats::probe::Hint;
 use symphonia::core::formats::{FormatOptions, TrackType};
@@ -51,7 +52,7 @@ fn window(s: &[f32], from: f64, to: f64) -> &[f32] {
 fn native_decoder_extracts_16k_mono_flac() {
     let tmp = tempfile::tempdir().unwrap();
     let out = tmp.path().join("a.flac");
-    let x = extract(&common::fixture("dialog.mp4"), &out, Backend::Native, &ProgressBar::hidden()).unwrap();
+    let x = extract(&common::fixture("dialog.mp4"), &out, Backend::Native, &ProgressBar::hidden(), &CancelToken::new()).unwrap();
 
     assert!((x.duration_s - FIXTURE_SECONDS).abs() < 0.1, "duration {}", x.duration_s);
     assert_eq!(&std::fs::read(&out).unwrap()[..4], b"fLaC");
@@ -66,7 +67,7 @@ fn native_decoder_keeps_speech_where_it_was() {
     // A timing shift from resampling would move energy into the silent lead-in.
     let tmp = tempfile::tempdir().unwrap();
     let out = tmp.path().join("a.flac");
-    extract(&common::fixture("dialog.mp4"), &out, Backend::Native, &ProgressBar::hidden()).unwrap();
+    extract(&common::fixture("dialog.mp4"), &out, Backend::Native, &ProgressBar::hidden(), &CancelToken::new()).unwrap();
     let (_, _, s) = read_flac(&out);
     let silence = rms(window(&s, 0.0, 0.4));
     let speech = rms(window(&s, 0.8, 3.5));
@@ -85,8 +86,8 @@ fn ffmpeg_backend_matches_native() {
     let tmp = tempfile::tempdir().unwrap();
     let (a, b) = (tmp.path().join("native.flac"), tmp.path().join("ffmpeg.flac"));
     let input = common::fixture("dialog.mp4");
-    extract(&input, &a, Backend::Native, &ProgressBar::hidden()).unwrap();
-    extract(&input, &b, Backend::Ffmpeg, &ProgressBar::hidden()).unwrap();
+    extract(&input, &a, Backend::Native, &ProgressBar::hidden(), &CancelToken::new()).unwrap();
+    extract(&input, &b, Backend::Ffmpeg, &ProgressBar::hidden(), &CancelToken::new()).unwrap();
     let ((ra, ca, sa), (rb, cb, sb)) = (read_flac(&a), read_flac(&b));
     assert_eq!((ra, ca), (rb, cb));
     assert!((sa.len() as f64 - sb.len() as f64).abs() / (RATE as f64) < 0.1);
@@ -100,20 +101,20 @@ fn not_media_is_an_error() {
     let tmp = tempfile::tempdir().unwrap();
     let fake = tmp.path().join("fake.mp4");
     std::fs::write(&fake, "definitely not a video").unwrap();
-    let r = extract(&fake, &tmp.path().join("a.flac"), Backend::Native, &ProgressBar::hidden());
+    let r = extract(&fake, &tmp.path().join("a.flac"), Backend::Native, &ProgressBar::hidden(), &CancelToken::new());
     assert!(r.is_err());
 }
 
 #[test]
 fn missing_file_is_an_error() {
     let tmp = tempfile::tempdir().unwrap();
-    let r = extract(&tmp.path().join("nope.mp4"), &tmp.path().join("a.flac"), Backend::Native, &ProgressBar::hidden());
+    let r = extract(&tmp.path().join("nope.mp4"), &tmp.path().join("a.flac"), Backend::Native, &ProgressBar::hidden(), &CancelToken::new());
     assert!(format!("{:#}", r.err().unwrap()).contains("cannot open"));
 }
 
 fn no_audio_reason(input: &Path, backend: Backend) -> String {
     let tmp = tempfile::tempdir().unwrap();
-    let err = extract(input, &tmp.path().join("a.flac"), backend, &ProgressBar::hidden()).err().expect("an error");
+    let err = extract(input, &tmp.path().join("a.flac"), backend, &ProgressBar::hidden(), &CancelToken::new()).err().expect("an error");
     err.downcast_ref::<NoAudio>().unwrap_or_else(|| panic!("not NoAudio: {err:#}")).0.clone()
 }
 
@@ -158,7 +159,7 @@ fn wav_without_samples_is_no_audio() {
 #[test]
 fn digital_silence_is_measured_as_silent() {
     let tmp = tempfile::tempdir().unwrap();
-    let x = extract(&common::fixture("silence.m4a"), &tmp.path().join("a.flac"), Backend::Native, &ProgressBar::hidden())
+    let x = extract(&common::fixture("silence.m4a"), &tmp.path().join("a.flac"), Backend::Native, &ProgressBar::hidden(), &CancelToken::new())
         .unwrap();
     assert!(x.peak.unwrap() < SILENCE_PEAK, "peak {:?}", x.peak);
 }
@@ -167,7 +168,7 @@ fn digital_silence_is_measured_as_silent() {
 fn noise_without_speech_is_not_silent() {
     // Must still go to Soniox: only Soniox can tell that there are no words in it.
     let tmp = tempfile::tempdir().unwrap();
-    let x = extract(&common::fixture("nospeech.mp4"), &tmp.path().join("a.flac"), Backend::Native, &ProgressBar::hidden())
+    let x = extract(&common::fixture("nospeech.mp4"), &tmp.path().join("a.flac"), Backend::Native, &ProgressBar::hidden(), &CancelToken::new())
         .unwrap();
     assert!(x.peak.unwrap() > 0.01, "peak {:?}", x.peak);
 }
@@ -175,7 +176,20 @@ fn noise_without_speech_is_not_silent() {
 #[test]
 fn speech_is_not_silent() {
     let tmp = tempfile::tempdir().unwrap();
-    let x = extract(&common::fixture("dialog.mp4"), &tmp.path().join("a.flac"), Backend::Native, &ProgressBar::hidden())
+    let x = extract(&common::fixture("dialog.mp4"), &tmp.path().join("a.flac"), Backend::Native, &ProgressBar::hidden(), &CancelToken::new())
         .unwrap();
     assert!(x.peak.unwrap() > 0.1, "peak {:?}", x.peak);
+}
+
+#[test]
+fn a_cancelled_token_stops_extraction() {
+    let tmp = tempfile::tempdir().unwrap();
+    let cancel = CancelToken::new();
+    cancel.cancel();
+    for backend in [Backend::Native, Backend::Auto] {
+        let err = extract(&common::fixture("dialog.mp4"), &tmp.path().join("a.flac"), backend, &ProgressBar::hidden(), &cancel)
+            .err()
+            .expect("cancelled");
+        assert!(err.is::<Cancelled>(), "{backend:?}: {err:#}");
+    }
 }
