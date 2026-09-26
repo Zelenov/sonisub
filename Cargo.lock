@@ -1517,7 +1517,7 @@ dependencies = [
 
 [[package]]
 name = "sonisub"
-version = "0.1.0"
+version = "0.3.0"
 dependencies = [
  "anyhow",
  "clap",
@@ -1525,6 +1525,7 @@ dependencies = [
  "flacenc",
  "humantime",
  "indicatif",
+ "log",
  "reqwest",
  "serde",
  "serde_json",

@@ -2,7 +2,6 @@
 //! Knows nothing about batches, log files or the command line.
 
 use std::path::{Path, PathBuf};
-use std::thread::sleep;
 use std::time::Duration;
 
 use anyhow::{Context, Result, anyhow, bail};
@@ -10,12 +9,13 @@ use indicatif::{MultiProgress, ProgressBar, ProgressStyle};
 use serde_json::{Value, json};
 
 use crate::audio;
-use crate::cancel::interrupted;
+use crate::cancel::{CancelToken, Cancelled};
 use crate::soniox::{self, Client, RemoteGuard};
 use crate::{premiere, srt};
 
 /// What gets written for a file.
-#[derive(clap::ValueEnum, Debug, Clone, Copy, PartialEq, Eq)]
+#[cfg_attr(feature = "cli", derive(clap::ValueEnum))]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Format {
     /// Subtitles: `clip.srt`.
     Srt,
@@ -65,6 +65,10 @@ pub struct Options {
     pub reference: String,
     /// Draw stage bars here, under a batch's overall bar; they are cleared when the file is done.
     pub progress: Option<MultiProgress>,
+    /// Stops this job's extraction and polling; give the [`Client`] the same token
+    /// ([`Client::with_cancel`]) to stop its uploads and retries too. The process-wide
+    /// [`crate::cancel::interrupt`] stops every job.
+    pub cancel: CancelToken,
 }
 
 impl Default for Options {
@@ -86,6 +90,7 @@ impl Default for Options {
             prefix: String::new(),
             reference: "sonisub".into(),
             progress: None,
+            cancel: CancelToken::new(),
         }
     }
 }
@@ -240,7 +245,8 @@ pub fn transcribe(input: &Path, opts: &Options, client: &Client) -> Result<Optio
     let audio_path = tmp.path().join(format!("{stem}.flac"));
 
     let pb = bar(opts, "extract", "{prefix} {msg:9} [{bar:30.cyan/blue}] {percent:>3}%  {elapsed}");
-    let audio = audio::extract(input, &audio_path, opts.audio, &pb).inspect_err(|_| pb.finish_and_clear())?;
+    let audio =
+        audio::extract(input, &audio_path, opts.audio, &pb, &opts.cancel).inspect_err(|_| pb.finish_and_clear())?;
     finish(opts, &pb, format!("extracted {} ({})", fmt_dur(audio.duration_s), fmt_size(&audio.path)));
     if opts.keep_audio {
         tmp.disable_cleanup(true);
@@ -251,7 +257,10 @@ pub fn transcribe(input: &Path, opts: &Options, client: &Client) -> Result<Optio
     }
 
     // Deletes the uploaded file and the transcription on drop, including on `?` returns below.
-    let mut remote = RemoteGuard { client, file_id: None, transcription_id: None, warnings: Vec::new() };
+    let mut remote = RemoteGuard { client, file_id: None, transcription_id: None };
+    if opts.cancel.is_cancelled() {
+        return Err(Cancelled.into());
+    }
 
     let pb = bar(opts, "upload", "{prefix} {msg:9} [{bar:30.cyan/blue}] {bytes}/{total_bytes}  {bytes_per_sec}");
     let file_id = client.upload(&audio.path, &pb).inspect_err(|_| pb.finish_and_clear())?;
@@ -276,15 +285,17 @@ pub fn transcribe(input: &Path, opts: &Options, client: &Client) -> Result<Optio
     // Clears the spinner however this loop is left.
     let _clear = ClearOnDrop(&pb);
     loop {
-        if interrupted() {
-            bail!("interrupted");
+        if opts.cancel.is_cancelled() {
+            return Err(Cancelled.into());
         }
         let st = client.status(&id)?;
         if st.status == "completed" {
             break;
         }
         pb.set_message(format!("transcribing ({})", st.status));
-        sleep(opts.poll);
+        if !opts.cancel.sleep(opts.poll) {
+            return Err(Cancelled.into());
+        }
     }
     pb.set_message("downloading transcript");
     let transcript = client.transcript(&id)?;

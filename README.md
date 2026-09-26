@@ -158,10 +158,25 @@ Exit codes: `0` ok, `1` some files failed, `2` fatal (key/balance/usage), `130` 
 | `src/job.rs` | **one file**: media → audio → Soniox → `.srt` / `.premiere.json`, cleanup. `job::process(input, output, &Options, client)` |
 | `src/audio.rs` | audio track → 16 kHz mono FLAC (built-in decoder or ffmpeg) |
 | `src/soniox.rs` | Soniox REST client, error types, remote cleanup guard |
-| `src/languages.rs` | languages per model from Soniox (`languages::fetch(client)`) |
+| `src/languages.rs` | language codes `-l` takes, from Soniox (`languages::fetch(client)`) |
 | `src/srt.rs` | transcript tokens → cues → SRT text (`srt::Layout`) |
 | `src/premiere.rs` | transcript tokens → Premiere Pro transcript JSON |
+| `src/cancel.rs` | Ctrl+C flag and per-job `CancelToken` |
 | `src/main.rs`, `src/cli.rs` | command line only: arguments, the list of files, log, stopping on fatal errors |
+
+### As a library
+
+```toml
+sonisub = { version = "0.3", default-features = false }
+```
+
+`default-features = false` drops the `cli` feature (the binary, `clap`, `ctrlc`). Per file:
+`job::process(input, output, &Options { cancel: token.clone(), .. }, Some(&Client::new(soniox::DEFAULT_BASE, key)?.with_cancel(token)))`.
+Cancelling the token stops extraction, upload, retries and polling within a fraction of a second, with the
+error `cancel::Cancelled`; what was created on Soniox is still deleted. Requests other than uploads time out
+after 60 s and are retried. Failed remote deletes are logged with the `log` crate and counted by
+`Client::failed_deletes`. `reqwest::blocking::Client` must not be created or dropped on an async runtime
+thread, so create the `Client` where the job runs. On Windows, ffmpeg and ffprobe run without a console window.
 
 ## Tests
 
@@ -194,5 +209,11 @@ The workflow runs the tests and builds Windows x64, Linux x64 and macOS arm64.
 
 - Push to `main`: a published release `vX.Y.Z` (skipped if that release already exists).
 - Push to any other branch: a draft `vX.Y.Z-<branch>`, rebuilt on every push.
+- From `main`, the crate is also published to [crates.io](https://crates.io/crates/sonisub) (needs the
+  `CARGO_REGISTRY_TOKEN` secret); a version already there is skipped.
+
+## License
+
+MIT, see [LICENSE](LICENSE).
 
 To release: bump `version` in `Cargo.toml`, add a new `# X.Y.Z` section at the top of `version.md`, commit, push.

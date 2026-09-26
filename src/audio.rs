@@ -16,12 +16,13 @@ use symphonia::core::formats::{FormatOptions, TrackType};
 use symphonia::core::io::MediaSourceStream;
 use symphonia::core::meta::MetadataOptions;
 
-use crate::cancel::interrupted;
+use crate::cancel::{CancelToken, Cancelled};
 
 pub const RATE: u32 = 16_000;
 
 /// How to extract audio.
-#[derive(clap::ValueEnum, Debug, Clone, Copy, PartialEq, Eq, Default)]
+#[cfg_attr(feature = "cli", derive(clap::ValueEnum))]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum Backend {
     /// Built-in decoder, ffmpeg if it fails and is on PATH.
     #[default]
@@ -79,21 +80,23 @@ pub fn probe(input: &Path) -> Result<Probe> {
     Ok(Probe::Audio(track.num_frames.zip(rate).map(|(n, r)| n as f64 / r as f64)))
 }
 
-pub fn extract(input: &Path, out: &Path, backend: Backend, pb: &ProgressBar) -> Result<Extracted> {
+/// Extracts the audio of `input` into `out`. Stops with [`Cancelled`] soon after `cancel` is set.
+pub fn extract(input: &Path, out: &Path, backend: Backend, pb: &ProgressBar, cancel: &CancelToken) -> Result<Extracted> {
     let ffmpeg = || which::which("ffmpeg").ok();
     match backend {
-        Backend::Native => native(input, out, pb),
+        Backend::Native => native(input, out, pb, cancel),
         Backend::Ffmpeg => {
             let exe = ffmpeg().ok_or_else(|| anyhow!("ffmpeg not found on PATH"))?;
-            with_ffmpeg(&exe, input, out, pb)
+            with_ffmpeg(&exe, input, out, pb, cancel)
         }
-        Backend::Auto => match native(input, out, pb) {
+        Backend::Auto => match native(input, out, pb, cancel) {
             Ok(x) => Ok(x),
-            Err(e) if interrupted() || e.is::<NoAudio>() => Err(e),
+            Err(e) if cancel.is_cancelled() || e.is::<NoAudio>() => Err(e),
             Err(e) => match ffmpeg() {
                 Some(exe) => {
                     pb.println(format!("  built-in decoder failed ({e:#}), falling back to ffmpeg"));
-                    with_ffmpeg(&exe, input, out, pb)
+                    log::info!("built-in decoder failed on {} ({e:#}), falling back to ffmpeg", input.display());
+                    with_ffmpeg(&exe, input, out, pb, cancel)
                 }
                 None => Err(e.context("built-in decoder failed and ffmpeg is not on PATH")),
             },
@@ -101,7 +104,7 @@ pub fn extract(input: &Path, out: &Path, backend: Backend, pb: &ProgressBar) -> 
     }
 }
 
-fn native(input: &Path, out: &Path, pb: &ProgressBar) -> Result<Extracted> {
+fn native(input: &Path, out: &Path, pb: &ProgressBar, cancel: &CancelToken) -> Result<Extracted> {
     let file = File::open(input).with_context(|| format!("cannot open {}", input.display()))?;
     let mss = MediaSourceStream::new(Box::new(file), Default::default());
     let mut hint = Hint::new();
@@ -135,8 +138,8 @@ fn native(input: &Path, out: &Path, pb: &ProgressBar) -> Result<Extracted> {
     let mut decoded_frames = 0u64;
 
     loop {
-        if interrupted() {
-            bail!("interrupted");
+        if cancel.is_cancelled() {
+            return Err(Cancelled.into());
         }
         let packet = match format.next_packet() {
             Ok(Some(p)) => p,
@@ -197,13 +200,13 @@ fn write_flac(samples: &[i16], out: &Path) -> Result<()> {
     std::fs::write(out, bytes).with_context(|| format!("cannot write {}", out.display()))
 }
 
-fn with_ffmpeg(exe: &Path, input: &Path, out: &Path, pb: &ProgressBar) -> Result<Extracted> {
+fn with_ffmpeg(exe: &Path, input: &Path, out: &Path, pb: &ProgressBar, cancel: &CancelToken) -> Result<Extracted> {
     let duration = probe_duration(exe, input);
     if let Some(d) = duration {
         pb.set_length((d * 1000.0) as u64);
     }
     pb.set_message("ffmpeg");
-    let mut child = Command::new(exe)
+    let mut child = command(exe)
         .args(["-hide_banner", "-nostats", "-loglevel", "error", "-y", "-i"])
         .arg(input)
         .args(["-vn", "-ac", "1", "-ar", &RATE.to_string(), "-c:a", "flac", "-progress", "pipe:1"])
@@ -215,9 +218,10 @@ fn with_ffmpeg(exe: &Path, input: &Path, out: &Path, pb: &ProgressBar) -> Result
     let stdout = child.stdout.take().expect("piped stdout");
     let mut last_ms = 0u64;
     for line in BufReader::new(stdout).lines().map_while(Result::ok) {
-        if interrupted() {
+        if cancel.is_cancelled() {
             let _ = child.kill();
-            bail!("interrupted");
+            let _ = child.wait();
+            return Err(Cancelled.into());
         }
         if let Some(v) = line.strip_prefix("out_time_us=").and_then(|v| v.trim().parse::<u64>().ok()) {
             last_ms = v / 1000;
@@ -237,12 +241,26 @@ fn with_ffmpeg(exe: &Path, input: &Path, out: &Path, pb: &ProgressBar) -> Result
 
 fn probe_duration(ffmpeg: &Path, input: &Path) -> Option<f64> {
     let ffprobe = ffmpeg.with_file_name(if cfg!(windows) { "ffprobe.exe" } else { "ffprobe" });
-    let out = Command::new(ffprobe)
+    let out = command(&ffprobe)
         .args(["-v", "error", "-show_entries", "format=duration", "-of", "csv=p=0"])
         .arg(input)
         .output()
         .ok()?;
     String::from_utf8_lossy(&out.stdout).trim().parse().ok()
+}
+
+/// A console program started without a console window of its own: a GUI app using this crate
+/// would otherwise flash one per file on Windows.
+fn command(exe: &Path) -> Command {
+    #[allow(unused_mut)]
+    let mut cmd = Command::new(exe);
+    #[cfg(windows)]
+    {
+        use std::os::windows::process::CommandExt;
+        const CREATE_NO_WINDOW: u32 = 0x0800_0000;
+        cmd.creation_flags(CREATE_NO_WINDOW);
+    }
+    cmd
 }
 
 /// Streaming windowed-sinc resampler (polyphase table, Blackman window).

@@ -4,7 +4,8 @@ use std::fmt;
 use std::fs::File;
 use std::io::Read;
 use std::path::Path;
-use std::thread::sleep;
+use std::sync::Arc;
+use std::sync::atomic::{AtomicUsize, Ordering};
 use std::time::Duration;
 
 use anyhow::{Context, Result, anyhow};
@@ -13,7 +14,14 @@ use reqwest::blocking::{Client as Http, RequestBuilder, Response, multipart};
 use serde::Deserialize;
 use serde_json::{Value, json};
 
-use crate::cancel::interrupted;
+use crate::cancel::{CancelToken, Cancelled};
+
+/// The Soniox REST API.
+pub const DEFAULT_BASE: &str = "https://api.soniox.com/v1";
+
+/// How long a request other than an upload may take before it is given up (and retried): a
+/// connection that silently died (Wi-Fi gone, laptop asleep) otherwise never returns.
+pub const REQUEST_TIMEOUT: Duration = Duration::from_secs(60);
 
 /// An error reported by Soniox, either as an HTTP error or as a failed transcription job.
 #[derive(Debug, Clone)]
@@ -71,6 +79,10 @@ pub struct Client {
     http: Http,
     base: String,
     key: String,
+    cancel: CancelToken,
+    timeout: Duration,
+    /// Remote files and transcriptions that could not be deleted (see [`RemoteGuard`]).
+    failed_deletes: Arc<AtomicUsize>,
 }
 
 #[derive(Deserialize)]
@@ -87,29 +99,79 @@ impl Client {
         let http = Http::builder()
             .user_agent(concat!("sonisub/", env!("CARGO_PKG_VERSION")))
             .connect_timeout(Duration::from_secs(30))
+            // Finds a connection that died while waiting for an answer.
+            .tcp_keepalive(Duration::from_secs(30))
             .timeout(None::<Duration>)
             .build()?;
-        Ok(Self { http, base: base.trim_end_matches('/').to_string(), key: key.to_string() })
+        Ok(Self {
+            http,
+            base: base.trim_end_matches('/').to_string(),
+            key: key.to_string(),
+            cancel: CancelToken::new(),
+            timeout: REQUEST_TIMEOUT,
+            failed_deletes: Arc::default(),
+        })
     }
 
+    /// Stops uploads and retries soon after `cancel` is set (the process-wide flag always does).
+    pub fn with_cancel(mut self, cancel: CancelToken) -> Self {
+        self.cancel = cancel;
+        self
+    }
+
+    /// Time limit for each request except uploads; [`REQUEST_TIMEOUT`] by default.
+    pub fn with_timeout(mut self, timeout: Duration) -> Self {
+        self.timeout = timeout;
+        self
+    }
+
+    /// How many remote files and transcriptions this client failed to delete after use.
+    /// Each one is also logged as a warning with its id; `sonisub purge` removes them.
+    pub fn failed_deletes(&self) -> usize {
+        self.failed_deletes.load(Ordering::Relaxed)
+    }
+
+    /// A request limited to the client's timeout.
     fn req(&self, method: reqwest::Method, path: &str) -> RequestBuilder {
+        self.req_untimed(method, path).timeout(self.timeout)
+    }
+
+    /// A request without the client's time limit: an upload sets its own, by size.
+    fn req_untimed(&self, method: reqwest::Method, path: &str) -> RequestBuilder {
         self.http.request(method, format!("{}{}", self.base, path)).bearer_auth(&self.key)
     }
 
-    /// Sends a request, retrying transient failures (network, 429, 5xx).
+    /// Sends a request, retrying transient failures (network, timeout, 429, 5xx).
     fn send(&self, make: impl Fn() -> Result<RequestBuilder>) -> Result<Response> {
+        self.send_with(make, true)
+    }
+
+    /// Sends a request that creates something: not retried after a timeout, since Soniox may
+    /// have created it already, and a second one would be left behind (and maybe paid for).
+    fn send_create(&self, make: impl Fn() -> Result<RequestBuilder>) -> Result<Response> {
+        self.send_with(make, false)
+    }
+
+    fn send_with(&self, make: impl Fn() -> Result<RequestBuilder>, retry_timeouts: bool) -> Result<Response> {
         let mut delay = Duration::from_secs(2);
         for attempt in 1.. {
             let res = make()?.send();
-            let retry = match &res {
-                Ok(r) => r.status().as_u16() == 429 || r.status().is_server_error(),
-                Err(e) => !interrupted() && (e.is_connect() || e.is_timeout() || e.is_request()),
-            };
-            if !retry || attempt >= 4 || interrupted() {
+            // Cancelled: no retries, but the request itself is still made, so cleanup after a
+            // cancel still deletes what was created.
+            let cancelled = self.cancel.is_cancelled();
+            let retry = !cancelled
+                && match &res {
+                    Ok(r) => r.status().as_u16() == 429 || r.status().is_server_error(),
+                    Err(e) if e.is_timeout() => retry_timeouts,
+                    Err(e) => e.is_connect() || e.is_request(),
+                };
+            if !retry || attempt >= 4 {
                 let r = res.context("request to Soniox failed")?;
                 return check(r);
             }
-            sleep(delay);
+            if !self.cancel.sleep(delay) {
+                return Err(Cancelled.into());
+            }
             delay *= 2;
         }
         unreachable!()
@@ -124,17 +186,23 @@ impl Client {
         let len = std::fs::metadata(path)?.len();
         pb.set_length(len);
         let name = path.file_name().and_then(|n| n.to_str()).unwrap_or("audio.flac").to_string();
-        let r = self.send(|| {
+        // No fixed limit for an upload, but one that grows with its size (at least 50 KB/s), so a
+        // connection that stalls mid-upload does not hang the job, and its cancel, for good.
+        let limit = Duration::from_secs(120) + Duration::from_secs(len / 50_000);
+        let r = self.send_create(|| {
             pb.set_position(0);
-            let reader = Progress { inner: File::open(path)?, pb: pb.clone() };
+            let reader = Progress { inner: File::open(path)?, pb: pb.clone(), cancel: self.cancel.clone() };
             let part = multipart::Part::reader_with_length(reader, len).file_name(name.clone());
-            Ok(self.req(reqwest::Method::POST, "/files").multipart(multipart::Form::new().part("file", part)))
+            Ok(self
+                .req_untimed(reqwest::Method::POST, "/files")
+                .timeout(limit)
+                .multipart(multipart::Form::new().part("file", part)))
         })?;
         Ok(r.json::<Id>()?.id)
     }
 
     pub fn create(&self, config: &Value) -> Result<String> {
-        let r = self.send(|| Ok(self.req(reqwest::Method::POST, "/transcriptions").json(config)))?;
+        let r = self.send_create(|| Ok(self.req(reqwest::Method::POST, "/transcriptions").json(config)))?;
         Ok(r.json::<Id>()?.id)
     }
 
@@ -282,15 +350,16 @@ fn check(r: Response) -> Result<Response> {
     .into())
 }
 
-/// Reader that drives an upload progress bar and aborts on Ctrl+C.
+/// Reader that drives an upload progress bar and aborts on cancel.
 struct Progress {
     inner: File,
     pb: ProgressBar,
+    cancel: CancelToken,
 }
 
 impl Read for Progress {
     fn read(&mut self, buf: &mut [u8]) -> std::io::Result<usize> {
-        if interrupted() {
+        if self.cancel.is_cancelled() {
             return Err(std::io::Error::new(std::io::ErrorKind::Interrupted, "interrupted"));
         }
         let n = self.inner.read(buf)?;
@@ -300,24 +369,28 @@ impl Read for Progress {
 }
 
 /// Deletes the remote file and transcription when dropped, whatever happened.
+/// A failed delete is logged as a warning (`log` crate) and counted in [`Client::failed_deletes`].
 pub struct RemoteGuard<'a> {
     pub client: &'a Client,
     pub file_id: Option<String>,
     pub transcription_id: Option<String>,
-    pub warnings: Vec<String>,
 }
 
 impl RemoteGuard<'_> {
     pub fn cleanup(&mut self) {
+        // After a cancel each delete is still tried, once (see `Client::send`).
+        let client = self.client;
         if let Some(id) = self.transcription_id.take()
-            && let Err(e) = self.client.delete_transcription(&id)
+            && let Err(e) = client.delete_transcription(&id)
         {
-            self.warnings.push(format!("could not delete Soniox transcription {id}: {e:#} (run `sonisub purge`)"));
+            self.client.failed_deletes.fetch_add(1, Ordering::Relaxed);
+            log::warn!("could not delete Soniox transcription {id}: {e:#} (run `sonisub purge`)");
         }
         if let Some(id) = self.file_id.take()
-            && let Err(e) = self.client.delete_file(&id)
+            && let Err(e) = client.delete_file(&id)
         {
-            self.warnings.push(format!("could not delete Soniox file {id}: {e:#} (run `sonisub purge`)"));
+            self.client.failed_deletes.fetch_add(1, Ordering::Relaxed);
+            log::warn!("could not delete Soniox file {id}: {e:#} (run `sonisub purge`)");
         }
     }
 }
@@ -325,9 +398,6 @@ impl RemoteGuard<'_> {
 impl Drop for RemoteGuard<'_> {
     fn drop(&mut self) {
         self.cleanup();
-        for w in &self.warnings {
-            eprintln!("warning: {w}");
-        }
     }
 }
 
