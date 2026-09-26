@@ -1,6 +1,7 @@
 # sonisub
 
-Generate `.srt` subtitles for video and audio files with [Soniox](https://soniox.com) speech-to-text.
+Generate `.srt` subtitles (and Premiere Pro transcripts) for video and audio files with
+[Soniox](https://soniox.com) speech-to-text.
 One self-contained binary: no Python, no ffmpeg required.
 
 ```
@@ -33,6 +34,8 @@ Pipeline per file:
 3. **Build subtitles**: cues break on sentence ends, pauses, speaker changes and at commas when a cue is full;
    lines are balanced; nothing exceeds `--max-line` × `--max-lines`.
 4. **Clean up**: the temp audio and the Soniox file and transcription are deleted — also on errors and Ctrl+C.
+   The transcript itself is kept next to the output as `clip.soniox.json` (`--no-json` to drop it): other
+   formats and layouts are made from it later without paying again.
 
 ## Build from source
 
@@ -55,13 +58,16 @@ sonisub *.MP4                             # .srt next to every video, existing o
 sonisub clip.MP4 -f -o subs/clip.srt      # overwrite, explicit output
 sonisub *.MOV -d subs -l en --strict-lang # English only, into ./subs
 sonisub clip.MP4 -c "Nairobi, Maasai, UAT, QA"   # context terms improve recognition
-sonisub clip.MP4 -j                       # also keep clip.soniox.json
+sonisub clip.MP4 -t srt,premiere          # also clip.premiere.json for Premiere Pro's Text panel
+sonisub . -t premiere                     # only the Premiere transcript; saved .soniox.json files are reused
+sonisub clip.MP4 --no-json                # don't keep clip.soniox.json
 sonisub clip.MP4 -u                       # no length limit: one cue per sentence
 sonisub clip.MP4 -s                       # "Speaker 1: ..." when the speaker changes
 sonisub clip.MP4 --speaker-names Eugene,Sasha
 sonisub clip.soniox.json -f --max-line 32 # re-cut subtitles from a saved transcript, no API call
 sonisub purge                             # list leftovers in the Soniox account (--yes deletes)
 sonisub usage                             # what Soniox cost: last 30 days, today, price per hour
+sonisub languages                         # language codes -l takes, as Soniox reports them
 ```
 
 ## Folders
@@ -83,6 +89,29 @@ Before anything is uploaded, sonisub reads the headers and shows the plan:
 `-n` / `--dry-run` also lists every file and stops there. While running, one bar tracks the whole batch by
 audio length (files sent, minutes done, cost so far, ETA) with the current file's stages under it, and each
 finished file leaves one line: `✓` subtitled, `·` skipped, `∅` no speech, `–` no audio, `✗` error.
+
+## Premiere Pro transcript
+
+`-t premiere` writes `clip.premiere.json` in Adobe's transcript format
+([schema](https://github.com/AdobeDocs/uxp-premiere-pro-samples/blob/main/sample-panels/premiere-api/assets/transcript_format_spec.json)):
+every word with its time and confidence, sentence ends, speakers, language. In Premiere Pro (25.6+) it
+replaces Premiere's own transcription for that clip — text-based editing, captions and search then work on the
+Soniox text:
+
+1. Open the clip in the Source Monitor.
+2. Window > Text > Transcript, `…` menu > Import > Import Static Transcript, pick `clip.premiere.json`.
+
+Premiere does not pick the file up by itself when the media is imported: transcripts live inside the `.prproj`.
+To import many clips at once use the panel in [`premiere-plugin/`](premiere-plugin/README.md): select clips
+or bins, press **Import transcripts**.
+
+- A segment (paragraph in the Transcript panel) is one speaker and one language; silence longer than `--gap`
+  starts a new one. Speakers are "Speaker N" or `--speaker-names`.
+- Languages are mapped to Premiere's codes (`en` → `en-us`, `ru` → `ru-ru`, `pt` → `pt-br`, `zh` → `cmn-hans`...);
+  a language Premiere doesn't know becomes `??-??`. Without language identification the first `-l` hint is used.
+- Hesitations like "um", "uh", "эм" are tagged as fillers, so Premiere can remove them.
+- Only missing outputs are written: `-t srt,premiere` on a folder that already has `.srt` and `.soniox.json`
+  files adds the Premiere transcripts for free and leaves hand-edited `.srt` alone.
 
 ## How subtitles are cut
 
@@ -126,10 +155,12 @@ Exit codes: `0` ok, `1` some files failed, `2` fatal (key/balance/usage), `130` 
 
 | Module | Does |
 |---|---|
-| `src/job.rs` | **one file**: media → audio → Soniox → `.srt`, cleanup. `job::process(input, output, &Options, client)` |
+| `src/job.rs` | **one file**: media → audio → Soniox → `.srt` / `.premiere.json`, cleanup. `job::process(input, output, &Options, client)` |
 | `src/audio.rs` | audio track → 16 kHz mono FLAC (built-in decoder or ffmpeg) |
 | `src/soniox.rs` | Soniox REST client, error types, remote cleanup guard |
+| `src/languages.rs` | languages per model from Soniox (`languages::fetch(client)`) |
 | `src/srt.rs` | transcript tokens → cues → SRT text (`srt::Layout`) |
+| `src/premiere.rs` | transcript tokens → Premiere Pro transcript JSON |
 | `src/main.rs`, `src/cli.rs` | command line only: arguments, the list of files, log, stopping on fatal errors |
 
 ## Tests
@@ -143,7 +174,7 @@ cargo test --test live -- --ignored   # real Soniox round trip (needs SONIOX_API
 `dialog` (English voices plus a Russian and a Spanish line), `punctuation` (dense punctuation, abbreviations,
 numbers, a sentence without commas), `nospeech` (noise and music: Soniox's empty transcript), plus `noaudio.mp4`
 and `silence.m4a`. Each has the video, the transcript and expected subtitles for the default, `-u` and `-s`
-layouts. Review the `.srt` diff before committing regenerated fixtures.
+layouts, and `dialog`/`punctuation` the expected Premiere transcript. Review the `.srt` diff before committing regenerated fixtures.
 
 ## Building for other platforms
 

@@ -191,6 +191,15 @@ impl Client {
         }
     }
 
+    /// Speech-to-text models with their languages (`GET /models`).
+    pub fn models(&self) -> Result<Vec<crate::languages::Model>> {
+        #[derive(Deserialize)]
+        struct Models {
+            models: Vec<crate::languages::Model>,
+        }
+        Ok(self.send(|| Ok(self.req(reqwest::Method::GET, "/models")))?.json::<Models>()?.models)
+    }
+
     /// All ids of a paginated collection ("files" or "transcriptions"), with a short description each.
     pub fn list(&self, what: &str) -> Result<Vec<(String, String)>> {
         let mut out = Vec::new();

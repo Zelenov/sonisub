@@ -27,6 +27,11 @@ pub fn golden(file: &str) -> String {
     normalize(&std::fs::read_to_string(fixture(file)).unwrap())
 }
 
+/// Expected JSON `tests/fixtures/<file>`.
+pub fn golden_json(file: &str) -> Value {
+    serde_json::from_str(&std::fs::read_to_string(fixture(file)).unwrap()).unwrap()
+}
+
 pub fn golden_srt() -> String {
     golden("dialog.srt")
 }

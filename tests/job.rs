@@ -7,7 +7,7 @@ use std::time::Duration;
 
 use common::{MockSoniox, ok_route, soniox_error};
 use serde_json::{Value, json};
-use sonisub::job::{self, Options, Outcome};
+use sonisub::job::{self, Format, Options, Outcome};
 use sonisub::soniox::{Client, api_error};
 
 fn options(temp: &Path) -> Options {
@@ -41,7 +41,7 @@ fn video_to_srt_and_everything_cleaned_up() {
 
     let out = job::process(&common::fixture("dialog.mp4"), &s.srt, &options(&s.temp), Some(&client)).unwrap();
 
-    assert!(matches!(out, Outcome::Written { cues: 10, json: None, uploaded_s: Some(s), .. } if (s - 29.25).abs() < 0.1), "{out:?}");
+    assert!(matches!(out, Outcome::Written { cues: 10, json: Some(_), uploaded_s: Some(s), .. } if (s - 29.25).abs() < 0.1), "{out:?}");
     assert_eq!(common::normalize(&std::fs::read_to_string(&s.srt).unwrap()), common::golden_srt());
     assert_eq!(
         mock.calls(),
@@ -88,17 +88,69 @@ fn uploads_flac_and_sends_the_options() {
 }
 
 #[test]
-fn keep_json_saves_the_transcript() {
+fn the_transcript_is_kept_by_default() {
     let s = setup();
     let mock = MockSoniox::happy(common::transcript());
     let client = Client::new(&mock.url, "key").unwrap();
-    let opts = Options { keep_json: true, ..options(&s.temp) };
-    let out = job::process(&common::fixture("dialog.mp4"), &s.srt, &opts, Some(&client)).unwrap();
+    let out = job::process(&common::fixture("dialog.mp4"), &s.srt, &options(&s.temp), Some(&client)).unwrap();
 
     let Outcome::Written { json: Some(json), .. } = out else { panic!("{out:?}") };
     assert_eq!(json, s.dir.path().join("dialog.soniox.json"));
     let saved: Value = serde_json::from_str(&std::fs::read_to_string(json).unwrap()).unwrap();
     assert_eq!(saved, common::transcript());
+}
+
+#[test]
+fn no_json_leaves_no_transcript() {
+    let s = setup();
+    let mock = MockSoniox::happy(common::transcript());
+    let client = Client::new(&mock.url, "key").unwrap();
+    let opts = Options { keep_json: false, ..options(&s.temp) };
+    let out = job::process(&common::fixture("dialog.mp4"), &s.srt, &opts, Some(&client)).unwrap();
+
+    assert!(matches!(out, Outcome::Written { json: None, .. }), "{out:?}");
+    assert!(!s.dir.path().join("dialog.soniox.json").exists());
+}
+
+#[test]
+fn srt_and_premiere_together() {
+    let s = setup();
+    let mock = MockSoniox::happy(common::transcript());
+    let client = Client::new(&mock.url, "key").unwrap();
+    let opts = Options { formats: vec![Format::Srt, Format::Premiere], ..options(&s.temp) };
+    let out = job::process(&common::fixture("dialog.mp4"), &s.srt, &opts, Some(&client)).unwrap();
+
+    let premiere = s.dir.path().join("dialog.premiere.json");
+    let Outcome::Written { files, cues: 10, .. } = out else { panic!("{out:?}") };
+    assert_eq!(files, [s.srt.clone(), premiere.clone()]);
+    assert_eq!(common::normalize(&std::fs::read_to_string(&s.srt).unwrap()), common::golden_srt());
+    let t: Value = serde_json::from_str(&std::fs::read_to_string(&premiere).unwrap()).unwrap();
+    assert_eq!(t, common::golden_json("dialog.premiere.json"));
+}
+
+#[test]
+fn a_new_format_is_made_from_the_saved_transcript_leaving_the_srt_alone() {
+    let s = setup();
+    let input = copy_fixture(&s, "dialog.mp4");
+    copy_fixture(&s, "dialog.soniox.json");
+    std::fs::write(&s.srt, "edited by hand").unwrap();
+    let opts = Options { formats: vec![Format::Srt, Format::Premiere], ..options(&s.temp) };
+
+    let out = job::process(&input, &s.srt, &opts, None).unwrap();
+    let Outcome::Written { files, cached: true, uploaded_s: None, .. } = out else { panic!("{out:?}") };
+    assert_eq!(files, [s.dir.path().join("dialog.premiere.json")]);
+    assert_eq!(std::fs::read_to_string(&s.srt).unwrap(), "edited by hand");
+
+    let again = job::process(&input, &s.srt, &opts, None).unwrap();
+    assert!(matches!(again, Outcome::Skipped { .. }), "{again:?}");
+}
+
+#[test]
+fn output_base_accepts_any_output_extension() {
+    for given in ["out/clip.srt", "out/clip.premiere.json", "out/clip.json", "out/clip.SRT", "out/clip"] {
+        assert_eq!(job::output_base(Path::new(given)), Path::new("out/clip.srt"), "{given}");
+    }
+    assert_eq!(Format::Premiere.path(Path::new("out/clip.v2.srt")), Path::new("out/clip.v2.premiere.json"));
 }
 
 #[test]

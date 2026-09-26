@@ -1,0 +1,19 @@
+{
+  "id": "com.zelenov.sonisub",
+  "name": "sonisub",
+  "version": "0.1.0",
+  "main": "index.html",
+  "manifestVersion": 5,
+  "host": { "app": "premierepro", "minVersion": "25.6.0" },
+  "requiredPermissions": { "localFileSystem": "fullAccess" },
+  "entrypoints": [
+    {
+      "id": "import",
+      "type": "panel",
+      "label": { "default": "sonisub" },
+      "minimumSize": { "width": 230, "height": 200 },
+      "preferredDockedSize": { "width": 300, "height": 320 },
+      "preferredFloatingSize": { "width": 360, "height": 360 }
+    }
+  ]
+}

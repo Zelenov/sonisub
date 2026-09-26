@@ -1,0 +1,1135 @@
+{
+  "language": "en-us",
+  "segments": [
+    {
+      "duration": 8.88,
+      "language": "en-us",
+      "speaker": "426e1bb9-d319-4860-97c1-a523c1d8263e",
+      "start": 0.63,
+      "words": [
+        {
+          "confidence": 0.979,
+          "duration": 0.18,
+          "eos": false,
+          "start": 0.63,
+          "tags": [],
+          "text": "Well,",
+          "type": "word"
+        },
+        {
+          "confidence": 1.0,
+          "duration": 0.24,
+          "eos": false,
+          "start": 0.93,
+          "tags": [],
+          "text": "here's",
+          "type": "word"
+        },
+        {
+          "confidence": 1.0,
+          "duration": 0.06,
+          "eos": false,
+          "start": 1.17,
+          "tags": [],
+          "text": "the",
+          "type": "word"
+        },
+        {
+          "confidence": 0.988,
+          "duration": 0.42,
+          "eos": false,
+          "start": 1.29,
+          "tags": [],
+          "text": "plan:",
+          "type": "word"
+        },
+        {
+          "confidence": 1.0,
+          "duration": 0.06,
+          "eos": false,
+          "start": 2.25,
+          "tags": [],
+          "text": "first",
+          "type": "word"
+        },
+        {
+          "confidence": 0.958,
+          "duration": 0.06,
+          "eos": false,
+          "start": 2.55,
+          "tags": [],
+          "text": "we",
+          "type": "word"
+        },
+        {
+          "confidence": 0.999,
+          "duration": 0.54,
+          "eos": false,
+          "start": 2.73,
+          "tags": [],
+          "text": "record,",
+          "type": "word"
+        },
+        {
+          "confidence": 1.0,
+          "duration": 0.06,
+          "eos": false,
+          "start": 3.57,
+          "tags": [],
+          "text": "then",
+          "type": "word"
+        },
+        {
+          "confidence": 1.0,
+          "duration": 0.06,
+          "eos": false,
+          "start": 3.75,
+          "tags": [],
+          "text": "we",
+          "type": "word"
+        },
+        {
+          "confidence": 0.939,
+          "duration": 0.6,
+          "eos": false,
+          "start": 4.11,
+          "tags": [],
+          "text": "transcribe;",
+          "type": "word"
+        },
+        {
+          "confidence": 0.902,
+          "duration": 0.66,
+          "eos": false,
+          "start": 5.43,
+          "tags": [],
+          "text": "finally—and",
+          "type": "word"
+        },
+        {
+          "confidence": 1.0,
+          "duration": 0.06,
+          "eos": false,
+          "start": 6.15,
+          "tags": [],
+          "text": "this",
+          "type": "word"
+        },
+        {
+          "confidence": 1.0,
+          "duration": 0.06,
+          "eos": false,
+          "start": 6.27,
+          "tags": [],
+          "text": "is",
+          "type": "word"
+        },
+        {
+          "confidence": 1.0,
+          "duration": 0.06,
+          "eos": false,
+          "start": 6.33,
+          "tags": [],
+          "text": "the",
+          "type": "word"
+        },
+        {
+          "confidence": 1.0,
+          "duration": 0.3,
+          "eos": false,
+          "start": 6.51,
+          "tags": [],
+          "text": "tricky",
+          "type": "word"
+        },
+        {
+          "confidence": 1.0,
+          "duration": 0.72,
+          "eos": false,
+          "start": 6.87,
+          "tags": [],
+          "text": "part—we",
+          "type": "word"
+        },
+        {
+          "confidence": 1.0,
+          "duration": 0.18,
+          "eos": false,
+          "start": 7.71,
+          "tags": [],
+          "text": "cut",
+          "type": "word"
+        },
+        {
+          "confidence": 1.0,
+          "duration": 0.06,
+          "eos": false,
+          "start": 7.95,
+          "tags": [],
+          "text": "the",
+          "type": "word"
+        },
+        {
+          "confidence": 0.999,
+          "duration": 0.06,
+          "eos": false,
+          "start": 8.31,
+          "tags": [],
+          "text": "text",
+          "type": "word"
+        },
+        {
+          "confidence": 1.0,
+          "duration": 0.06,
+          "eos": false,
+          "start": 8.61,
+          "tags": [],
+          "text": "into",
+          "type": "word"
+        },
+        {
+          "confidence": 1.0,
+          "duration": 0.54,
+          "eos": true,
+          "start": 8.97,
+          "tags": [],
+          "text": "subtitles.",
+          "type": "word"
+        }
+      ]
+    },
+    {
+      "duration": 3.36,
+      "language": "en-us",
+      "speaker": "69090cea-ae9c-45cd-81e4-a2dbb766c0f9",
+      "start": 10.47,
+      "words": [
+        {
+          "confidence": 0.91,
+          "duration": 0.24,
+          "eos": false,
+          "start": 10.47,
+          "tags": [],
+          "text": "Wait,",
+          "type": "word"
+        },
+        {
+          "confidence": 1.0,
+          "duration": 0.42,
+          "eos": true,
+          "start": 11.37,
+          "tags": [],
+          "text": "really?",
+          "type": "word"
+        },
+        {
+          "confidence": 1.0,
+          "duration": 0.3,
+          "eos": false,
+          "start": 12.21,
+          "tags": [],
+          "text": "You're",
+          "type": "word"
+        },
+        {
+          "confidence": 1.0,
+          "duration": 0.12,
+          "eos": false,
+          "start": 12.51,
+          "tags": [],
+          "text": "doing",
+          "type": "word"
+        },
+        {
+          "confidence": 1.0,
+          "duration": 0.06,
+          "eos": false,
+          "start": 12.63,
+          "tags": [],
+          "text": "all",
+          "type": "word"
+        },
+        {
+          "confidence": 1.0,
+          "duration": 0.06,
+          "eos": false,
+          "start": 12.75,
+          "tags": [],
+          "text": "of",
+          "type": "word"
+        },
+        {
+          "confidence": 1.0,
+          "duration": 0.06,
+          "eos": false,
+          "start": 12.87,
+          "tags": [],
+          "text": "that",
+          "type": "word"
+        },
+        {
+          "confidence": 1.0,
+          "duration": 0.06,
+          "eos": false,
+          "start": 13.11,
+          "tags": [],
+          "text": "by",
+          "type": "word"
+        },
+        {
+          "confidence": 0.907,
+          "duration": 0.42,
+          "eos": true,
+          "start": 13.41,
+          "tags": [],
+          "text": "hand?",
+          "type": "word"
+        }
+      ]
+    },
+    {
+      "duration": 8.76,
+      "language": "en-us",
+      "speaker": "426e1bb9-d319-4860-97c1-a523c1d8263e",
+      "start": 14.55,
+      "words": [
+        {
+          "confidence": 0.69,
+          "duration": 0.06,
+          "eos": true,
+          "start": 14.55,
+          "tags": [],
+          "text": "No.",
+          "type": "word"
+        },
+        {
+          "confidence": 0.983,
+          "duration": 0.06,
+          "eos": false,
+          "start": 15.15,
+          "tags": [],
+          "text": "Dr.",
+          "type": "word"
+        },
+        {
+          "confidence": 0.987,
+          "duration": 0.06,
+          "eos": false,
+          "start": 15.51,
+          "tags": [],
+          "text": "Smith",
+          "type": "word"
+        },
+        {
+          "confidence": 0.999,
+          "duration": 0.18,
+          "eos": false,
+          "start": 15.75,
+          "tags": [],
+          "text": "wrote",
+          "type": "word"
+        },
+        {
+          "confidence": 1.0,
+          "duration": 0.06,
+          "eos": false,
+          "start": 15.99,
+          "tags": [],
+          "text": "a",
+          "type": "word"
+        },
+        {
+          "confidence": 0.888,
+          "duration": 0.3,
+          "eos": false,
+          "start": 16.11,
+          "tags": [],
+          "text": "tool,",
+          "type": "word"
+        },
+        {
+          "confidence": 1.0,
+          "duration": 0.06,
+          "eos": false,
+          "start": 16.71,
+          "tags": [],
+          "text": "a",
+          "type": "word"
+        },
+        {
+          "confidence": 1.0,
+          "duration": 0.06,
+          "eos": false,
+          "start": 16.83,
+          "tags": [],
+          "text": "small",
+          "type": "word"
+        },
+        {
+          "confidence": 1.0,
+          "duration": 0.18,
+          "eos": false,
+          "start": 17.19,
+          "tags": [],
+          "text": "one,",
+          "type": "word"
+        },
+        {
+          "confidence": 1.0,
+          "duration": 0.06,
+          "eos": false,
+          "start": 17.43,
+          "tags": [],
+          "text": "written",
+          "type": "word"
+        },
+        {
+          "confidence": 1.0,
+          "duration": 0.06,
+          "eos": false,
+          "start": 17.73,
+          "tags": [],
+          "text": "in",
+          "type": "word"
+        },
+        {
+          "confidence": 0.968,
+          "duration": 0.42,
+          "eos": false,
+          "start": 17.97,
+          "tags": [],
+          "text": "Rust,",
+          "type": "word"
+        },
+        {
+          "confidence": 1.0,
+          "duration": 0.06,
+          "eos": false,
+          "start": 18.51,
+          "tags": [],
+          "text": "that",
+          "type": "word"
+        },
+        {
+          "confidence": 1.0,
+          "duration": 0.18,
+          "eos": false,
+          "start": 18.63,
+          "tags": [],
+          "text": "does",
+          "type": "word"
+        },
+        {
+          "confidence": 1.0,
+          "duration": 0.06,
+          "eos": false,
+          "start": 18.87,
+          "tags": [],
+          "text": "it",
+          "type": "word"
+        },
+        {
+          "confidence": 1.0,
+          "duration": 0.06,
+          "eos": false,
+          "start": 18.99,
+          "tags": [],
+          "text": "for",
+          "type": "word"
+        },
+        {
+          "confidence": 0.654,
+          "duration": 0.42,
+          "eos": true,
+          "start": 19.11,
+          "tags": [],
+          "text": "us.",
+          "type": "word"
+        },
+        {
+          "confidence": 0.993,
+          "duration": 0.06,
+          "eos": false,
+          "start": 19.83,
+          "tags": [],
+          "text": "For",
+          "type": "word"
+        },
+        {
+          "confidence": 0.989,
+          "duration": 0.42,
+          "eos": false,
+          "start": 19.89,
+          "tags": [],
+          "text": "example,",
+          "type": "word"
+        },
+        {
+          "confidence": 1.0,
+          "duration": 0.06,
+          "eos": false,
+          "start": 20.37,
+          "tags": [],
+          "text": "for",
+          "type": "word"
+        },
+        {
+          "confidence": 1.0,
+          "duration": 0.06,
+          "eos": false,
+          "start": 20.49,
+          "tags": [],
+          "text": "the",
+          "type": "word"
+        },
+        {
+          "confidence": 1.0,
+          "duration": 0.24,
+          "eos": false,
+          "start": 20.73,
+          "tags": [],
+          "text": "videos",
+          "type": "word"
+        },
+        {
+          "confidence": 1.0,
+          "duration": 0.06,
+          "eos": false,
+          "start": 21.03,
+          "tags": [],
+          "text": "from",
+          "type": "word"
+        },
+        {
+          "confidence": 1.0,
+          "duration": 0.36,
+          "eos": false,
+          "start": 21.39,
+          "tags": [],
+          "text": "Kenya,",
+          "type": "word"
+        },
+        {
+          "confidence": 0.999,
+          "duration": 0.48,
+          "eos": false,
+          "start": 21.93,
+          "tags": [],
+          "text": "Nairobi,",
+          "type": "word"
+        },
+        {
+          "confidence": 1.0,
+          "duration": 0.06,
+          "eos": false,
+          "start": 22.47,
+          "tags": [],
+          "text": "and",
+          "type": "word"
+        },
+        {
+          "confidence": 0.997,
+          "duration": 0.54,
+          "eos": true,
+          "start": 22.77,
+          "tags": [],
+          "text": "Mombasa.",
+          "type": "word"
+        }
+      ]
+    },
+    {
+      "duration": 3.78,
+      "language": "en-us",
+      "speaker": "69090cea-ae9c-45cd-81e4-a2dbb766c0f9",
+      "start": 23.97,
+      "words": [
+        {
+          "confidence": 1.0,
+          "duration": 0.06,
+          "eos": false,
+          "start": 23.97,
+          "tags": [],
+          "text": "He",
+          "type": "word"
+        },
+        {
+          "confidence": 0.811,
+          "duration": 0.24,
+          "eos": false,
+          "start": 24.09,
+          "tags": [],
+          "text": "said,",
+          "type": "word"
+        },
+        {
+          "confidence": 0.764,
+          "duration": 0.06,
+          "eos": false,
+          "start": 25.11,
+          "tags": [],
+          "text": "\"it",
+          "type": "word"
+        },
+        {
+          "confidence": 1.0,
+          "duration": 0.06,
+          "eos": false,
+          "start": 25.29,
+          "tags": [],
+          "text": "just",
+          "type": "word"
+        },
+        {
+          "confidence": 0.777,
+          "duration": 0.54,
+          "eos": true,
+          "start": 25.65,
+          "tags": [],
+          "text": "works.\"",
+          "type": "word"
+        },
+        {
+          "confidence": 0.999,
+          "duration": 0.18,
+          "eos": false,
+          "start": 26.85,
+          "tags": [],
+          "text": "I'm",
+          "type": "word"
+        },
+        {
+          "confidence": 0.998,
+          "duration": 0.06,
+          "eos": false,
+          "start": 27.03,
+          "tags": [],
+          "text": "not",
+          "type": "word"
+        },
+        {
+          "confidence": 1.0,
+          "duration": 0.06,
+          "eos": false,
+          "start": 27.21,
+          "tags": [],
+          "text": "so",
+          "type": "word"
+        },
+        {
+          "confidence": 0.998,
+          "duration": 0.3,
+          "eos": true,
+          "start": 27.45,
+          "tags": [],
+          "text": "sure.",
+          "type": "word"
+        }
+      ]
+    },
+    {
+      "duration": 5.28,
+      "language": "en-us",
+      "speaker": "426e1bb9-d319-4860-97c1-a523c1d8263e",
+      "start": 28.53,
+      "words": [
+        {
+          "confidence": 1.0,
+          "duration": 0.3,
+          "eos": false,
+          "start": 28.53,
+          "tags": [],
+          "text": "Version",
+          "type": "word"
+        },
+        {
+          "confidence": 1.0,
+          "duration": 0.48,
+          "eos": false,
+          "start": 28.95,
+          "tags": [],
+          "text": "3.5",
+          "type": "word"
+        },
+        {
+          "confidence": 1.0,
+          "duration": 0.24,
+          "eos": false,
+          "start": 29.79,
+          "tags": [],
+          "text": "costs",
+          "type": "word"
+        },
+        {
+          "confidence": 0.999,
+          "duration": 1.14,
+          "eos": false,
+          "start": 30.15,
+          "tags": [],
+          "text": "$12.50",
+          "type": "word"
+        },
+        {
+          "confidence": 1.0,
+          "duration": 0.06,
+          "eos": false,
+          "start": 31.65,
+          "tags": [],
+          "text": "per",
+          "type": "word"
+        },
+        {
+          "confidence": 0.997,
+          "duration": 0.42,
+          "eos": false,
+          "start": 31.89,
+          "tags": [],
+          "text": "hour,",
+          "type": "word"
+        },
+        {
+          "confidence": 1.0,
+          "duration": 0.06,
+          "eos": false,
+          "start": 32.49,
+          "tags": [],
+          "text": "about",
+          "type": "word"
+        },
+        {
+          "confidence": 0.935,
+          "duration": 0.24,
+          "eos": false,
+          "start": 32.85,
+          "tags": [],
+          "text": "20",
+          "type": "word"
+        },
+        {
+          "confidence": 1.0,
+          "duration": 0.18,
+          "eos": false,
+          "start": 33.21,
+          "tags": [],
+          "text": "cents",
+          "type": "word"
+        },
+        {
+          "confidence": 1.0,
+          "duration": 0.06,
+          "eos": false,
+          "start": 33.45,
+          "tags": [],
+          "text": "a",
+          "type": "word"
+        },
+        {
+          "confidence": 0.998,
+          "duration": 0.3,
+          "eos": true,
+          "start": 33.51,
+          "tags": [],
+          "text": "minute.",
+          "type": "word"
+        }
+      ]
+    },
+    {
+      "duration": 4.68,
+      "language": "en-us",
+      "speaker": "69090cea-ae9c-45cd-81e4-a2dbb766c0f9",
+      "start": 34.47,
+      "words": [
+        {
+          "confidence": 0.594,
+          "duration": 0.18,
+          "eos": true,
+          "start": 34.47,
+          "tags": [
+            "filler"
+          ],
+          "text": "Mm.",
+          "type": "word"
+        },
+        {
+          "confidence": 0.98,
+          "duration": 0.36,
+          "eos": true,
+          "start": 35.55,
+          "tags": [],
+          "text": "Well.",
+          "type": "word"
+        },
+        {
+          "confidence": 0.966,
+          "duration": 0.3,
+          "eos": true,
+          "start": 36.69,
+          "tags": [],
+          "text": "Okay.",
+          "type": "word"
+        },
+        {
+          "confidence": 0.988,
+          "duration": 0.3,
+          "eos": true,
+          "start": 37.83,
+          "tags": [],
+          "text": "Fine.",
+          "type": "word"
+        },
+        {
+          "confidence": 1.0,
+          "duration": 0.3,
+          "eos": true,
+          "start": 38.85,
+          "tags": [],
+          "text": "Deal.",
+          "type": "word"
+        }
+      ]
+    },
+    {
+      "duration": 8.04,
+      "language": "en-us",
+      "speaker": "426e1bb9-d319-4860-97c1-a523c1d8263e",
+      "start": 40.05,
+      "words": [
+        {
+          "confidence": 0.98,
+          "duration": 0.06,
+          "eos": false,
+          "start": 40.05,
+          "tags": [],
+          "text": "And",
+          "type": "word"
+        },
+        {
+          "confidence": 0.992,
+          "duration": 0.06,
+          "eos": false,
+          "start": 40.11,
+          "tags": [],
+          "text": "then",
+          "type": "word"
+        },
+        {
+          "confidence": 1.0,
+          "duration": 0.06,
+          "eos": false,
+          "start": 40.23,
+          "tags": [],
+          "text": "we",
+          "type": "word"
+        },
+        {
+          "confidence": 1.0,
+          "duration": 0.18,
+          "eos": false,
+          "start": 40.29,
+          "tags": [],
+          "text": "went",
+          "type": "word"
+        },
+        {
+          "confidence": 1.0,
+          "duration": 0.06,
+          "eos": false,
+          "start": 40.53,
+          "tags": [],
+          "text": "down",
+          "type": "word"
+        },
+        {
+          "confidence": 1.0,
+          "duration": 0.06,
+          "eos": false,
+          "start": 40.65,
+          "tags": [],
+          "text": "to",
+          "type": "word"
+        },
+        {
+          "confidence": 1.0,
+          "duration": 0.06,
+          "eos": false,
+          "start": 40.77,
+          "tags": [],
+          "text": "the",
+          "type": "word"
+        },
+        {
+          "confidence": 1.0,
+          "duration": 0.24,
+          "eos": false,
+          "start": 41.01,
+          "tags": [],
+          "text": "river",
+          "type": "word"
+        },
+        {
+          "confidence": 0.562,
+          "duration": 0.06,
+          "eos": false,
+          "start": 41.31,
+          "tags": [],
+          "text": "and",
+          "type": "word"
+        },
+        {
+          "confidence": 1.0,
+          "duration": 0.06,
+          "eos": false,
+          "start": 41.43,
+          "tags": [],
+          "text": "we",
+          "type": "word"
+        },
+        {
+          "confidence": 1.0,
+          "duration": 0.06,
+          "eos": false,
+          "start": 41.73,
+          "tags": [],
+          "text": "sat",
+          "type": "word"
+        },
+        {
+          "confidence": 1.0,
+          "duration": 0.06,
+          "eos": false,
+          "start": 42.03,
+          "tags": [],
+          "text": "there",
+          "type": "word"
+        },
+        {
+          "confidence": 1.0,
+          "duration": 0.06,
+          "eos": false,
+          "start": 42.21,
+          "tags": [],
+          "text": "for",
+          "type": "word"
+        },
+        {
+          "confidence": 1.0,
+          "duration": 0.06,
+          "eos": false,
+          "start": 42.39,
+          "tags": [],
+          "text": "a",
+          "type": "word"
+        },
+        {
+          "confidence": 0.997,
+          "duration": 0.06,
+          "eos": false,
+          "start": 42.57,
+          "tags": [],
+          "text": "long",
+          "type": "word"
+        },
+        {
+          "confidence": 0.971,
+          "duration": 0.36,
+          "eos": false,
+          "start": 43.05,
+          "tags": [],
+          "text": "time,",
+          "type": "word"
+        },
+        {
+          "confidence": 1.0,
+          "duration": 0.06,
+          "eos": false,
+          "start": 43.65,
+          "tags": [],
+          "text": "and",
+          "type": "word"
+        },
+        {
+          "confidence": 1.0,
+          "duration": 0.06,
+          "eos": false,
+          "start": 43.71,
+          "tags": [],
+          "text": "we",
+          "type": "word"
+        },
+        {
+          "confidence": 1.0,
+          "duration": 0.24,
+          "eos": false,
+          "start": 43.83,
+          "tags": [],
+          "text": "watched",
+          "type": "word"
+        },
+        {
+          "confidence": 1.0,
+          "duration": 0.06,
+          "eos": false,
+          "start": 44.13,
+          "tags": [],
+          "text": "the",
+          "type": "word"
+        },
+        {
+          "confidence": 1.0,
+          "duration": 0.24,
+          "eos": false,
+          "start": 44.31,
+          "tags": [],
+          "text": "boats",
+          "type": "word"
+        },
+        {
+          "confidence": 1.0,
+          "duration": 0.06,
+          "eos": false,
+          "start": 44.67,
+          "tags": [],
+          "text": "go",
+          "type": "word"
+        },
+        {
+          "confidence": 1.0,
+          "duration": 0.06,
+          "eos": false,
+          "start": 44.91,
+          "tags": [],
+          "text": "by",
+          "type": "word"
+        },
+        {
+          "confidence": 0.679,
+          "duration": 0.06,
+          "eos": false,
+          "start": 45.09,
+          "tags": [],
+          "text": "until",
+          "type": "word"
+        },
+        {
+          "confidence": 1.0,
+          "duration": 0.06,
+          "eos": false,
+          "start": 45.27,
+          "tags": [],
+          "text": "the",
+          "type": "word"
+        },
+        {
+          "confidence": 1.0,
+          "duration": 0.12,
+          "eos": false,
+          "start": 45.45,
+          "tags": [],
+          "text": "sun",
+          "type": "word"
+        },
+        {
+          "confidence": 1.0,
+          "duration": 0.12,
+          "eos": false,
+          "start": 45.69,
+          "tags": [],
+          "text": "went",
+          "type": "word"
+        },
+        {
+          "confidence": 1.0,
+          "duration": 0.06,
+          "eos": false,
+          "start": 45.87,
+          "tags": [],
+          "text": "down",
+          "type": "word"
+        },
+        {
+          "confidence": 0.999,
+          "duration": 0.06,
+          "eos": false,
+          "start": 46.23,
+          "tags": [],
+          "text": "and",
+          "type": "word"
+        },
+        {
+          "confidence": 1.0,
+          "duration": 0.06,
+          "eos": false,
+          "start": 46.35,
+          "tags": [],
+          "text": "it",
+          "type": "word"
+        },
+        {
+          "confidence": 1.0,
+          "duration": 0.06,
+          "eos": false,
+          "start": 46.41,
+          "tags": [],
+          "text": "got",
+          "type": "word"
+        },
+        {
+          "confidence": 1.0,
+          "duration": 0.12,
+          "eos": false,
+          "start": 46.65,
+          "tags": [],
+          "text": "too",
+          "type": "word"
+        },
+        {
+          "confidence": 1.0,
+          "duration": 0.18,
+          "eos": false,
+          "start": 46.83,
+          "tags": [],
+          "text": "cold",
+          "type": "word"
+        },
+        {
+          "confidence": 1.0,
+          "duration": 0.06,
+          "eos": false,
+          "start": 47.13,
+          "tags": [],
+          "text": "to",
+          "type": "word"
+        },
+        {
+          "confidence": 1.0,
+          "duration": 0.18,
+          "eos": false,
+          "start": 47.25,
+          "tags": [],
+          "text": "stay",
+          "type": "word"
+        },
+        {
+          "confidence": 0.995,
+          "duration": 0.66,
+          "eos": true,
+          "start": 47.43,
+          "tags": [],
+          "text": "outside.",
+          "type": "word"
+        }
+      ]
+    }
+  ],
+  "speakers": [
+    {
+      "id": "426e1bb9-d319-4860-97c1-a523c1d8263e",
+      "name": "Speaker 1"
+    },
+    {
+      "id": "69090cea-ae9c-45cd-81e4-a2dbb766c0f9",
+      "name": "Speaker 2"
+    }
+  ]
+}
