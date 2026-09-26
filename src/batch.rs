@@ -30,7 +30,7 @@ pub struct Selection {
     pub filters: Vec<String>,
     /// Descend into subfolders.
     pub recursive: bool,
-    /// Put all .srt here (keeping subfolders of a scanned folder) instead of next to each input.
+    /// Put all outputs here (keeping subfolders of a scanned folder) instead of next to each input.
     pub out_dir: Option<PathBuf>,
 }
 
@@ -123,7 +123,7 @@ pub fn matches(pattern: &str, name: &str) -> bool {
 /// What a file needs, decided from the file system and media headers only.
 #[derive(Debug, Clone, PartialEq)]
 pub enum Action {
-    /// The .srt exists and `force` is off.
+    /// Every output exists and `force` is off.
     Skip,
     /// The input is a transcript: subtitles are built from it.
     FromTranscript,
@@ -146,11 +146,11 @@ pub fn plan(items: &[Item], opts: &Options) -> Vec<Planned> {
 }
 
 fn action(item: &Item, opts: &Options) -> Action {
-    if job::is_transcript(&item.input) {
-        return if item.output.exists() && !opts.force { Action::Skip } else { Action::FromTranscript };
-    }
-    if item.output.exists() && !opts.force {
+    if job::missing_outputs(&item.output, &opts.formats, opts.force).is_empty() {
         return Action::Skip;
+    }
+    if job::is_transcript(&item.input) {
+        return Action::FromTranscript;
     }
     let cache = job::transcript_path(&item.output);
     if cache.is_file() && !opts.force {

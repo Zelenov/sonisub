@@ -1,3 +1,14 @@
+# 0.3.0
+## Added
+- `-t premiere` writes a Premiere Pro transcript (`clip.premiere.json`, Adobe's import format) for Text panel > Transcript > Import Static Transcript: words with timing and confidence, speakers, languages, filler tags. `-t srt,premiere` writes both. Only missing outputs are written, so a new format is made from saved transcripts for free.
+- `premiere-plugin/`: a Premiere Pro panel to import transcripts for many clips at once.
+- `sonisub languages` lists the language codes `-l` takes, fetched from Soniox; `sonisub::languages::fetch` does the same in code.
+
+## Changed
+- The Soniox transcript is kept next to the output as `.soniox.json` by default (`--no-json` to drop it; `-j` / `--keep-json` is gone).
+- `-o` takes any output extension (`clip.premiere.json` means base `clip`).
+- Library: `job::Options` has `formats`; `Outcome::Written` / `Skipped` list `files` instead of one `srt` path.
+
 # 0.2.0
 ## Added
 - Usable as a library from other programs (frename uses it): a `cli` feature (on by default) holds the command line; build with `default-features = false` for the library alone.

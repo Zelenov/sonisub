@@ -1,0 +1,24 @@
+<!doctype html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <style>
+      body { padding: 12px; font-size: 13px; color: var(--uxp-host-text-color); }
+      p { margin: 0 0 10px; color: var(--uxp-host-text-color-secondary); }
+      .row { display: flex; flex-direction: column; gap: 6px; margin-bottom: 10px; }
+      #folder { word-break: break-all; }
+      #report { white-space: pre-wrap; margin-top: 8px; }
+    </style>
+  </head>
+  <body>
+    <p>Imports <code>clip.premiere.json</code> made by <code>sonisub -t premiere</code> into the selected clips (all clips if nothing is selected).</p>
+    <div class="row">
+      <sp-checkbox id="overwrite">Replace existing transcripts</sp-checkbox>
+      <sp-button variant="secondary" id="pick">Also look in folder…</sp-button>
+      <span id="folder"></span>
+    </div>
+    <sp-button variant="cta" id="run">Import transcripts</sp-button>
+    <div id="report"></div>
+    <script src="main.js"></script>
+  </body>
+</html>

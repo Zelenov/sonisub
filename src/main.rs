@@ -16,6 +16,7 @@ use cli::{ApiArgs, Cli, Command, RunArgs};
 use sonisub::cancel::{interrupt, interrupted};
 use sonisub::batch::{self, Item, Selection, Totals};
 use sonisub::job::{self, Outcome};
+use sonisub::languages;
 use sonisub::soniox::{self, Client, api_error};
 use sonisub::usage::{self, Summary};
 
@@ -52,6 +53,7 @@ fn main() -> ExitCode {
     let result = match cli.command {
         Some(Command::Purge { yes, api }) => purge(&api, yes).map(|_| ExitCode::SUCCESS),
         Some(Command::Usage { days, api }) => show_usage(&api, days).map(|_| ExitCode::SUCCESS),
+        Some(Command::Languages { api }) => show_languages(&api).map(|_| ExitCode::SUCCESS),
         None => run(&cli.run),
     };
     result.unwrap_or_else(|e| {
@@ -72,7 +74,7 @@ fn run(args: &RunArgs) -> Result<ExitCode> {
         if folder_mode {
             bail!("--output works with a single file; use --out-dir for folders and several files");
         }
-        items[0].output = o.clone();
+        items[0].output = job::output_base(o);
     }
 
     let mut opts = args.job_options();
@@ -92,7 +94,7 @@ fn run(args: &RunArgs) -> Result<ExitCode> {
         _ => usage::FALLBACK_USD_PER_HOUR,
     };
     if folder_mode || args.dry_run {
-        eprint!("{}", plan_text(&plan, &totals, price, args.dry_run));
+        eprint!("{}", plan_text(&plan, &totals, price, args.dry_run, &exists_label(&args.formats)));
     }
     if args.dry_run {
         return Ok(ExitCode::SUCCESS);
@@ -121,6 +123,7 @@ fn run(args: &RunArgs) -> Result<ExitCode> {
         }
     };
 
+    let exists = exists_label(&args.formats);
     let mut stats = Stats::default();
     let (mut sent_files, mut sent_audio_s, mut planned_done_s) = (0usize, 0.0, 0.0);
     let total = plan.len();
@@ -142,7 +145,7 @@ fn run(args: &RunArgs) -> Result<ExitCode> {
             sent_audio_s += secs;
         }
         let fatal = result.as_ref().err().and_then(api_error).filter(|a| a.is_fatal()).map(|a| a.error_type.clone());
-        let (line, log_msg) = describe(name, &result, &mut stats, started.elapsed().as_secs_f64());
+        let (line, log_msg) = describe(name, &result, &mut stats, started.elapsed().as_secs_f64(), &exists);
         say(line);
         log_line(&log, input, &log_msg);
         if result.is_err() && !folder_mode {
@@ -171,7 +174,7 @@ fn run(args: &RunArgs) -> Result<ExitCode> {
         bar.finish_and_clear();
     }
     if folder_mode {
-        eprintln!("{}", stats.summary());
+        eprintln!("{}", stats.summary(&exists));
     }
     report_run_cost(client.as_ref(), &opts.reference, run_started, sent_audio_s, sent_files);
     Ok(if interrupted() {
@@ -197,11 +200,12 @@ struct Stats {
 }
 
 impl Stats {
-    fn summary(&self) -> String {
+    fn summary(&self, exists: &str) -> String {
+        let skipped = format!("skipped ({exists})");
         let parts = [
-            (self.written, "subtitled"),
+            (self.written, "processed"),
             (self.from_saved, "from saved transcripts"),
-            (self.skipped, "skipped (.srt exists)"),
+            (self.skipped, skipped.as_str()),
             (self.no_speech, "without speech"),
             (self.no_audio, "without audio"),
             (self.failed, "failed"),
@@ -211,10 +215,19 @@ impl Stats {
     }
 }
 
+/// ".srt exists", ".srt, .premiere.json exist": why a file is skipped.
+fn exists_label(formats: &[job::Format]) -> String {
+    let names: Vec<String> = formats
+        .iter()
+        .map(|f| f.path(Path::new("x.srt")).to_string_lossy().trim_start_matches('x').to_string())
+        .collect();
+    format!("{} exist{}", names.join(", "), if names.len() == 1 { "s" } else { "" })
+}
+
 /// One result line for the screen, one for the log.
-fn describe(name: &str, result: &Result<Outcome>, stats: &mut Stats, secs: f64) -> (String, String) {
+fn describe(name: &str, result: &Result<Outcome>, stats: &mut Stats, secs: f64, exists: &str) -> (String, String) {
     match result {
-        Ok(Outcome::Written { srt, cues, cached, .. }) => {
+        Ok(Outcome::Written { files, cues, cached, .. }) => {
             let from = if *cached {
                 stats.from_saved += 1;
                 ", from saved transcript"
@@ -222,11 +235,13 @@ fn describe(name: &str, result: &Result<Outcome>, stats: &mut Stats, secs: f64) 
                 stats.written += 1;
                 ""
             };
-            (format!("✓ {name} — {cues} cues{from}"), format!("OK -> {} ({secs:.0}s){from}", srt.display()))
+            let what = if *cues > 0 { format!("{cues} cues") } else { "transcript".into() };
+            let paths: Vec<String> = files.iter().map(|f| f.display().to_string()).collect();
+            (format!("✓ {name} — {what}{from}"), format!("OK -> {} ({secs:.0}s){from}", paths.join(", ")))
         }
         Ok(Outcome::Skipped { .. }) => {
             stats.skipped += 1;
-            (format!("· {name} — skipped, .srt exists (--force to redo)"), "SKIPPED (.srt exists)".into())
+            (format!("· {name} — skipped, {exists} (--force to redo)"), format!("SKIPPED ({exists})"))
         }
         Ok(Outcome::NoAudio { reason }) => {
             stats.no_audio += 1;
@@ -252,7 +267,7 @@ fn describe(name: &str, result: &Result<Outcome>, stats: &mut Stats, secs: f64) 
 }
 
 /// What is about to happen, before anything is uploaded.
-fn plan_text(plan: &[batch::Planned], t: &Totals, usd_per_hour: f64, detailed: bool) -> String {
+fn plan_text(plan: &[batch::Planned], t: &Totals, usd_per_hour: f64, detailed: bool, exists: &str) -> String {
     let mut out = String::new();
     if detailed {
         for p in plan {
@@ -285,7 +300,7 @@ fn plan_text(plan: &[batch::Planned], t: &Totals, usd_per_hour: f64, detailed: b
         (t.from_transcript, "rebuilt from transcripts, free"),
         (t.cached_silent, "checked before, no speech"),
         (t.no_audio, "no audio track"),
-        (t.skip, ".srt exists, skipped (--force to redo)"),
+        (t.skip, &format!("{exists}, skipped (--force to redo)")),
     ] {
         if n > 0 {
             out.push_str(&format!("  {n:>4}  {what}
@@ -383,6 +398,13 @@ fn show_usage(api: &ApiArgs, days: u64) -> Result<()> {
         .cloned()
         .collect();
     print!("{}", usage::report(&Summary::of(&logs), &Summary::of(&today), days));
+    Ok(())
+}
+
+fn show_languages(api: &ApiArgs) -> Result<()> {
+    let key = api.api_key.as_deref().filter(|k| !k.trim().is_empty()).ok_or_else(soniox::missing_key)?;
+    let client = Client::new(&api.api_url, key.trim())?;
+    print!("{}", languages::report(&languages::fetch(&client)?));
     Ok(())
 }
 

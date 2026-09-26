@@ -2,6 +2,7 @@ use std::path::PathBuf;
 use std::time::Duration;
 
 use clap::{Args, Parser, Subcommand};
+use sonisub::job::Format;
 use sonisub::{audio, job, soniox, srt};
 
 /// Generate .srt subtitles for video/audio files with Soniox speech-to-text.
@@ -26,6 +27,11 @@ pub enum Command {
         #[arg(long, default_value_t = 30, value_parser = clap::value_parser!(u64).range(1..=91))]
         days: u64,
 
+        #[command(flatten)]
+        api: ApiArgs,
+    },
+    /// Languages Soniox recognises: the codes --lang takes.
+    Languages {
         #[command(flatten)]
         api: ApiArgs,
     },
@@ -74,15 +80,22 @@ pub struct RunArgs {
     #[command(flatten)]
     pub api: ApiArgs,
 
-    /// Output .srt path (only with a single input). Default: next to the input, same name.
+    /// What to write, comma separated: srt (subtitles), premiere (Premiere Pro transcript, clip.premiere.json).
+    /// Only missing files are written, so adding a format later reuses the saved transcript for free.
+    #[arg(short = 't', long = "format", value_enum, value_delimiter = ',', default_value = "srt")]
+    pub formats: Vec<Format>,
+
+    /// Output path (only with a single input); other formats get their own extension next to it.
+    /// Default: next to the input, same name.
     #[arg(short, long)]
     pub output: Option<PathBuf>,
 
-    /// Directory for the .srt files. Default: next to each input.
+    /// Directory for the output files. Default: next to each input.
     #[arg(short = 'd', long, conflicts_with = "output")]
     pub out_dir: Option<PathBuf>,
 
-    /// Overwrite existing .srt files (by default such inputs are skipped).
+    /// Overwrite existing outputs and transcribe again (by default existing files are kept and a saved
+    /// .soniox.json is reused).
     #[arg(short, long)]
     pub force: bool,
 
@@ -106,9 +119,10 @@ pub struct RunArgs {
     #[arg(long)]
     pub no_diarization: bool,
 
-    /// Also save the raw Soniox transcript as <name>.soniox.json next to the .srt.
-    #[arg(short = 'j', long)]
-    pub keep_json: bool,
+    /// Don't keep the raw Soniox transcript (<name>.soniox.json next to the outputs). By default it is kept:
+    /// other formats and layouts can be made from it later without paying again.
+    #[arg(long)]
+    pub no_json: bool,
 
     /// How to extract audio.
     #[arg(long, value_enum, default_value_t = audio::Backend::Auto)]
@@ -187,7 +201,8 @@ impl RunArgs {
             audio: self.audio,
             temp_dir: self.temp_dir.clone(),
             keep_audio: self.keep_audio,
-            keep_json: self.keep_json,
+            keep_json: !self.no_json,
+            formats: self.formats.clone(),
             force: self.force,
             layout: srt::Layout {
                 max_line: if self.seg.unlimited { 0 } else { self.seg.max_line },

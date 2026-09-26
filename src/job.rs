@@ -1,4 +1,4 @@
-//! Everything that happens to one input file: media -> audio -> Soniox -> .srt, and cleanup.
+//! Everything that happens to one input file: media -> audio -> Soniox -> .srt (and other formats), and cleanup.
 //! Knows nothing about batches, log files or the command line.
 
 use std::path::{Path, PathBuf};
@@ -11,7 +11,27 @@ use serde_json::{Value, json};
 use crate::audio;
 use crate::cancel::{CancelToken, Cancelled};
 use crate::soniox::{self, Client, RemoteGuard};
-use crate::srt;
+use crate::{premiere, srt};
+
+/// What gets written for a file.
+#[cfg_attr(feature = "cli", derive(clap::ValueEnum))]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Format {
+    /// Subtitles: `clip.srt`.
+    Srt,
+    /// Premiere Pro transcript (Text panel > Transcript > ... > Import Static Transcript): `clip.premiere.json`.
+    Premiere,
+}
+
+impl Format {
+    /// Where this format goes for the output base path (`clip.srt` -> `clip.premiere.json`).
+    pub fn path(self, output: &Path) -> PathBuf {
+        match self {
+            Format::Srt => output.to_path_buf(),
+            Format::Premiere => output.with_extension("premiere.json"),
+        }
+    }
+}
 
 /// What to do with a file.
 #[derive(Debug, Clone)]
@@ -32,7 +52,9 @@ pub struct Options {
     pub keep_audio: bool,
     /// Save the raw transcript as `<output>.soniox.json` (an empty one is always saved, as a marker).
     pub keep_json: bool,
-    /// Overwrite an existing .srt and ignore a saved `.soniox.json` (transcribe again).
+    /// What to write; files that already exist are left alone unless `force`.
+    pub formats: Vec<Format>,
+    /// Overwrite existing outputs and ignore a saved `.soniox.json` (transcribe again).
     pub force: bool,
     pub layout: srt::Layout,
     /// Interval between transcription status checks.
@@ -60,7 +82,8 @@ impl Default for Options {
             audio: audio::Backend::Auto,
             temp_dir: None,
             keep_audio: false,
-            keep_json: false,
+            keep_json: true,
+            formats: vec![Format::Srt],
             force: false,
             layout: srt::Layout::default(),
             poll: Duration::from_secs(3),
@@ -74,11 +97,11 @@ impl Default for Options {
 
 #[derive(Debug)]
 pub enum Outcome {
-    /// Subtitles written. `cached`: the transcript came from an existing `.soniox.json`, no API call.
-    /// `uploaded_s`: seconds of audio sent to Soniox (what is paid for).
-    Written { srt: PathBuf, cues: usize, json: Option<PathBuf>, cached: bool, uploaded_s: Option<f64> },
-    /// The .srt already exists and `force` is off.
-    Skipped { srt: PathBuf },
+    /// Outputs written (`files`; `cues` counts subtitles, 0 without .srt). `cached`: the transcript came
+    /// from an existing `.soniox.json`, no API call. `uploaded_s`: seconds of audio sent to Soniox (what is paid for).
+    Written { files: Vec<PathBuf>, cues: usize, json: Option<PathBuf>, cached: bool, uploaded_s: Option<f64> },
+    /// Every output already exists and `force` is off.
+    Skipped { files: Vec<PathBuf> },
     /// Nothing to transcribe: no audio track, or a track without samples.
     NoAudio { reason: String },
     /// Audio is there but has no words: digital silence (detected locally, `uploaded_s` is `None`),
@@ -111,7 +134,13 @@ enum Source {
     Input(Value),
 }
 
-/// Makes subtitles for `input` and writes them to `output`.
+/// Outputs of `formats` for the base path `output` that still have to be written (all of them with `force`).
+pub fn missing_outputs(output: &Path, formats: &[Format], force: bool) -> Vec<(Format, PathBuf)> {
+    formats.iter().map(|f| (*f, f.path(output))).filter(|(_, p)| force || !p.exists()).collect()
+}
+
+/// Makes subtitles for `input` and writes them to `output` (the .srt path; other formats go next to it,
+/// see [`Format::path`]). Outputs that already exist are kept unless `force`.
 ///
 /// `input` is a media file, or a `.json` Soniox transcript (then no API call is made and `client` may be `None`).
 /// A `.soniox.json` already lying next to `output` is used instead of calling the API, unless `force`.
@@ -124,8 +153,9 @@ pub fn process(input: &Path, output: &Path, opts: &Options, client: Option<&Clie
     if meta.len() == 0 {
         bail!("empty file: {}", input.display());
     }
-    if output.exists() && !opts.force {
-        return Ok(Outcome::Skipped { srt: output.to_path_buf() });
+    let targets = missing_outputs(output, &opts.formats, opts.force);
+    if targets.is_empty() {
+        return Ok(Outcome::Skipped { files: opts.formats.iter().map(|f| f.path(output)).collect() });
     }
 
     let cache = transcript_path(output);
@@ -169,9 +199,25 @@ pub fn process(input: &Path, output: &Path, opts: &Options, client: Option<&Clie
         return Ok(Outcome::NoSpeech { marker: json, cached, uploaded_s });
     }
     let layout = srt::Layout { by_speaker: opts.diarization, ..opts.layout.clone() };
-    let (text, cues) = srt::build(&transcript, &layout);
-    std::fs::write(output, text).with_context(|| format!("cannot write {}", output.display()))?;
-    Ok(Outcome::Written { srt: output.to_path_buf(), cues, json, cached, uploaded_s })
+    let mut cues = 0;
+    let mut files = Vec::new();
+    for (format, path) in targets {
+        let text = match format {
+            Format::Srt => {
+                let (text, n) = srt::build(&transcript, &layout);
+                cues = n;
+                text
+            }
+            Format::Premiere => {
+                let hint = opts.languages.first().map(String::as_str);
+                let t = premiere::build(&transcript, &layout, hint).expect("the transcript has speech");
+                serde_json::to_string_pretty(&t)?
+            }
+        };
+        std::fs::write(&path, text).with_context(|| format!("cannot write {}", path.display()))?;
+        files.push(path);
+    }
+    Ok(Outcome::Written { files, cues, json, cached, uploaded_s })
 }
 
 fn read_transcript(path: &Path) -> Result<Value> {
@@ -262,12 +308,26 @@ pub fn transcribe(input: &Path, opts: &Options, client: &Client) -> Result<Optio
 /// Default .srt path: next to the input (or in `out_dir`), same name; `clip.soniox.json` -> `clip.srt`.
 pub fn default_output(input: &Path, out_dir: Option<&Path>) -> PathBuf {
     let name = input.file_name().map_or_else(String::new, |n| n.to_string_lossy().into_owned());
-    let stem = name
-        .strip_suffix(".soniox.json")
+    let stem = strip_suffix(&name, ".soniox.json")
         .map(str::to_string)
         .unwrap_or_else(|| input.file_stem().map_or(name.clone(), |s| s.to_string_lossy().into_owned()));
     let dir = out_dir.map_or_else(|| input.parent().unwrap_or(Path::new(".")).to_path_buf(), Path::to_path_buf);
     dir.join(format!("{stem}.srt"))
+}
+
+/// The .srt base for an `-o` path given with any output extension: `clip.premiere.json` -> `clip.srt`.
+pub fn output_base(path: &Path) -> PathBuf {
+    let name = path.file_name().map_or_else(String::new, |n| n.to_string_lossy().into_owned());
+    let stem = [".premiere.json", ".soniox.json", ".srt", ".json"]
+        .iter()
+        .find_map(|s| strip_suffix(&name, s))
+        .unwrap_or(&name);
+    path.with_file_name(format!("{stem}.srt"))
+}
+
+fn strip_suffix<'a>(name: &'a str, suffix: &str) -> Option<&'a str> {
+    let cut = name.len().checked_sub(suffix.len())?;
+    (name.is_char_boundary(cut) && name[cut..].eq_ignore_ascii_case(suffix) && cut > 0).then(|| &name[..cut])
 }
 
 /// A saved Soniox transcript rather than media.

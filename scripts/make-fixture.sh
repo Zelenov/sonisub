@@ -61,8 +61,8 @@ mux() {
 
 transcribe() {
   local name=$1 langs=$2
-  rm -f "$out/$name.soniox.json" "$out/$name.srt"
-  "$sonisub" "$out/$name.mp4" -f -j -l "$langs" --log "$work/sonisub.log"
+  rm -f "$out/$name.soniox.json" "$out/$name.srt" "$out/$name.premiere.json"
+  "$sonisub" "$out/$name.mp4" -f -t srt,premiere -l "$langs" --log "$work/sonisub.log"
   "$sonisub" "$out/$name.soniox.json" -f -u -o "$out/$name.unlimited.srt" --log "$work/sonisub.log"
   "$sonisub" "$out/$name.soniox.json" -f -s -o "$out/$name.speakers.srt" --log "$work/sonisub.log"
   "$sonisub" "$out/$name.soniox.json" -f -w -o "$out/$name.wrap.srt" --log "$work/sonisub.log"

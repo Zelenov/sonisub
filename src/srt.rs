@@ -56,13 +56,17 @@ impl Layout {
 }
 
 #[derive(Debug, Clone)]
-struct Word {
-    text: String,
-    start: u64,
-    end: u64,
-    speaker: Option<String>,
+pub(crate) struct Word {
+    pub text: String,
+    pub start: u64,
+    pub end: u64,
+    pub speaker: Option<String>,
+    /// Soniox language code of the word's first token ("en", "ru").
+    pub language: Option<String>,
+    /// Mean confidence of the word's tokens.
+    pub confidence: f64,
     /// Written right after the previous word, without a space ("finally—" + "and").
-    glued: bool,
+    pub glued: bool,
 }
 
 const DASHES: [char; 2] = ['—', '–'];
@@ -93,14 +97,16 @@ fn split_dashes(w: Word) -> Vec<Word> {
             let start = w.start + span * done / total;
             done += text.chars().count() as u64;
             let end = w.start + span * done / total;
-            Word { text, start, end, speaker: w.speaker.clone(), glued: i > 0 || w.glued }
+            Word { text, start, end, glued: i > 0 || w.glued, ..w.clone() }
         })
         .collect()
 }
 
 /// Joins sub-word tokens (Soniox marks a new word with a leading space, sometimes as a separate " " token) into words.
-fn words(transcript: &Value) -> Vec<Word> {
+/// "finally—and" stays one word; [`split_dashes`] cuts it for subtitles.
+pub(crate) fn words(transcript: &Value) -> Vec<Word> {
     let mut out: Vec<Word> = Vec::new();
+    let mut tokens: Vec<u32> = Vec::new();
     let mut space = false;
     for t in transcript["tokens"].as_array().into_iter().flatten() {
         if t["is_audio_event"].as_bool() == Some(true) || t["translation_status"].as_str() == Some("translation") {
@@ -113,17 +119,24 @@ fn words(transcript: &Value) -> Vec<Word> {
         }
         let (start, end) = (t["start_ms"].as_u64().unwrap_or(0), t["end_ms"].as_u64().unwrap_or(0));
         let speaker = t["speaker"].as_str().map(str::to_string);
+        let confidence = t["confidence"].as_f64().unwrap_or(1.0);
         let new_word = space || text.starts_with(char::is_whitespace);
         space = text.ends_with(char::is_whitespace);
-        match out.last_mut() {
-            Some(w) if !new_word && w.speaker == speaker => {
+        match (out.last_mut(), tokens.last_mut()) {
+            (Some(w), Some(n)) if !new_word && w.speaker == speaker => {
                 w.text.push_str(text.trim_end());
                 w.end = end;
+                w.confidence = (w.confidence * *n as f64 + confidence) / (*n + 1) as f64;
+                *n += 1;
             }
-            _ => out.push(Word { text: text.trim().to_string(), start, end, speaker, glued: false }),
+            _ => {
+                let language = t["language"].as_str().map(str::to_string);
+                out.push(Word { text: text.trim().to_string(), start, end, speaker, language, confidence, glued: false });
+                tokens.push(1);
+            }
         }
     }
-    out.into_iter().flat_map(split_dashes).collect()
+    out
 }
 
 /// Whether the transcript contains any words at all.
@@ -211,7 +224,7 @@ fn pieces(text: &str) -> Vec<(&str, bool)> {
 
 /// Cuts at speaker changes, long silences and sentence ends. A sentence interrupted by a long pause
 /// keeps its short tail: "…ближе всего <pause> описывается." stays one sentence.
-fn sentences(words: Vec<Word>, s: &Layout) -> Vec<Vec<Word>> {
+pub(crate) fn sentences(words: Vec<Word>, s: &Layout) -> Vec<Vec<Word>> {
     let gap_ms = (s.gap * 1000.0) as u64;
     let mut blocks: Vec<Vec<Word>> = Vec::new();
     let mut cur: Vec<Word> = Vec::new();
@@ -394,7 +407,7 @@ fn partition(ws: &[Word], range: Range<usize>, prefix: &str, s: &Layout, level: 
     out
 }
 
-fn speaker_label(speaker: &str, names: &[String]) -> String {
+pub(crate) fn speaker_label(speaker: &str, names: &[String]) -> String {
     speaker
         .parse::<usize>()
         .ok()
@@ -416,7 +429,7 @@ struct Cue {
 
 /// Builds SRT text from a Soniox transcript; returns the text and the number of cues.
 pub fn build(transcript: &Value, s: &Layout) -> (String, usize) {
-    let words = words(transcript);
+    let words: Vec<Word> = words(transcript).into_iter().flat_map(split_dashes).collect();
     let mut speakers: Vec<&str> = words.iter().filter_map(|w| w.speaker.as_deref()).collect();
     speakers.sort_unstable();
     speakers.dedup();

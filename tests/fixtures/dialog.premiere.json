@@ -1,0 +1,700 @@
+{
+  "language": "en-us",
+  "segments": [
+    {
+      "duration": 2.46,
+      "language": "en-us",
+      "speaker": "5fe6e7e2-e8df-46f4-a1fc-5d0acd477b66",
+      "start": 0.87,
+      "words": [
+        {
+          "confidence": 0.923,
+          "duration": 0.24,
+          "eos": false,
+          "start": 0.87,
+          "tags": [],
+          "text": "Hi,",
+          "type": "word"
+        },
+        {
+          "confidence": 1.0,
+          "duration": 0.18,
+          "eos": false,
+          "start": 1.23,
+          "tags": [],
+          "text": "today",
+          "type": "word"
+        },
+        {
+          "confidence": 1.0,
+          "duration": 0.24,
+          "eos": false,
+          "start": 1.41,
+          "tags": [],
+          "text": "we're",
+          "type": "word"
+        },
+        {
+          "confidence": 1.0,
+          "duration": 0.18,
+          "eos": false,
+          "start": 1.65,
+          "tags": [],
+          "text": "testing",
+          "type": "word"
+        },
+        {
+          "confidence": 1.0,
+          "duration": 0.06,
+          "eos": false,
+          "start": 1.89,
+          "tags": [],
+          "text": "the",
+          "type": "word"
+        },
+        {
+          "confidence": 0.999,
+          "duration": 0.42,
+          "eos": false,
+          "start": 2.19,
+          "tags": [],
+          "text": "subtitle",
+          "type": "word"
+        },
+        {
+          "confidence": 0.994,
+          "duration": 0.54,
+          "eos": true,
+          "start": 2.79,
+          "tags": [],
+          "text": "generator.",
+          "type": "word"
+        }
+      ]
+    },
+    {
+      "duration": 10.98,
+      "language": "en-us",
+      "speaker": "f854d5ff-8719-4163-94a6-d1a4c0e27dcb",
+      "start": 3.87,
+      "words": [
+        {
+          "confidence": 0.963,
+          "duration": 0.24,
+          "eos": true,
+          "start": 3.87,
+          "tags": [],
+          "text": "Great.",
+          "type": "word"
+        },
+        {
+          "confidence": 1.0,
+          "duration": 0.24,
+          "eos": false,
+          "start": 4.59,
+          "tags": [],
+          "text": "I've",
+          "type": "word"
+        },
+        {
+          "confidence": 1.0,
+          "duration": 0.24,
+          "eos": false,
+          "start": 4.83,
+          "tags": [],
+          "text": "prepared",
+          "type": "word"
+        },
+        {
+          "confidence": 1.0,
+          "duration": 0.06,
+          "eos": false,
+          "start": 5.19,
+          "tags": [],
+          "text": "a",
+          "type": "word"
+        },
+        {
+          "confidence": 1.0,
+          "duration": 0.18,
+          "eos": false,
+          "start": 5.31,
+          "tags": [],
+          "text": "very",
+          "type": "word"
+        },
+        {
+          "confidence": 1.0,
+          "duration": 0.06,
+          "eos": false,
+          "start": 5.55,
+          "tags": [],
+          "text": "long",
+          "type": "word"
+        },
+        {
+          "confidence": 1.0,
+          "duration": 0.3,
+          "eos": false,
+          "start": 5.91,
+          "tags": [],
+          "text": "sentence",
+          "type": "word"
+        },
+        {
+          "confidence": 0.999,
+          "duration": 0.06,
+          "eos": false,
+          "start": 6.27,
+          "tags": [],
+          "text": "with",
+          "type": "word"
+        },
+        {
+          "confidence": 1.0,
+          "duration": 0.24,
+          "eos": false,
+          "start": 6.63,
+          "tags": [],
+          "text": "plenty",
+          "type": "word"
+        },
+        {
+          "confidence": 1.0,
+          "duration": 0.06,
+          "eos": false,
+          "start": 6.87,
+          "tags": [],
+          "text": "of",
+          "type": "word"
+        },
+        {
+          "confidence": 0.839,
+          "duration": 0.3,
+          "eos": false,
+          "start": 7.17,
+          "tags": [],
+          "text": "commas",
+          "type": "word"
+        },
+        {
+          "confidence": 0.998,
+          "duration": 0.06,
+          "eos": false,
+          "start": 7.89,
+          "tags": [],
+          "text": "so",
+          "type": "word"
+        },
+        {
+          "confidence": 1.0,
+          "duration": 0.06,
+          "eos": false,
+          "start": 8.01,
+          "tags": [],
+          "text": "we",
+          "type": "word"
+        },
+        {
+          "confidence": 1.0,
+          "duration": 0.06,
+          "eos": false,
+          "start": 8.13,
+          "tags": [],
+          "text": "can",
+          "type": "word"
+        },
+        {
+          "confidence": 1.0,
+          "duration": 0.12,
+          "eos": false,
+          "start": 8.31,
+          "tags": [],
+          "text": "check",
+          "type": "word"
+        },
+        {
+          "confidence": 1.0,
+          "duration": 0.06,
+          "eos": false,
+          "start": 8.49,
+          "tags": [],
+          "text": "how",
+          "type": "word"
+        },
+        {
+          "confidence": 1.0,
+          "duration": 0.06,
+          "eos": false,
+          "start": 8.67,
+          "tags": [],
+          "text": "the",
+          "type": "word"
+        },
+        {
+          "confidence": 1.0,
+          "duration": 0.18,
+          "eos": false,
+          "start": 8.91,
+          "tags": [],
+          "text": "tool",
+          "type": "word"
+        },
+        {
+          "confidence": 1.0,
+          "duration": 0.24,
+          "eos": false,
+          "start": 9.27,
+          "tags": [],
+          "text": "splits",
+          "type": "word"
+        },
+        {
+          "confidence": 1.0,
+          "duration": 0.06,
+          "eos": false,
+          "start": 9.57,
+          "tags": [],
+          "text": "it",
+          "type": "word"
+        },
+        {
+          "confidence": 1.0,
+          "duration": 0.06,
+          "eos": false,
+          "start": 9.69,
+          "tags": [],
+          "text": "into",
+          "type": "word"
+        },
+        {
+          "confidence": 0.888,
+          "duration": 0.42,
+          "eos": false,
+          "start": 10.05,
+          "tags": [],
+          "text": "parts,",
+          "type": "word"
+        },
+        {
+          "confidence": 1.0,
+          "duration": 0.24,
+          "eos": false,
+          "start": 10.77,
+          "tags": [],
+          "text": "without",
+          "type": "word"
+        },
+        {
+          "confidence": 1.0,
+          "duration": 0.24,
+          "eos": false,
+          "start": 11.13,
+          "tags": [],
+          "text": "breaking",
+          "type": "word"
+        },
+        {
+          "confidence": 1.0,
+          "duration": 0.06,
+          "eos": false,
+          "start": 11.49,
+          "tags": [],
+          "text": "a",
+          "type": "word"
+        },
+        {
+          "confidence": 1.0,
+          "duration": 0.24,
+          "eos": false,
+          "start": 11.67,
+          "tags": [],
+          "text": "phrase",
+          "type": "word"
+        },
+        {
+          "confidence": 1.0,
+          "duration": 0.06,
+          "eos": false,
+          "start": 11.97,
+          "tags": [],
+          "text": "in",
+          "type": "word"
+        },
+        {
+          "confidence": 1.0,
+          "duration": 0.06,
+          "eos": false,
+          "start": 12.03,
+          "tags": [],
+          "text": "the",
+          "type": "word"
+        },
+        {
+          "confidence": 0.933,
+          "duration": 0.36,
+          "eos": false,
+          "start": 12.15,
+          "tags": [],
+          "text": "middle,",
+          "type": "word"
+        },
+        {
+          "confidence": 1.0,
+          "duration": 0.06,
+          "eos": false,
+          "start": 12.87,
+          "tags": [],
+          "text": "and",
+          "type": "word"
+        },
+        {
+          "confidence": 1.0,
+          "duration": 0.24,
+          "eos": false,
+          "start": 13.05,
+          "tags": [],
+          "text": "without",
+          "type": "word"
+        },
+        {
+          "confidence": 1.0,
+          "duration": 0.36,
+          "eos": false,
+          "start": 13.53,
+          "tags": [],
+          "text": "exceeding",
+          "type": "word"
+        },
+        {
+          "confidence": 1.0,
+          "duration": 0.06,
+          "eos": false,
+          "start": 13.89,
+          "tags": [],
+          "text": "the",
+          "type": "word"
+        },
+        {
+          "confidence": 1.0,
+          "duration": 0.06,
+          "eos": false,
+          "start": 14.25,
+          "tags": [],
+          "text": "line",
+          "type": "word"
+        },
+        {
+          "confidence": 0.995,
+          "duration": 0.36,
+          "eos": true,
+          "start": 14.49,
+          "tags": [],
+          "text": "length.",
+          "type": "word"
+        }
+      ]
+    },
+    {
+      "duration": 3.0,
+      "language": "en-us",
+      "speaker": "5fe6e7e2-e8df-46f4-a1fc-5d0acd477b66",
+      "start": 15.45,
+      "words": [
+        {
+          "confidence": 0.973,
+          "duration": 0.12,
+          "eos": false,
+          "start": 15.45,
+          "tags": [],
+          "text": "What",
+          "type": "word"
+        },
+        {
+          "confidence": 1.0,
+          "duration": 0.24,
+          "eos": false,
+          "start": 15.63,
+          "tags": [],
+          "text": "happens",
+          "type": "word"
+        },
+        {
+          "confidence": 1.0,
+          "duration": 0.06,
+          "eos": false,
+          "start": 15.99,
+          "tags": [],
+          "text": "if",
+          "type": "word"
+        },
+        {
+          "confidence": 1.0,
+          "duration": 0.06,
+          "eos": false,
+          "start": 16.05,
+          "tags": [],
+          "text": "I",
+          "type": "word"
+        },
+        {
+          "confidence": 0.943,
+          "duration": 0.54,
+          "eos": false,
+          "start": 16.41,
+          "tags": [],
+          "text": "pause...",
+          "type": "word"
+        },
+        {
+          "confidence": 0.986,
+          "duration": 0.06,
+          "eos": false,
+          "start": 17.55,
+          "tags": [],
+          "text": "and",
+          "type": "word"
+        },
+        {
+          "confidence": 0.999,
+          "duration": 0.06,
+          "eos": false,
+          "start": 17.67,
+          "tags": [],
+          "text": "then",
+          "type": "word"
+        },
+        {
+          "confidence": 0.994,
+          "duration": 0.42,
+          "eos": true,
+          "start": 18.03,
+          "tags": [],
+          "text": "continue?",
+          "type": "word"
+        }
+      ]
+    },
+    {
+      "duration": 1.74,
+      "language": "ru-ru",
+      "speaker": "2f979954-44bf-4488-8e5b-7725f261f6a9",
+      "start": 20.37,
+      "words": [
+        {
+          "confidence": 0.999,
+          "duration": 0.06,
+          "eos": false,
+          "start": 20.37,
+          "tags": [],
+          "text": "А",
+          "type": "word"
+        },
+        {
+          "confidence": 1.0,
+          "duration": 0.18,
+          "eos": false,
+          "start": 20.49,
+          "tags": [],
+          "text": "теперь",
+          "type": "word"
+        },
+        {
+          "confidence": 1.0,
+          "duration": 0.42,
+          "eos": false,
+          "start": 20.79,
+          "tags": [],
+          "text": "короткая",
+          "type": "word"
+        },
+        {
+          "confidence": 1.0,
+          "duration": 0.18,
+          "eos": false,
+          "start": 21.21,
+          "tags": [],
+          "text": "фраза",
+          "type": "word"
+        },
+        {
+          "confidence": 0.991,
+          "duration": 0.54,
+          "eos": true,
+          "start": 21.57,
+          "tags": [],
+          "text": "по-русски.",
+          "type": "word"
+        }
+      ]
+    },
+    {
+      "duration": 1.44,
+      "language": "es-es",
+      "speaker": "a645e07d-f51c-4ae7-8059-ec57691edefb",
+      "start": 22.89,
+      "words": [
+        {
+          "confidence": 0.996,
+          "duration": 0.06,
+          "eos": false,
+          "start": 22.89,
+          "tags": [],
+          "text": "Y",
+          "type": "word"
+        },
+        {
+          "confidence": 1.0,
+          "duration": 0.06,
+          "eos": false,
+          "start": 23.07,
+          "tags": [],
+          "text": "una",
+          "type": "word"
+        },
+        {
+          "confidence": 1.0,
+          "duration": 0.18,
+          "eos": false,
+          "start": 23.19,
+          "tags": [],
+          "text": "frase",
+          "type": "word"
+        },
+        {
+          "confidence": 1.0,
+          "duration": 0.24,
+          "eos": false,
+          "start": 23.55,
+          "tags": [],
+          "text": "corta",
+          "type": "word"
+        },
+        {
+          "confidence": 1.0,
+          "duration": 0.06,
+          "eos": false,
+          "start": 23.85,
+          "tags": [],
+          "text": "en",
+          "type": "word"
+        },
+        {
+          "confidence": 0.999,
+          "duration": 0.36,
+          "eos": true,
+          "start": 23.97,
+          "tags": [],
+          "text": "español.",
+          "type": "word"
+        }
+      ]
+    },
+    {
+      "duration": 0.24,
+      "language": "en-us",
+      "speaker": "f854d5ff-8719-4163-94a6-d1a4c0e27dcb",
+      "start": 25.11,
+      "words": [
+        {
+          "confidence": 0.996,
+          "duration": 0.24,
+          "eos": true,
+          "start": 25.11,
+          "tags": [],
+          "text": "Yes.",
+          "type": "word"
+        }
+      ]
+    },
+    {
+      "duration": 1.74,
+      "language": "en-us",
+      "speaker": "5fe6e7e2-e8df-46f4-a1fc-5d0acd477b66",
+      "start": 26.55,
+      "words": [
+        {
+          "confidence": 0.982,
+          "duration": 0.3,
+          "eos": false,
+          "start": 26.55,
+          "tags": [],
+          "text": "Okay,",
+          "type": "word"
+        },
+        {
+          "confidence": 1.0,
+          "duration": 0.18,
+          "eos": false,
+          "start": 27.03,
+          "tags": [],
+          "text": "that's",
+          "type": "word"
+        },
+        {
+          "confidence": 1.0,
+          "duration": 0.06,
+          "eos": false,
+          "start": 27.21,
+          "tags": [],
+          "text": "the",
+          "type": "word"
+        },
+        {
+          "confidence": 1.0,
+          "duration": 0.06,
+          "eos": false,
+          "start": 27.39,
+          "tags": [],
+          "text": "end",
+          "type": "word"
+        },
+        {
+          "confidence": 1.0,
+          "duration": 0.06,
+          "eos": false,
+          "start": 27.51,
+          "tags": [],
+          "text": "of",
+          "type": "word"
+        },
+        {
+          "confidence": 1.0,
+          "duration": 0.06,
+          "eos": false,
+          "start": 27.63,
+          "tags": [],
+          "text": "the",
+          "type": "word"
+        },
+        {
+          "confidence": 0.964,
+          "duration": 0.36,
+          "eos": true,
+          "start": 27.93,
+          "tags": [],
+          "text": "test.",
+          "type": "word"
+        }
+      ]
+    }
+  ],
+  "speakers": [
+    {
+      "id": "5fe6e7e2-e8df-46f4-a1fc-5d0acd477b66",
+      "name": "Speaker 1"
+    },
+    {
+      "id": "f854d5ff-8719-4163-94a6-d1a4c0e27dcb",
+      "name": "Speaker 2"
+    },
+    {
+      "id": "2f979954-44bf-4488-8e5b-7725f261f6a9",
+      "name": "Speaker 3"
+    },
+    {
+      "id": "a645e07d-f51c-4ae7-8059-ec57691edefb",
+      "name": "Speaker 4"
+    }
+  ]
+}

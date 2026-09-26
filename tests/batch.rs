@@ -6,7 +6,7 @@ use std::path::Path;
 
 use sonisub::audio::{self, Probe};
 use sonisub::batch::{self, Action, Selection, Totals, matches};
-use sonisub::job::Options;
+use sonisub::job::{Format, Options};
 
 fn touch(p: &Path) {
     std::fs::create_dir_all(p.parent().unwrap()).unwrap();
@@ -154,6 +154,11 @@ fn plan_says_what_each_file_needs() {
     let t = Totals::of(&plan);
     assert_eq!((t.transcribe, t.no_audio, t.skip, t.cached, t.cached_silent), (1, 1, 1, 1, 1));
     assert!((t.audio_s - 29.25).abs() < 0.1);
+
+    // Another format: files with a saved transcript make it for free, the rest are sent.
+    let premiere = batch::plan(&items, &Options { formats: vec![Format::Srt, Format::Premiere], ..Options::default() });
+    assert!(matches!(premiere[2].action, Action::Transcribe { .. }), "{:?}", premiere[2].action);
+    assert_eq!(premiere[3].action, Action::Cached { speech: true });
 
     // --force: everything with audio is sent again.
     let forced = batch::plan(&items, &Options { force: true, ..Options::default() });
