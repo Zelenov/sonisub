@@ -468,3 +468,17 @@ fn a_failed_remote_delete_is_counted() {
     assert!(matches!(out, Outcome::Written { .. }), "{out:?}");
     assert_eq!(client.failed_deletes(), 2);
 }
+
+#[test]
+fn a_create_that_times_out_is_not_sent_twice() {
+    // Soniox answers too late: it may have created the transcription, so a retry would make a
+    // second one that nothing deletes.
+    let mock = MockSoniox::start(|_, _| {
+        std::thread::sleep(Duration::from_millis(600));
+        (201, json!({"id": "t1"}))
+    });
+    let client = Client::new(&mock.url, "key").unwrap().with_timeout(Duration::from_millis(200));
+    assert!(client.create(&json!({})).is_err());
+    std::thread::sleep(Duration::from_millis(700));
+    assert_eq!(mock.calls(), ["POST /v1/transcriptions"]);
+}

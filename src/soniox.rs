@@ -99,6 +99,8 @@ impl Client {
         let http = Http::builder()
             .user_agent(concat!("sonisub/", env!("CARGO_PKG_VERSION")))
             .connect_timeout(Duration::from_secs(30))
+            // Finds a connection that died while waiting for an answer.
+            .tcp_keepalive(Duration::from_secs(30))
             .timeout(None::<Duration>)
             .build()?;
         Ok(Self {
@@ -134,13 +136,23 @@ impl Client {
         self.req_untimed(method, path).timeout(self.timeout)
     }
 
-    /// A request without a total time limit: an upload of a long file takes as long as it takes.
+    /// A request without the client's time limit: an upload sets its own, by size.
     fn req_untimed(&self, method: reqwest::Method, path: &str) -> RequestBuilder {
         self.http.request(method, format!("{}{}", self.base, path)).bearer_auth(&self.key)
     }
 
     /// Sends a request, retrying transient failures (network, timeout, 429, 5xx).
     fn send(&self, make: impl Fn() -> Result<RequestBuilder>) -> Result<Response> {
+        self.send_with(make, true)
+    }
+
+    /// Sends a request that creates something: not retried after a timeout, since Soniox may
+    /// have created it already, and a second one would be left behind (and maybe paid for).
+    fn send_create(&self, make: impl Fn() -> Result<RequestBuilder>) -> Result<Response> {
+        self.send_with(make, false)
+    }
+
+    fn send_with(&self, make: impl Fn() -> Result<RequestBuilder>, retry_timeouts: bool) -> Result<Response> {
         let mut delay = Duration::from_secs(2);
         for attempt in 1.. {
             let res = make()?.send();
@@ -150,7 +162,8 @@ impl Client {
             let retry = !cancelled
                 && match &res {
                     Ok(r) => r.status().as_u16() == 429 || r.status().is_server_error(),
-                    Err(e) => e.is_connect() || e.is_timeout() || e.is_request(),
+                    Err(e) if e.is_timeout() => retry_timeouts,
+                    Err(e) => e.is_connect() || e.is_request(),
                 };
             if !retry || attempt >= 4 {
                 let r = res.context("request to Soniox failed")?;
@@ -173,17 +186,23 @@ impl Client {
         let len = std::fs::metadata(path)?.len();
         pb.set_length(len);
         let name = path.file_name().and_then(|n| n.to_str()).unwrap_or("audio.flac").to_string();
-        let r = self.send(|| {
+        // No fixed limit for an upload, but one that grows with its size (at least 50 KB/s), so a
+        // connection that stalls mid-upload does not hang the job, and its cancel, for good.
+        let limit = Duration::from_secs(120) + Duration::from_secs(len / 50_000);
+        let r = self.send_create(|| {
             pb.set_position(0);
             let reader = Progress { inner: File::open(path)?, pb: pb.clone(), cancel: self.cancel.clone() };
             let part = multipart::Part::reader_with_length(reader, len).file_name(name.clone());
-            Ok(self.req_untimed(reqwest::Method::POST, "/files").multipart(multipart::Form::new().part("file", part)))
+            Ok(self
+                .req_untimed(reqwest::Method::POST, "/files")
+                .timeout(limit)
+                .multipart(multipart::Form::new().part("file", part)))
         })?;
         Ok(r.json::<Id>()?.id)
     }
 
     pub fn create(&self, config: &Value) -> Result<String> {
-        let r = self.send(|| Ok(self.req(reqwest::Method::POST, "/transcriptions").json(config)))?;
+        let r = self.send_create(|| Ok(self.req(reqwest::Method::POST, "/transcriptions").json(config)))?;
         Ok(r.json::<Id>()?.id)
     }
 
