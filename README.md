@@ -136,7 +136,7 @@ Exit codes: `0` ok, `1` some files failed, `2` fatal (key/balance/usage), `130` 
 ### As a library
 
 ```toml
-sonisub = { git = "https://github.com/Zelenov/sonisub", rev = "<commit>", default-features = false }
+sonisub = { version = "0.2", default-features = false }
 ```
 
 `default-features = false` drops the `cli` feature (the binary, `clap`, `ctrlc`). Per file:
@@ -178,5 +178,11 @@ The workflow runs the tests and builds Windows x64, Linux x64 and macOS arm64.
 
 - Push to `main`: a published release `vX.Y.Z` (skipped if that release already exists).
 - Push to any other branch: a draft `vX.Y.Z-<branch>`, rebuilt on every push.
+- From `main`, the crate is also published to [crates.io](https://crates.io/crates/sonisub) (needs the
+  `CARGO_REGISTRY_TOKEN` secret); a version already there is skipped.
+
+## License
+
+MIT, see [LICENSE](LICENSE).
 
 To release: bump `version` in `Cargo.toml`, add a new `# X.Y.Z` section at the top of `version.md`, commit, push.
