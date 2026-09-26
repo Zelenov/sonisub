@@ -1,17 +1,29 @@
 [package]
 name = "sonisub"
-version = "0.1.0"
+version = "0.2.0"
 edition = "2024"
 description = "Generate .srt subtitles from video/audio files with Soniox speech-to-text"
 repository = "https://github.com/Zelenov/sonisub"
 
+[features]
+default = ["cli"]
+# The `sonisub` command line. Programs using sonisub as a library turn it off
+# (`default-features = false`) and build neither clap nor ctrlc.
+cli = ["dep:clap", "dep:ctrlc"]
+
+[[bin]]
+name = "sonisub"
+path = "src/main.rs"
+required-features = ["cli"]
+
 [dependencies]
 anyhow = "1.0.104"
-clap = { version = "4.6.7", features = ["derive", "env"] }
-ctrlc = "3.5.2"
+clap = { version = "4.6.7", features = ["derive", "env"], optional = true }
+ctrlc = { version = "3.5.2", optional = true }
 flacenc = "0.5.1"
 humantime = "2.4.0"
 indicatif = "0.18.6"
+log = "0.4"
 reqwest = { version = "0.13.5", default-features = false, features = ["blocking", "json", "multipart", "query", "rustls"] }
 serde = { version = "1.0.229", features = ["derive"] }
 serde_json = "1.0.151"

@@ -2,7 +2,7 @@ use std::path::PathBuf;
 use std::time::Duration;
 
 use clap::{Args, Parser, Subcommand};
-use sonisub::{audio, job, srt};
+use sonisub::{audio, job, soniox, srt};
 
 /// Generate .srt subtitles for video/audio files with Soniox speech-to-text.
 ///
@@ -47,7 +47,7 @@ pub struct ApiArgs {
     pub api_key: Option<String>,
 
     /// Soniox API base URL.
-    #[arg(long, default_value = "https://api.soniox.com/v1", hide = true)]
+    #[arg(long, default_value = soniox::DEFAULT_BASE, hide = true)]
     pub api_url: String,
 }
 
@@ -204,6 +204,8 @@ impl RunArgs {
             prefix: String::new(),
             reference: "sonisub".into(),
             progress: None,
+            // Ctrl+C sets the process-wide flag, which every token also obeys.
+            cancel: Default::default(),
         }
     }
 }

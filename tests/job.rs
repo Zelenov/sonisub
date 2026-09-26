@@ -3,10 +3,11 @@
 mod common;
 
 use std::path::Path;
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
 use common::{MockSoniox, ok_route, soniox_error};
 use serde_json::{Value, json};
+use sonisub::cancel::{CancelToken, Cancelled};
 use sonisub::job::{self, Options, Outcome};
 use sonisub::soniox::{Client, api_error};
 
@@ -351,4 +352,133 @@ fn transcript_input_without_words_writes_nothing() {
     let out = job::process(&common::fixture("nospeech.soniox.json"), &s.srt, &options(&s.temp), None).unwrap();
     assert!(matches!(out, Outcome::NoSpeech { marker: None, cached: false, uploaded_s: None }), "{out:?}");
     assert!(!s.srt.exists());
+}
+
+/// A Soniox whose transcription never finishes.
+fn stuck_soniox() -> MockSoniox {
+    MockSoniox::start(|r, n| match (r.method.as_str(), r.path.as_str()) {
+        ("GET", "/v1/transcriptions/t1") => (200, json!({"id": "t1", "status": "processing"})),
+        _ => ok_route(r, n, &Value::Null).unwrap_or((404, json!({}))),
+    })
+}
+
+#[test]
+fn cancelling_a_job_stops_it_and_cleans_up_and_the_next_job_runs() {
+    let s = setup();
+    let mock = stuck_soniox();
+    let cancel = CancelToken::new();
+    let client = Client::new(&mock.url, "key").unwrap().with_cancel(cancel.clone());
+    let opts = Options { cancel: cancel.clone(), ..options(&s.temp) };
+
+    // Cancelled while Soniox is transcribing: once the job has been created and polled.
+    let err = std::thread::scope(|scope| {
+        scope.spawn(|| {
+            while !mock.calls().iter().any(|c| c == "GET /v1/transcriptions/t1") {
+                std::thread::sleep(Duration::from_millis(20));
+            }
+            cancel.cancel();
+        });
+        job::process(&common::fixture("dialog.mp4"), &s.srt, &opts, Some(&client)).unwrap_err()
+    });
+
+    assert!(err.is::<Cancelled>(), "{err:#}");
+    assert!(!s.srt.exists());
+    let calls = mock.calls();
+    assert!(calls.contains(&"DELETE /v1/transcriptions/t1".to_string()), "{calls:?}");
+    assert!(calls.contains(&"DELETE /v1/files/f1".to_string()), "{calls:?}");
+    assert_eq!(client.failed_deletes(), 0);
+    assert_empty(&s.temp);
+
+    // A new job with its own token is not stopped by the cancelled one.
+    let mock = MockSoniox::happy(common::transcript());
+    let next = CancelToken::new();
+    let client = Client::new(&mock.url, "key").unwrap().with_cancel(next.clone());
+    let opts = Options { cancel: next, ..options(&s.temp) };
+    let out = job::process(&common::fixture("dialog.mp4"), &s.srt, &opts, Some(&client)).unwrap();
+    assert!(matches!(out, Outcome::Written { .. }), "{out:?}");
+}
+
+#[test]
+fn a_cancelled_job_sends_nothing() {
+    let s = setup();
+    let mock = MockSoniox::happy(common::transcript());
+    let cancel = CancelToken::new();
+    cancel.cancel();
+    let client = Client::new(&mock.url, "key").unwrap().with_cancel(cancel.clone());
+    let opts = Options { cancel, ..options(&s.temp) };
+    let err = job::process(&common::fixture("dialog.mp4"), &s.srt, &opts, Some(&client)).unwrap_err();
+    assert!(err.is::<Cancelled>(), "{err:#}");
+    assert!(mock.calls().is_empty(), "{:?}", mock.calls());
+}
+
+#[test]
+fn cancel_cuts_the_wait_between_retries() {
+    let mock = MockSoniox::start(|_, _| soniox_error(503, "unavailable", "busy"));
+    let cancel = CancelToken::new();
+    let client = Client::new(&mock.url, "key").unwrap().with_cancel(cancel.clone());
+    let canceller = cancel.clone();
+    let waker = std::thread::spawn(move || {
+        std::thread::sleep(Duration::from_millis(300));
+        canceller.cancel();
+    });
+    let started = Instant::now();
+    let err = client.check_auth().unwrap_err();
+    waker.join().unwrap();
+    // Without the cancel: 2 + 4 + 8 s of waits between four attempts.
+    assert!(started.elapsed() < Duration::from_secs(2), "took {:?}", started.elapsed());
+    assert!(err.is::<Cancelled>(), "{err:#}");
+}
+
+#[test]
+fn a_connection_that_never_answers_times_out() {
+    // Accepts connections and never answers, like a connection that died silently.
+    let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+    let url = format!("http://{}/v1", listener.local_addr().unwrap());
+    std::thread::spawn(move || {
+        let mut open = Vec::new();
+        for stream in listener.incoming().flatten() {
+            open.push(stream);
+        }
+    });
+    let cancel = CancelToken::new();
+    let client = Client::new(&url, "key").unwrap().with_timeout(Duration::from_millis(200)).with_cancel(cancel.clone());
+    let canceller = cancel.clone();
+    let waker = std::thread::spawn(move || {
+        std::thread::sleep(Duration::from_millis(1000));
+        canceller.cancel();
+    });
+    let started = Instant::now();
+    // Timed out, retried after 2 s, then cancelled during the wait; without the timeout the first
+    // request would never return and the cancel could not reach it.
+    assert!(client.status("t1").is_err());
+    waker.join().unwrap();
+    assert!(started.elapsed() < Duration::from_secs(3), "took {:?}", started.elapsed());
+}
+
+#[test]
+fn a_failed_remote_delete_is_counted() {
+    let s = setup();
+    let transcript = common::transcript();
+    let mock = MockSoniox::start(move |r, n| match r.method.as_str() {
+        "DELETE" => soniox_error(404, "not_found", "gone"),
+        _ => ok_route(r, n, &transcript).unwrap_or((404, json!({}))),
+    });
+    let client = Client::new(&mock.url, "key").unwrap();
+    let out = job::process(&common::fixture("dialog.mp4"), &s.srt, &options(&s.temp), Some(&client)).unwrap();
+    assert!(matches!(out, Outcome::Written { .. }), "{out:?}");
+    assert_eq!(client.failed_deletes(), 2);
+}
+
+#[test]
+fn a_create_that_times_out_is_not_sent_twice() {
+    // Soniox answers too late: it may have created the transcription, so a retry would make a
+    // second one that nothing deletes.
+    let mock = MockSoniox::start(|_, _| {
+        std::thread::sleep(Duration::from_millis(600));
+        (201, json!({"id": "t1"}))
+    });
+    let client = Client::new(&mock.url, "key").unwrap().with_timeout(Duration::from_millis(200));
+    assert!(client.create(&json!({})).is_err());
+    std::thread::sleep(Duration::from_millis(700));
+    assert_eq!(mock.calls(), ["POST /v1/transcriptions"]);
 }

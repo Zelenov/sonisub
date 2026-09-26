@@ -130,7 +130,22 @@ Exit codes: `0` ok, `1` some files failed, `2` fatal (key/balance/usage), `130` 
 | `src/audio.rs` | audio track → 16 kHz mono FLAC (built-in decoder or ffmpeg) |
 | `src/soniox.rs` | Soniox REST client, error types, remote cleanup guard |
 | `src/srt.rs` | transcript tokens → cues → SRT text (`srt::Layout`) |
+| `src/cancel.rs` | Ctrl+C flag and per-job `CancelToken` |
 | `src/main.rs`, `src/cli.rs` | command line only: arguments, the list of files, log, stopping on fatal errors |
+
+### As a library
+
+```toml
+sonisub = { git = "https://github.com/Zelenov/sonisub", rev = "<commit>", default-features = false }
+```
+
+`default-features = false` drops the `cli` feature (the binary, `clap`, `ctrlc`). Per file:
+`job::process(input, output, &Options { cancel: token.clone(), .. }, Some(&Client::new(soniox::DEFAULT_BASE, key)?.with_cancel(token)))`.
+Cancelling the token stops extraction, upload, retries and polling within a fraction of a second, with the
+error `cancel::Cancelled`; what was created on Soniox is still deleted. Requests other than uploads time out
+after 60 s and are retried. Failed remote deletes are logged with the `log` crate and counted by
+`Client::failed_deletes`. `reqwest::blocking::Client` must not be created or dropped on an async runtime
+thread, so create the `Client` where the job runs. On Windows, ffmpeg and ffprobe run without a console window.
 
 ## Tests
 
