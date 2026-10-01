@@ -1,0 +1,68 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  linux:
+    name: ci-linux
+    runs-on: ubuntu-24.04
+    env:
+      # Job level: a step's own env is not visible to its `if`.
+      SONIOX_API_KEY: ${{ secrets.SONIOX_API_KEY }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
+
+      - uses: Swatinem/rust-cache@v2
+
+      - name: Format
+        run: cargo fmt --all -- --check
+
+      # Both ways the crate is used: the command line, and the library alone (frename).
+      - name: Clippy
+        run: |
+          cargo clippy --all-targets --locked -- -D warnings
+          cargo clippy --locked --no-default-features -- -D warnings
+
+      - name: Test
+        run: cargo test --locked
+
+      # A real Soniox round trip (a few seconds of audio) when the secret is set; skipped otherwise.
+      - name: Live test
+        if: env.SONIOX_API_KEY != ''
+        run: cargo test --locked --test live -- --ignored
+
+  windows:
+    name: ci-windows
+    runs-on: windows-2022
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy
+
+      - uses: Swatinem/rust-cache@v2
+
+      - name: Clippy
+        run: cargo clippy --all-targets --locked -- -D warnings
+
+      - name: Test
+        run: cargo test --locked
+
+      - name: Build
+        run: cargo build --release --locked
