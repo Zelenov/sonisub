@@ -81,7 +81,13 @@ pub fn probe(input: &Path) -> Result<Probe> {
 }
 
 /// Extracts the audio of `input` into `out`. Stops with [`Cancelled`] soon after `cancel` is set.
-pub fn extract(input: &Path, out: &Path, backend: Backend, pb: &ProgressBar, cancel: &CancelToken) -> Result<Extracted> {
+pub fn extract(
+    input: &Path,
+    out: &Path,
+    backend: Backend,
+    pb: &ProgressBar,
+    cancel: &CancelToken,
+) -> Result<Extracted> {
     let ffmpeg = || which::which("ffmpeg").ok();
     match backend {
         Backend::Native => native(input, out, pb, cancel),
@@ -182,9 +188,7 @@ fn native(input: &Path, out: &Path, pb: &ProgressBar, cancel: &CancelToken) -> R
 
 fn write_flac(samples: &[i16], out: &Path) -> Result<()> {
     let signal: Vec<i32> = samples.iter().map(|&s| s as i32).collect();
-    let config = flacenc::config::Encoder::default()
-        .into_verified()
-        .map_err(|(_, e)| anyhow!("flac config: {e:?}"))?;
+    let config = flacenc::config::Encoder::default().into_verified().map_err(|(_, e)| anyhow!("flac config: {e:?}"))?;
     let source = flacenc::source::MemSource::from_samples(&signal, 1, 16, RATE as usize);
     let stream = flacenc::encode_with_fixed_block_size(&config, source, config.block_size)
         .map_err(|e| anyhow!("flac encoding failed: {e:?}"))?;
@@ -286,9 +290,15 @@ impl Resampler {
                 let mut row: Vec<f64> = (0..2 * half)
                     .map(|j| {
                         let x = j as f64 - (half as f64 - 1.0) - frac;
-                        let s = if x == 0.0 { 1.0 } else { (std::f64::consts::PI * 2.0 * cutoff * x).sin() / (std::f64::consts::PI * 2.0 * cutoff * x) };
+                        let s = if x == 0.0 {
+                            1.0
+                        } else {
+                            (std::f64::consts::PI * 2.0 * cutoff * x).sin() / (std::f64::consts::PI * 2.0 * cutoff * x)
+                        };
                         let t = (x / half as f64).clamp(-1.0, 1.0);
-                        let w = 0.42 + 0.5 * (std::f64::consts::PI * t).cos() + 0.08 * (2.0 * std::f64::consts::PI * t).cos();
+                        let w = 0.42
+                            + 0.5 * (std::f64::consts::PI * t).cos()
+                            + 0.08 * (2.0 * std::f64::consts::PI * t).cos();
                         s * w
                     })
                     .collect();

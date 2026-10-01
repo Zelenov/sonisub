@@ -91,16 +91,16 @@ pub fn of_run<'a>(logs: &'a [Value], reference: &str) -> Vec<&'a Value> {
 }
 
 pub fn fmt_usd(usd: f64) -> String {
-    if usd >= 1.0 {
-        format!("${usd:.2}")
-    } else {
-        format!("${usd:.4}")
-    }
+    if usd >= 1.0 { format!("${usd:.2}") } else { format!("${usd:.4}") }
 }
 
 pub fn fmt_minutes(ms: u64) -> String {
     let s = ms / 1000;
-    if s >= 3600 { format!("{}:{:02}:{:02}", s / 3600, s / 60 % 60, s % 60) } else { format!("{}:{:02}", s / 60, s % 60) }
+    if s >= 3600 {
+        format!("{}:{:02}:{:02}", s / 3600, s / 60 % 60, s % 60)
+    } else {
+        format!("{}:{:02}", s / 60, s % 60)
+    }
 }
 
 /// Human report for `sonisub usage`.
@@ -116,9 +116,17 @@ pub fn report(summary: &Summary, today: &Summary, days: u64) -> String {
     out.push_str(&format!("  {:<18} {:>5}      {:>12}  {:>9}\n", "total", "", "", fmt_usd(summary.cost_usd)));
     out.push_str(&format!("  today (UTC): {}\n", fmt_usd(today.cost_usd)));
     match summary.stt_usd_per_hour() {
-        Some(p) => out.push_str(&format!("  transcription: {} per hour of audio ({} per minute)\n", fmt_usd(p), fmt_usd(p / 60.0))),
-        None => out.push_str(&format!("  transcription: no data yet (about {} per hour)\n", fmt_usd(FALLBACK_USD_PER_HOUR))),
+        Some(p) => out.push_str(&format!(
+            "  transcription: {} per hour of audio ({} per minute)\n",
+            fmt_usd(p),
+            fmt_usd(p / 60.0)
+        )),
+        None => {
+            out.push_str(&format!("  transcription: no data yet (about {} per hour)\n", fmt_usd(FALLBACK_USD_PER_HOUR)))
+        }
     }
-    out.push_str("  remaining balance is not available through the API: https://console.soniox.com/org/billing/overview\n");
+    out.push_str(
+        "  remaining balance is not available through the API: https://console.soniox.com/org/billing/overview\n",
+    );
     out
 }

@@ -13,8 +13,8 @@ use clap::Parser;
 use indicatif::{MultiProgress, ProgressBar, ProgressStyle};
 
 use cli::{ApiArgs, Cli, Command, RunArgs};
-use sonisub::cancel::{interrupt, interrupted};
 use sonisub::batch::{self, Item, Selection, Totals};
+use sonisub::cancel::{interrupt, interrupted};
 use sonisub::job::{self, Outcome};
 use sonisub::languages;
 use sonisub::soniox::{self, Client, api_error};
@@ -66,8 +66,12 @@ fn run(args: &RunArgs) -> Result<ExitCode> {
     let sel = Selection { filters: args.filters.clone(), recursive: args.recursive, out_dir: args.out_dir.clone() };
     let mut items = batch::collect(&args.inputs, &sel)?;
     if items.is_empty() {
-        let filter = if args.filters.is_empty() { String::new() } else { format!(" matching {}", args.filters.join(", ")) };
-        bail!("no media files{filter} in {}", args.inputs.iter().map(|p| p.display().to_string()).collect::<Vec<_>>().join(", "));
+        let filter =
+            if args.filters.is_empty() { String::new() } else { format!(" matching {}", args.filters.join(", ")) };
+        bail!(
+            "no media files{filter} in {}",
+            args.inputs.iter().map(|p| p.display().to_string()).collect::<Vec<_>>().join(", ")
+        );
     }
     let folder_mode = items.len() > 1 || args.inputs.iter().any(|p| p.is_dir());
     if let Some(o) = &args.output {
@@ -105,10 +109,8 @@ fn run(args: &RunArgs) -> Result<ExitCode> {
 
     // Tags this run's requests in Soniox usage logs, to report what it cost.
     let run_started = SystemTime::now();
-    opts.reference = format!(
-        "sonisub-{}",
-        run_started.duration_since(SystemTime::UNIX_EPOCH).unwrap_or_default().as_millis()
-    );
+    opts.reference =
+        format!("sonisub-{}", run_started.duration_since(SystemTime::UNIX_EPOCH).unwrap_or_default().as_millis());
     let multi = MultiProgress::new();
     let overall = (folder_mode && needs_api).then(|| overall_bar(&multi, &totals));
     if folder_mode {
@@ -155,7 +157,13 @@ fn run(args: &RunArgs) -> Result<ExitCode> {
         if let (Some(bar), batch::Action::Transcribe { audio_s }) = (&overall, &planned.action) {
             planned_done_s += audio_s.unwrap_or(0.0);
             bar.set_position((planned_done_s * 1000.0) as u64);
-            bar.set_message(overall_message(sent_files, totals.transcribe, planned_done_s, totals.audio_s, price * sent_audio_s / 3600.0));
+            bar.set_message(overall_message(
+                sent_files,
+                totals.transcribe,
+                planned_done_s,
+                totals.audio_s,
+                price * sent_audio_s / 3600.0,
+            ));
         }
         if interrupted() {
             break;
@@ -253,7 +261,10 @@ fn describe(name: &str, result: &Result<Outcome>, stats: &mut Stats, secs: f64, 
                 (_, true, _) => "checked before (--force to try again)".to_string(),
                 (_, false, None) => "silent, nothing uploaded".to_string(),
                 (Some(m), false, Some(_)) => {
-                    format!("marker saved: {}", m.file_name().map_or_else(|| m.display().to_string(), |n| n.to_string_lossy().into()))
+                    format!(
+                        "marker saved: {}",
+                        m.file_name().map_or_else(|| m.display().to_string(), |n| n.to_string_lossy().into())
+                    )
                 }
                 (None, false, Some(_)) => "nothing recognised".to_string(),
             };
@@ -278,7 +289,9 @@ fn plan_text(plan: &[batch::Planned], t: &Totals, usd_per_hour: f64, detailed: b
                 batch::Action::Cached { speech: true } => "saved      ".to_string(),
                 batch::Action::Cached { speech: false } => "no speech  ".to_string(),
                 batch::Action::NoAudio => "no audio   ".to_string(),
-                batch::Action::Transcribe { audio_s: Some(s) } => format!("send {:>6} ", usage::fmt_minutes((s * 1000.0) as u64)),
+                batch::Action::Transcribe { audio_s: Some(s) } => {
+                    format!("send {:>6} ", usage::fmt_minutes((s * 1000.0) as u64))
+                }
                 batch::Action::Transcribe { audio_s: None } => "send     ? ".to_string(),
             };
             out.push_str(&format!("  {what} {name}\n"));
@@ -286,7 +299,8 @@ fn plan_text(plan: &[batch::Planned], t: &Totals, usd_per_hour: f64, detailed: b
     }
     out.push_str(&format!("{} file(s):\n", plan.len()));
     if t.transcribe > 0 {
-        let unknown = if t.unknown_length > 0 { format!(" + {} of unknown length", t.unknown_length) } else { String::new() };
+        let unknown =
+            if t.unknown_length > 0 { format!(" + {} of unknown length", t.unknown_length) } else { String::new() };
         out.push_str(&format!(
             "  {:>4}  to transcribe: {} audio{unknown}, ≈ {} (at {}/h)\n",
             t.transcribe,
@@ -303,8 +317,10 @@ fn plan_text(plan: &[batch::Planned], t: &Totals, usd_per_hour: f64, detailed: b
         (t.skip, &format!("{exists}, skipped (--force to redo)")),
     ] {
         if n > 0 {
-            out.push_str(&format!("  {n:>4}  {what}
-"));
+            out.push_str(&format!(
+                "  {n:>4}  {what}
+"
+            ));
         }
     }
     out
@@ -368,7 +384,9 @@ fn report_run_cost(client: Option<&Client>, reference: &str, started: SystemTime
             std::thread::sleep(Duration::from_secs(2));
         }
         let now = SystemTime::now();
-        let Ok(logs) = client.usage_logs(started - Duration::from_secs(60), now + Duration::from_secs(60)) else { break };
+        let Ok(logs) = client.usage_logs(started - Duration::from_secs(60), now + Duration::from_secs(60)) else {
+            break;
+        };
         let mine: Vec<_> = usage::of_run(&logs, reference).into_iter().cloned().collect();
         if mine.len() >= uploads {
             exact = Some(Summary::of(&mine));
@@ -393,7 +411,10 @@ fn show_usage(api: &ApiArgs, days: u64) -> Result<()> {
     let today: Vec<_> = logs
         .iter()
         .filter(|e| {
-            e["end_time"].as_str().and_then(|t| humantime::parse_rfc3339_weak(t.trim_end_matches('Z')).ok()).is_some_and(|t| t >= day_start)
+            e["end_time"]
+                .as_str()
+                .and_then(|t| humantime::parse_rfc3339_weak(t.trim_end_matches('Z')).ok())
+                .is_some_and(|t| t >= day_start)
         })
         .cloned()
         .collect();

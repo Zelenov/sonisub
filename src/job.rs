@@ -174,10 +174,8 @@ pub fn process(input: &Path, output: &Path, opts: &Options, client: Option<&Clie
                     .with_context(|| format!("cannot write {}", cache.display()))?;
                 return Ok(Outcome::NoSpeech { marker: Some(cache), cached: false, uploaded_s: None });
             }
-            Err(e) => match e.downcast::<audio::NoAudio>() {
-                Ok(no) => return Ok(Outcome::NoAudio { reason: no.0 }),
-                Err(e) => return Err(e),
-            },
+            // Anything but "no audio track" is a real error.
+            Err(e) => return Ok(Outcome::NoAudio { reason: e.downcast::<audio::NoAudio>()?.0 }),
         }
     };
 
