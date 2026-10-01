@@ -45,9 +45,7 @@ const UNKNOWN_LANGUAGE: &str = "??-??";
 const FILLERS: &[&str] = &["um", "umm", "uh", "uhm", "hmm", "mm", "er", "erm", "ah", "эм", "ээ", "э", "мм", "хм"];
 
 fn premiere_language(soniox: Option<&str>) -> &'static str {
-    soniox
-        .and_then(|l| LANGUAGES.iter().find(|(s, _)| s.eq_ignore_ascii_case(l)))
-        .map_or(UNKNOWN_LANGUAGE, |(_, p)| p)
+    soniox.and_then(|l| LANGUAGES.iter().find(|(s, _)| s.eq_ignore_ascii_case(l))).map_or(UNKNOWN_LANGUAGE, |(_, p)| p)
 }
 
 /// The language most words are in; words without one count as `fallback`.
@@ -80,7 +78,14 @@ fn uuid(seed: &str) -> String {
     let (a, b) = (hash(0), hash(0x9e37_79b9_7f4a_7c15));
     let a = (a & !0xf000) | 0x4000; // version 4
     let b = (b & !(0b11 << 62)) | (0b10 << 62); // RFC 4122 variant
-    format!("{:08x}-{:04x}-{:04x}-{:04x}-{:012x}", a >> 32, (a >> 16) & 0xffff, a & 0xffff, b >> 48, b & 0xffff_ffff_ffff)
+    format!(
+        "{:08x}-{:04x}-{:04x}-{:04x}-{:012x}",
+        a >> 32,
+        (a >> 16) & 0xffff,
+        a & 0xffff,
+        b >> 48,
+        b & 0xffff_ffff_ffff
+    )
 }
 
 fn word_json(w: &Word, eos: bool) -> Value {
@@ -133,7 +138,9 @@ pub fn build(transcript: &Value, layout: &Layout, default_language: Option<&str>
         let n = sentence.len();
         let items = sentence.iter().enumerate().map(|(i, w)| word_json(w, i + 1 == n));
         match segments.last_mut() {
-            Some((sp, lang, ws, _, e)) if *sp == speaker && *lang == language && (gap_ms == 0 || start.saturating_sub(*e) <= gap_ms) => {
+            Some((sp, lang, ws, _, e))
+                if *sp == speaker && *lang == language && (gap_ms == 0 || start.saturating_sub(*e) <= gap_ms) =>
+            {
                 ws.extend(items);
                 *e = end;
             }

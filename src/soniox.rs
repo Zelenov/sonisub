@@ -42,13 +42,17 @@ impl ApiError {
 
     fn hint(&self) -> Option<&'static str> {
         Some(match self.error_type.as_str() {
-            "organization_balance_exhausted" => "Soniox balance is empty: top up or enable autopay at https://console.soniox.com",
+            "organization_balance_exhausted" => {
+                "Soniox balance is empty: top up or enable autopay at https://console.soniox.com"
+            }
             "organization_monthly_budget_exhausted" | "project_monthly_budget_exhausted" => {
                 "monthly budget limit reached: raise it in https://console.soniox.com"
             }
             "unauthenticated" => "invalid API key: check SONIOX_API_KEY or --api-key",
             "permission_denied" => "the API key has no access to this operation",
-            "max_duration_reached" | "max_audio_duration_reached" => "audio is longer than Soniox allows: split the file",
+            "max_duration_reached" | "max_audio_duration_reached" => {
+                "audio is longer than Soniox allows: split the file"
+            }
             "limit_exceeded" => "Soniox rate/usage limit hit: try again later",
             "invalid_audio_file" => "Soniox could not read the extracted audio",
             _ => return None,
@@ -236,15 +240,18 @@ impl Client {
 
     /// Usage log entries (one per request) between two moments, at most 31 days apart.
     pub fn usage_logs(&self, from: std::time::SystemTime, to: std::time::SystemTime) -> Result<Vec<Value>> {
-        let (from, to) = (humantime::format_rfc3339_seconds(from).to_string(), humantime::format_rfc3339_seconds(to).to_string());
+        let (from, to) =
+            (humantime::format_rfc3339_seconds(from).to_string(), humantime::format_rfc3339_seconds(to).to_string());
         let mut out = Vec::new();
         let mut cursor: Option<String> = None;
         loop {
             let v: Value = self
                 .send(|| {
-                    let mut r = self
-                        .req(reqwest::Method::GET, "/usage-logs")
-                        .query(&[("start_time", from.as_str()), ("end_time", to.as_str()), ("limit", "1000")]);
+                    let mut r = self.req(reqwest::Method::GET, "/usage-logs").query(&[
+                        ("start_time", from.as_str()),
+                        ("end_time", to.as_str()),
+                        ("limit", "1000"),
+                    ]);
                     if let Some(c) = &cursor {
                         r = r.query(&[("cursor", c)]);
                     }
@@ -333,7 +340,11 @@ fn check(r: Response) -> Result<Response> {
     let code = r.status().as_u16();
     let text = r.text().unwrap_or_default();
     let v: Value = serde_json::from_str(&text).unwrap_or(Value::Null);
-    let mut message = v["message"].as_str().or(v["error_message"].as_str()).map(str::to_string).unwrap_or_else(|| text.trim().chars().take(300).collect());
+    let mut message = v["message"]
+        .as_str()
+        .or(v["error_message"].as_str())
+        .map(str::to_string)
+        .unwrap_or_else(|| text.trim().chars().take(300).collect());
     if let Some(errs) = v["validation_errors"].as_array().filter(|e| !e.is_empty()) {
         let details: Vec<String> = errs
             .iter()

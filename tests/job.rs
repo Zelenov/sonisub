@@ -42,7 +42,10 @@ fn video_to_srt_and_everything_cleaned_up() {
 
     let out = job::process(&common::fixture("dialog.mp4"), &s.srt, &options(&s.temp), Some(&client)).unwrap();
 
-    assert!(matches!(out, Outcome::Written { cues: 10, json: Some(_), uploaded_s: Some(s), .. } if (s - 29.25).abs() < 0.1), "{out:?}");
+    assert!(
+        matches!(out, Outcome::Written { cues: 10, json: Some(_), uploaded_s: Some(s), .. } if (s - 29.25).abs() < 0.1),
+        "{out:?}"
+    );
     assert_eq!(common::normalize(&std::fs::read_to_string(&s.srt).unwrap()), common::golden_srt());
     assert_eq!(
         mock.calls(),
@@ -347,7 +350,10 @@ fn digital_silence_is_not_uploaded() {
     let client = Client::new(&mock.url, "key").unwrap();
     let out = job::process(&common::fixture("silence.m4a"), &s.srt, &options(&s.temp), Some(&client)).unwrap();
     let marker = job::transcript_path(&s.srt);
-    assert!(matches!(&out, Outcome::NoSpeech { marker: Some(m), cached: false, uploaded_s: None } if *m == marker), "{out:?}");
+    assert!(
+        matches!(&out, Outcome::NoSpeech { marker: Some(m), cached: false, uploaded_s: None } if *m == marker),
+        "{out:?}"
+    );
     assert!(mock.calls().is_empty());
     // Next time it is known without decoding.
     let again = job::process(&common::fixture("silence.m4a"), &s.srt, &options(&s.temp), Some(&client)).unwrap();
@@ -367,7 +373,10 @@ fn no_speech_leaves_a_marker_and_is_not_paid_for_twice() {
 
     let first = job::process(&input, &srt, &options(&s.temp), Some(&client)).unwrap();
     let marker = s.dir.path().join("nospeech.soniox.json");
-    assert!(matches!(&first, Outcome::NoSpeech { marker: Some(m), cached: false, uploaded_s: Some(_) } if *m == marker), "{first:?}");
+    assert!(
+        matches!(&first, Outcome::NoSpeech { marker: Some(m), cached: false, uploaded_s: Some(_) } if *m == marker),
+        "{first:?}"
+    );
     assert!(!srt.exists(), "no .srt for a file without speech");
     let saved: Value = serde_json::from_str(&std::fs::read_to_string(&marker).unwrap()).unwrap();
     assert_eq!(saved["tokens"], json!([]));

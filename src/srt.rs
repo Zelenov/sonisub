@@ -131,7 +131,15 @@ pub(crate) fn words(transcript: &Value) -> Vec<Word> {
             }
             _ => {
                 let language = t["language"].as_str().map(str::to_string);
-                out.push(Word { text: text.trim().to_string(), start, end, speaker, language, confidence, glued: false });
+                out.push(Word {
+                    text: text.trim().to_string(),
+                    start,
+                    end,
+                    speaker,
+                    language,
+                    confidence,
+                    glued: false,
+                });
                 tokens.push(1);
             }
         }
@@ -150,8 +158,8 @@ fn strip_closing(w: &str) -> &str {
 
 /// Words whose final dot is not a sentence end.
 const ABBREVIATIONS: &[&str] = &[
-    "mr", "mrs", "ms", "dr", "prof", "st", "sr", "jr", "vs", "approx", "dept", "fig", "vol", "т", "г", "гг",
-    "др", "проф", "ул", "им", "напр", "см", "стр",
+    "mr", "mrs", "ms", "dr", "prof", "st", "sr", "jr", "vs", "approx", "dept", "fig", "vol", "т", "г", "гг", "др",
+    "проф", "ул", "им", "напр", "см", "стр",
 ];
 
 fn is_abbreviation(w: &str) -> bool {
@@ -363,10 +371,7 @@ fn refine(ws: &[Word], range: Range<usize>, prefix: &str, s: &Layout, level: usi
     if level > 2 || cue_cost(&ws[range.clone()], p, s).is_some() {
         return vec![range];
     }
-    partition(ws, range, prefix, s, level)
-        .into_iter()
-        .flat_map(|r| refine(ws, r, prefix, s, level + 1))
-        .collect()
+    partition(ws, range, prefix, s, level).into_iter().flat_map(|r| refine(ws, r, prefix, s, level + 1)).collect()
 }
 
 /// Best split of `range` using only cuts of `level` or cleaner. A piece with no such cut inside may
@@ -449,7 +454,11 @@ pub fn build(transcript: &Value, s: &Layout) -> (String, usize) {
         for (k, r) in split(&sentence, &prefix, s).into_iter().enumerate() {
             let ws = &sentence[r];
             let p = if k == 0 { prefix.as_str() } else { "" };
-            cues.push(Cue { start: ws[0].start, end: ws.last().expect("non-empty").end, text: format!("{p}{}", join(ws)) });
+            cues.push(Cue {
+                start: ws[0].start,
+                end: ws.last().expect("non-empty").end,
+                text: format!("{p}{}", join(ws)),
+            });
         }
     }
 

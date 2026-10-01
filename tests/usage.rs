@@ -56,7 +56,16 @@ fn one_run_is_found_by_its_reference() {
 fn report_shows_models_total_today_and_price() {
     let logs = [entry("stt-async-v5", 11 * 60_000, "0.0180", "a"), entry("tts-rt-v2", 0, "0.5015", "b")];
     let r = usage::report(&Summary::of(&logs), &Summary::of(&logs[..1]), 30);
-    for part in ["last 30 days", "tts-rt-v2", "stt-async-v5", "11:00 audio", "$0.5195", "today (UTC): $0.0180", "per hour", "console.soniox.com"] {
+    for part in [
+        "last 30 days",
+        "tts-rt-v2",
+        "stt-async-v5",
+        "11:00 audio",
+        "$0.5195",
+        "today (UTC): $0.0180",
+        "per hour",
+        "console.soniox.com",
+    ] {
         assert!(r.contains(part), "{part:?} missing in:\n{r}");
     }
 }

@@ -15,7 +15,8 @@ fn fixture_video_through_real_soniox() {
 
     let dir = tempfile::tempdir().unwrap();
     let srt = dir.path().join("dialog.srt");
-    let opts = Options { keep_json: true, languages: vec!["en".into(), "ru".into(), "es".into()], ..Options::default() };
+    let opts =
+        Options { keep_json: true, languages: vec!["en".into(), "ru".into(), "es".into()], ..Options::default() };
     let out = job::process(&common::fixture("dialog.mp4"), &srt, &opts, Some(&client)).unwrap();
 
     let Outcome::Written { cues, .. } = out else { panic!("{out:?}") };

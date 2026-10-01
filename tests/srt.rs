@@ -88,7 +88,11 @@ fn golden_subtitles_for_real_transcripts() {
     for name in ["dialog", "punctuation"] {
         let t = common::transcript_of(name);
         assert_eq!(build(&t, &Layout::default()).0, common::golden(&format!("{name}.srt")), "{name}.srt");
-        assert_eq!(build(&t, &Layout::unlimited()).0, common::golden(&format!("{name}.unlimited.srt")), "{name}.unlimited");
+        assert_eq!(
+            build(&t, &Layout::unlimited()).0,
+            common::golden(&format!("{name}.unlimited.srt")),
+            "{name}.unlimited"
+        );
         assert_eq!(build(&t, &speakers).0, common::golden(&format!("{name}.speakers.srt")), "{name}.speakers");
         assert_eq!(build(&t, &wrapped()).0, common::golden(&format!("{name}.wrap.srt")), "{name}.wrap");
     }
@@ -193,27 +197,26 @@ fn real_dialog_never_mixes_speakers_or_languages() {
 
 #[test]
 fn each_sentence_is_its_own_cue() {
-    assert_eq!(texts(&say("Work is done. Painting buttons next.", 300), &Layout::default()), [
-        "Work is done.",
-        "Painting buttons next."
-    ]);
+    assert_eq!(
+        texts(&say("Work is done. Painting buttons next.", 300), &Layout::default()),
+        ["Work is done.", "Painting buttons next."]
+    );
 }
 
 #[test]
 fn question_and_exclamation_end_sentences() {
-    assert_eq!(texts(&say("Really?! Yes! Why?.. Because.", 200), &Layout::default()), [
-        "Really?!",
-        "Yes!",
-        "Why?..",
-        "Because."
-    ]);
+    assert_eq!(
+        texts(&say("Really?! Yes! Why?.. Because.", 200), &Layout::default()),
+        ["Really?!", "Yes!", "Why?..", "Because."]
+    );
 }
 
 #[test]
 fn ellipsis_is_a_hesitation_not_an_end() {
-    assert_eq!(texts(&say("What do we have on... on... what is next?", 200), &Layout::default()), [
-        "What do we have on... on... what is next?"
-    ]);
+    assert_eq!(
+        texts(&say("What do we have on... on... what is next?", 200), &Layout::default()),
+        ["What do we have on... on... what is next?"]
+    );
     assert_eq!(texts(&say("Well… maybe later.", 200), &Layout::default()), ["Well… maybe later."]);
 }
 
@@ -241,14 +244,14 @@ fn numbers_with_dots_do_not_end_sentences() {
 
 #[test]
 fn quoted_sentence_end_is_an_end() {
-    assert_eq!(texts(&say("He said: \"it works.\" Then he left.", 200), &Layout::default()), [
-        "He said: \"it works.\"",
-        "Then he left."
-    ]);
-    assert_eq!(texts(&say("Он сказал: «готово.» И ушёл.", 200), &Layout::default()), [
-        "Он сказал: «готово.»",
-        "И ушёл."
-    ]);
+    assert_eq!(
+        texts(&say("He said: \"it works.\" Then he left.", 200), &Layout::default()),
+        ["He said: \"it works.\"", "Then he left."]
+    );
+    assert_eq!(
+        texts(&say("Он сказал: «готово.» И ушёл.", 200), &Layout::default()),
+        ["Он сказал: «готово.»", "И ушёл."]
+    );
 }
 
 // ---------------------------------------------------------------- cutting a long sentence
@@ -297,11 +300,14 @@ fn dash_glued_to_words_is_a_cut_point_and_text_is_unchanged() {
     // Soniox writes em dashes without spaces: "finally—and this is the tricky part—we".
     let s = "Well, here we go; finally—and this is the really tricky part of it—we cut the text into small subtitles.";
     let c = texts(&say(s, 150), &narrow(45));
-    assert_eq!(c, [
-        "Well, here we go; finally—",
-        "and this is the really tricky part of it—",
-        "we cut the text into small subtitles."
-    ]);
+    assert_eq!(
+        c,
+        [
+            "Well, here we go; finally—",
+            "and this is the really tricky part of it—",
+            "we cut the text into small subtitles."
+        ]
+    );
     // Whole cue on one line: the dash stays glued.
     assert_eq!(texts(&say(s, 150), &Layout::unlimited()), [s]);
 }
@@ -310,10 +316,10 @@ fn dash_glued_to_words_is_a_cut_point_and_text_is_unchanged() {
 fn a_pause_is_the_next_best_cut_when_there_is_no_punctuation() {
     let s = "and we sat there by the river for a very long time <pause600>watching the boats go by until the sun went down.";
     let c = texts(&say(s, 150), &narrow(50));
-    assert_eq!(c, [
-        "and we sat there by the river for a very long time",
-        "watching the boats go by until the sun went down."
-    ]);
+    assert_eq!(
+        c,
+        ["and we sat there by the river for a very long time", "watching the boats go by until the sun went down."]
+    );
 }
 
 #[test]
@@ -415,7 +421,8 @@ fn speaker_labels_appear_when_the_speaker_changes() {
 #[test]
 fn speaker_names_replace_numbers() {
     let t = say_as(&[("1", "Hi."), ("2", "Hello."), ("3", "Hey.")], 200);
-    let layout = Layout { speaker_labels: true, speaker_names: vec!["Eugene".into(), "Sasha".into()], ..Layout::default() };
+    let layout =
+        Layout { speaker_labels: true, speaker_names: vec!["Eugene".into(), "Sasha".into()], ..Layout::default() };
     assert_eq!(texts(&t, &layout), ["Eugene: Hi.", "Sasha: Hello.", "Speaker 3: Hey."]);
 }
 

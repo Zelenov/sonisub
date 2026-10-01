@@ -9,8 +9,8 @@ use sonisub::srt::Layout;
 
 const LANGUAGES: &[&str] = &[
     "en-us", "en-gb", "zh-hk", "cmn-hans", "cmn-hant", "es-es", "de-de", "fr-fr", "ja-jp", "pt-pt", "pt-br", "ko-kr",
-    "it-it", "ru-ru", "hi-in", "nb-no", "sv-se", "nl-nl", "da-dk", "id-id", "th-th", "vi-vn", "ms-my", "tr-tr", "pl-pl",
-    "fil-ph", "te-in", "ml-in", "pa-in", "??-??",
+    "it-it", "ru-ru", "hi-in", "nb-no", "sv-se", "nl-nl", "da-dk", "id-id", "th-th", "vi-vn", "ms-my", "tr-tr",
+    "pl-pl", "fil-ph", "te-in", "ml-in", "pa-in", "??-??",
 ];
 
 fn keys(v: &Value) -> Vec<&str> {
@@ -65,7 +65,9 @@ fn text(t: &Value) -> Vec<String> {
         .as_array()
         .unwrap()
         .iter()
-        .map(|s| s["words"].as_array().unwrap().iter().map(|w| w["text"].as_str().unwrap()).collect::<Vec<_>>().join(" "))
+        .map(|s| {
+            s["words"].as_array().unwrap().iter().map(|w| w["text"].as_str().unwrap()).collect::<Vec<_>>().join(" ")
+        })
         .collect()
 }
 
@@ -92,11 +94,19 @@ fn a_segment_is_one_speaker_and_one_language() {
 fn eos_ends_every_sentence_and_dashes_stay_inside_words() {
     let t = build(&common::transcript_of("punctuation"), &Layout::default(), Some("en")).unwrap();
     let first = &t["segments"][0]["words"];
-    let eos: Vec<&str> = first.as_array().unwrap().iter().filter(|w| w["eos"] == true).map(|w| w["text"].as_str().unwrap()).collect();
+    let eos: Vec<&str> =
+        first.as_array().unwrap().iter().filter(|w| w["eos"] == true).map(|w| w["text"].as_str().unwrap()).collect();
     assert_eq!(eos, ["subtitles."]);
     assert!(text(&t)[0].contains("finally—and this is the tricky part—we"));
     // "Dr." is not a sentence end.
-    assert!(t["segments"].as_array().unwrap().iter().flat_map(|s| s["words"].as_array().unwrap()).any(|w| w["text"] == "Dr." && w["eos"] == false));
+    assert!(
+        t["segments"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .flat_map(|s| s["words"].as_array().unwrap())
+            .any(|w| w["text"] == "Dr." && w["eos"] == false)
+    );
 }
 
 #[test]
