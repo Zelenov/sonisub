@@ -434,7 +434,12 @@ struct Cue {
 
 /// Builds SRT text from a Soniox transcript; returns the text and the number of cues.
 pub fn build(transcript: &Value, s: &Layout) -> (String, usize) {
-    let words: Vec<Word> = words(transcript).into_iter().flat_map(split_dashes).collect();
+    build_from_words(words(transcript), s)
+}
+
+/// SRT text from words that are already joined (a Soniox transcript's, or a Premiere one's).
+pub(crate) fn build_from_words(words: Vec<Word>, s: &Layout) -> (String, usize) {
+    let words: Vec<Word> = words.into_iter().flat_map(split_dashes).collect();
     let mut speakers: Vec<&str> = words.iter().filter_map(|w| w.speaker.as_deref()).collect();
     speakers.sort_unstable();
     speakers.dedup();

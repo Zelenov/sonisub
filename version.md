@@ -1,3 +1,7 @@
+# 0.4.0
+## Added
+- Library: `premiere::to_srt(source, &layout)` reads a Premiere Pro transcript (`clip.premiere.json`, the file `-t premiere` writes) back as SRT text and the number of cues, laid out by the same `srt::Layout` rules as an SRT made from the same speech. Speakers are named as the file names them, with `layout.speaker_labels`. `None` for JSON that is not a Premiere transcript or has no words. Nothing else changes: no caller has to change.
+
 # 0.3.0
 ## Added
 - `-t premiere` writes a Premiere Pro transcript (`clip.premiere.json`, Adobe's import format) for Text panel > Transcript > Import Static Transcript: words with timing and confidence, speakers, languages, filler tags. `-t srt,premiere` writes both. Only missing outputs are written, so a new format is made from saved transcripts for free.

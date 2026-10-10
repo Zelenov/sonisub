@@ -171,3 +171,65 @@ pub fn build(transcript: &Value, layout: &Layout, default_language: Option<&str>
         .collect();
     Some(json!({ "language": root_language, "segments": segments, "speakers": speakers }))
 }
+
+/// Subtitles (SRT text and the number of cues) from a Premiere Pro transcript, laid out by `layout`
+/// like the SRT made from the same speech: `None` when `source` is not a Premiere transcript or has
+/// no words. Speakers are named as the file names them (a speaker without a name is "Speaker N");
+/// `layout.speaker_names` is not used. Premiere's own sentence ends (`eos`) are not used either:
+/// the layout decides where a cue ends.
+pub fn to_srt(source: &str, layout: &Layout) -> Option<(String, usize)> {
+    let transcript: Value = serde_json::from_str(source.strip_prefix('\u{feff}').unwrap_or(source)).ok()?;
+    let speakers = transcript["speakers"].as_array()?;
+    let segments = transcript["segments"].as_array()?;
+    // Speaker ids in order, as the numbers `srt` labels by.
+    let ids: Vec<&str> = speakers.iter().map(|s| s["id"].as_str().unwrap_or_default()).collect();
+    let layout = Layout {
+        speaker_names: speakers.iter().map(|s| s["name"].as_str().unwrap_or_default().to_string()).collect(),
+        ..layout.clone()
+    };
+
+    let mut words: Vec<Word> = Vec::new();
+    for segment in segments {
+        let speaker =
+            segment["speaker"].as_str().and_then(|id| ids.iter().position(|i| *i == id)).map(|n| (n + 1).to_string());
+        let language = segment["language"].as_str().map(str::to_string);
+        for w in segment["words"].as_array().into_iter().flatten() {
+            let (Some(text), Some(start)) = (w["text"].as_str(), w["start"].as_f64()) else { continue };
+            let text = text.trim();
+            if text.is_empty() || !(0.0..=MAX_SECONDS).contains(&start) {
+                continue;
+            }
+            let start_ms = ms(start);
+            let end_ms =
+                start_ms.max(ms(start + w["duration"].as_f64().filter(|d| d.is_finite() && *d >= 0.0).unwrap_or(0.0)));
+            match words.last_mut() {
+                // Punctuation is written right after the word before it.
+                Some(prev) if w["type"].as_str() == Some("punctuation") && prev.speaker == speaker => {
+                    prev.text.push_str(text);
+                    prev.end = prev.end.max(end_ms);
+                }
+                _ => words.push(Word {
+                    text: text.to_string(),
+                    start: start_ms,
+                    end: end_ms,
+                    speaker: speaker.clone(),
+                    language: language.clone(),
+                    confidence: w["confidence"].as_f64().unwrap_or(1.0),
+                    glued: false,
+                }),
+            }
+        }
+    }
+    if words.is_empty() {
+        return None;
+    }
+    words.sort_by_key(|w| w.start);
+    Some(srt::build_from_words(words, &layout))
+}
+
+/// Words later than this (about 115 days) are junk, not speech.
+const MAX_SECONDS: f64 = 1e7;
+
+fn ms(seconds: f64) -> u64 {
+    (seconds * 1000.0).round().min(MAX_SECONDS * 2000.0) as u64
+}

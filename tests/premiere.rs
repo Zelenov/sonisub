@@ -4,7 +4,7 @@
 mod common;
 
 use serde_json::{Value, json};
-use sonisub::premiere::build;
+use sonisub::premiere::{build, to_srt};
 use sonisub::srt::Layout;
 
 const LANGUAGES: &[&str] = &[
@@ -154,4 +154,73 @@ fn same_transcript_same_ids() {
     assert_eq!(a["speakers"], b["speakers"]);
     let other = build(&common::transcript_of("punctuation"), &Layout::default(), None).unwrap();
     assert_ne!(a["speakers"][0]["id"], other["speakers"][0]["id"]);
+}
+
+// ------------------------------------------------------------ reading a transcript back
+
+fn written(t: &Value) -> String {
+    serde_json::to_string_pretty(t).unwrap()
+}
+
+/// The subtitles of a transcript that sonisub wrote are the ones sonisub writes as an `.srt`
+/// from the same speech, for both layouts (the "short line" and the "whole sentence" setting).
+#[test]
+fn a_written_transcript_reads_back_as_the_srt_made_from_the_same_speech() {
+    for name in ["dialog", "punctuation"] {
+        let soniox = common::transcript_of(name);
+        let premiere = written(&build(&soniox, &Layout::default(), Some("en")).unwrap());
+        for layout in [Layout::default(), Layout::unlimited(), Layout { speaker_labels: true, ..Layout::default() }] {
+            let (expected, cues) = sonisub::srt::build(&soniox, &layout);
+            let (srt, n) = to_srt(&premiere, &layout).expect("a transcript");
+            assert_eq!((srt, n), (expected, cues), "{name} {layout:?}");
+        }
+    }
+}
+
+#[test]
+fn speakers_are_named_as_the_file_names_them() {
+    let named = Layout { speaker_names: vec!["Eugene".into(), "Sasha".into()], ..Layout::default() };
+    let premiere = written(&build(&common::transcript(), &named, None).unwrap());
+    let labelled = Layout { speaker_labels: true, ..Layout::default() };
+    let (srt, _) = to_srt(&premiere, &labelled).unwrap();
+    assert!(srt.contains("Eugene: "), "{srt}");
+    assert!(srt.contains("Sasha: "), "{srt}");
+    assert!(srt.contains("Speaker 3: "), "{srt}");
+    // Without labels the text carries no names.
+    let (plain, _) = to_srt(&premiere, &Layout::default()).unwrap();
+    assert!(!plain.contains("Eugene"));
+}
+
+#[test]
+fn something_that_is_not_a_premiere_transcript_is_none() {
+    let layout = Layout::default();
+    assert!(to_srt("", &layout).is_none());
+    assert!(to_srt("not json", &layout).is_none());
+    assert!(to_srt("[1, 2]", &layout).is_none());
+    assert!(to_srt(r#"{"tokens": []}"#, &layout).is_none(), "a Soniox transcript is not one");
+    assert!(to_srt(r#"{"language": "en-us", "segments": [], "speakers": []}"#, &layout).is_none());
+    assert!(to_srt(r#"{"segments": [{"words": [{"text": 1}]}], "speakers": []}"#, &layout).is_none());
+}
+
+#[test]
+fn damaged_words_are_skipped_and_a_bom_is_fine() {
+    let json = format!(
+        "\u{feff}{}",
+        r#"{"language": "en-us", "speakers": [{"id": "a", "name": "Speaker 1"}], "segments": [
+            {"language": "en-us", "speaker": "a", "start": 0, "duration": 2, "words": [
+                {"text": "Hello", "start": 0.0, "duration": 0.5, "confidence": 1, "eos": false, "tags": [], "type": "word"},
+                {"text": "", "start": 0.5, "duration": 0.1},
+                {"start": 0.6},
+                {"text": "bad", "start": -1.0, "duration": 1},
+                {"text": "huge", "start": 1e300, "duration": 1e300},
+                {"text": "late", "start": 99999999, "duration": 1},
+                {"text": "!", "start": 0.5, "duration": 0.1, "type": "punctuation"}
+            ]}]}"#
+    );
+    let (srt, n) = to_srt(&json, &Layout::default()).expect("the good words are kept");
+    assert!(n >= 1);
+    assert!(srt.contains("Hello!"), "{srt}");
+    for junk in ["bad", "huge", "late"] {
+        assert!(!srt.contains(junk), "{srt}");
+    }
 }
