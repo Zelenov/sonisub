@@ -249,3 +249,44 @@ fn a_speaker_the_file_does_not_list_is_read_without_a_label() {
     assert!(srt.contains("Anna: Hello"), "{srt}");
     assert!(srt.contains("Boris: Hi"), "{srt}");
 }
+
+#[test]
+fn standalone_dashes_and_symbols_survive_the_round_trip_but_marks_attach() {
+    let tok = |text: &str, start: u64| json!({"text": text, "start_ms": start, "end_ms": start + 100, "confidence": 0.9, "language": "en", "speaker": "1"});
+    let soniox = json!({"tokens": [
+        tok("5", 0), tok(" +", 200), tok(" 3", 400), tok(" —", 600), tok(" ok.", 800), tok(" &", 1000), tok(" fine", 1200)
+    ]});
+    let premiere = written(&build(&soniox, &Layout::default(), Some("en")).unwrap());
+    let layout = Layout::default();
+    assert_eq!(to_srt(&premiere, &layout).unwrap(), sonisub::srt::build(&soniox, &layout));
+    assert!(to_srt(&premiere, &layout).unwrap().0.contains("5 + 3 — ok."));
+}
+
+#[test]
+fn a_label_only_where_the_speaker_changes_and_a_leading_mark_attaches() {
+    let json = r#"{"language": "en-us", "speakers": [{"id": "a", "name": "Anna"}, {"id": "b", "name": "Boris"}], "segments": [
+        {"language": "en-us", "speaker": "a", "start": 0, "duration": 1, "words": [
+            {"text": "One", "start": 0.0, "duration": 0.4, "type": "word"},
+            {"text": "two", "start": 0.5, "duration": 0.4, "type": "word"}]},
+        {"language": "en-us", "speaker": "a", "start": 1, "duration": 1, "words": [
+            {"text": "three", "start": 1.0, "duration": 0.4, "type": "word"}]},
+        {"language": "en-us", "speaker": "b", "start": 5, "duration": 1, "words": [
+            {"text": ".", "start": 5.0, "duration": 0.1, "type": "punctuation"},
+            {"text": "Four", "start": 5.2, "duration": 0.4, "type": "word"}]}]}"#;
+    let labelled = Layout { speaker_labels: true, ..Layout::default() };
+    let (srt, n) = to_srt(json, &labelled).unwrap();
+    assert_eq!(n, 2, "{srt}");
+    assert_eq!(
+        srt,
+        "1\n00:00:00,000 --> 00:00:01,400\nAnna: One two three.\n\n2\n00:00:05,200 --> 00:00:05,700\nBoris: Four\n\n"
+    );
+}
+
+#[test]
+fn a_junk_duration_does_not_stretch_a_cue() {
+    let json = r#"{"language": "en-us", "speakers": [{"id": "a", "name": "Speaker 1"}], "segments": [
+        {"language": "en-us", "speaker": "a", "start": 0, "duration": 1, "words": [
+            {"text": "Hello", "start": 0.5, "duration": 1e300, "type": "word"}]}]}"#;
+    let (srt, _) = to_srt(json, &Layout::default()).unwrap();
+    assert!(srt.contains("00:00:00,500 --> 00:01:00,500"), "{srt}");
+}

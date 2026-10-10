@@ -175,7 +175,8 @@ pub fn build(transcript: &Value, layout: &Layout, default_language: Option<&str>
 /// Subtitles (SRT text and the number of cues) from a Premiere Pro transcript, laid out by `layout`
 /// like the SRT made from the same speech: `None` when `source` is not a Premiere transcript or has
 /// no words. Speakers are named as the file names them (a speaker without a name is "Speaker N");
-/// `layout.speaker_names` is not used. Premiere's own sentence ends (`eos`) are not used either:
+/// `layout.speaker_names` is not used. A segment whose speaker the file does not list is read without
+/// a speaker (never labelled). Premiere's own sentence ends (`eos`) are not used either:
 /// the layout decides where a cue ends. Tested on transcripts sonisub wrote; others are read on a
 /// best-effort basis.
 pub fn to_srt(source: &str, layout: &Layout) -> Option<(String, usize)> {
@@ -201,13 +202,19 @@ pub fn to_srt(source: &str, layout: &Layout) -> Option<(String, usize)> {
                 continue;
             }
             let start_ms = ms(start);
-            let end_ms =
-                start_ms.max(ms(start + w["duration"].as_f64().filter(|d| d.is_finite() && *d >= 0.0).unwrap_or(0.0)));
+            let duration = w["duration"].as_f64().filter(|d| d.is_finite() && *d >= 0.0).unwrap_or(0.0);
+            let end_ms = start_ms + ms(duration.min(MAX_WORD_SECONDS));
             match words.last_mut() {
-                // Punctuation is written right after the word before it.
-                Some(prev) if w["type"].as_str() == Some("punctuation") && prev.speaker == speaker => {
+                // Marks that belong to the word before them (even across a speaker change: a mark
+                // never starts a cue) are written right after it. Dashes, `+`, `&` and emoji are
+                // words of their own, as Soniox has them.
+                Some(prev) if text.chars().all(|c| ATTACHED.contains(c)) => {
                     prev.text.push_str(text);
-                    prev.end = prev.end.max(end_ms);
+                    // A mark after a pause (the first word of another speaker's segment) does not
+                    // stretch the word it joins over the silence.
+                    if start_ms <= prev.end + 500 {
+                        prev.end = prev.end.max(end_ms);
+                    }
                 }
                 _ => words.push(Word {
                     text: text.to_string(),
@@ -228,9 +235,15 @@ pub fn to_srt(source: &str, layout: &Layout) -> Option<(String, usize)> {
     Some(srt::build_from_words(words, &layout))
 }
 
-/// Words later than this (about 115 days) are junk, not speech.
-const MAX_SECONDS: f64 = 1e7;
+/// Words later than this (100 hours) are junk, not speech.
+const MAX_SECONDS: f64 = 360_000.0;
+
+/// A word is never longer than this; a junk duration must not stretch a cue over hours.
+const MAX_WORD_SECONDS: f64 = 60.0;
+
+/// Marks that are written right after the word before them.
+const ATTACHED: &str = ".,!?;:…)]}»”’%";
 
 fn ms(seconds: f64) -> u64 {
-    (seconds * 1000.0).round().min(MAX_SECONDS * 2000.0) as u64
+    (seconds * 1000.0).round().min(MAX_SECONDS * 1000.0) as u64
 }
