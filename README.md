@@ -160,15 +160,19 @@ Exit codes: `0` ok, `1` some files failed, `2` fatal (key/balance/usage), `130` 
 | `src/soniox.rs` | Soniox REST client, error types, remote cleanup guard |
 | `src/languages.rs` | language codes `-l` takes, from Soniox (`languages::fetch(client)`) |
 | `src/srt.rs` | transcript tokens → cues → SRT text (`srt::Layout`) |
-| `src/premiere.rs` | transcript tokens → Premiere Pro transcript JSON |
+| `src/premiere.rs` | transcript tokens → Premiere Pro transcript JSON; `premiere::to_srt` reads one back as SRT text |
 | `src/cancel.rs` | Ctrl+C flag and per-job `CancelToken` |
 | `src/main.rs`, `src/cli.rs` | command line only: arguments, the list of files, log, stopping on fatal errors |
 
 ### As a library
 
 ```toml
-sonisub = { version = "0.3", default-features = false }
+sonisub = { version = "0.4", default-features = false }
 ```
+
+`premiere::to_srt(&json, &layout)` turns a `clip.premiere.json` back into SRT text and the cue count
+(`None` when it is not a Premiere transcript). Tested on transcripts sonisub wrote; transcripts from
+other tools are read on a best-effort basis.
 
 `default-features = false` drops the `cli` feature (the binary, `clap`, `ctrlc`). Per file:
 `job::process(input, output, &Options { cancel: token.clone(), .. }, Some(&Client::new(soniox::DEFAULT_BASE, key)?.with_cancel(token)))`.
