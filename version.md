@@ -1,6 +1,6 @@
 # 0.4.0
 ## Added
-- Library: `premiere::to_srt(source, &layout)` reads a Premiere Pro transcript (`clip.premiere.json`, the file `-t premiere` writes) back as SRT text and the number of cues, laid out by the same `srt::Layout` rules as an SRT made from the same speech. Speakers are named as the file names them, with `layout.speaker_labels`. `None` for JSON that is not a Premiere transcript or has no words. Nothing else changes: no caller has to change.
+- Library: `premiere::to_srt(source, &layout)` reads a Premiere Pro transcript back as SRT text and the number of cues, laid out by the same `srt::Layout` rules as an SRT made from the same speech. Speaker names come from the file (`layout.speaker_labels` turns them on; `layout.speaker_names` is ignored). `None` for JSON that is not a Premiere transcript or has no words. Tested on transcripts sonisub wrote; others are read on a best-effort basis. No caller has to change.
 
 # 0.3.0
 ## Added

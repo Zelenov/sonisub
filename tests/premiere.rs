@@ -169,7 +169,14 @@ fn a_written_transcript_reads_back_as_the_srt_made_from_the_same_speech() {
     for name in ["dialog", "punctuation"] {
         let soniox = common::transcript_of(name);
         let premiere = written(&build(&soniox, &Layout::default(), Some("en")).unwrap());
-        for layout in [Layout::default(), Layout::unlimited(), Layout { speaker_labels: true, ..Layout::default() }] {
+        for layout in [
+            Layout::default(),
+            Layout::unlimited(),
+            Layout { speaker_labels: true, ..Layout::default() },
+            Layout { by_speaker: false, ..Layout::default() },
+            Layout { wrap_lines: true, ..Layout::default() },
+            Layout { gap: 0.0, ..Layout::default() },
+        ] {
             let (expected, cues) = sonisub::srt::build(&soniox, &layout);
             let (srt, n) = to_srt(&premiere, &layout).expect("a transcript");
             assert_eq!((srt, n), (expected, cues), "{name} {layout:?}");
@@ -214,13 +221,31 @@ fn damaged_words_are_skipped_and_a_bom_is_fine() {
                 {"text": "bad", "start": -1.0, "duration": 1},
                 {"text": "huge", "start": 1e300, "duration": 1e300},
                 {"text": "late", "start": 99999999, "duration": 1},
+                {"text": "ok", "start": 0.6, "duration": -1},
                 {"text": "!", "start": 0.5, "duration": 0.1, "type": "punctuation"}
             ]}]}"#
     );
     let (srt, n) = to_srt(&json, &Layout::default()).expect("the good words are kept");
-    assert!(n >= 1);
-    assert!(srt.contains("Hello!"), "{srt}");
+    assert_eq!(n, 1);
+    assert!(srt.contains("Hello ok!"), "{srt}");
     for junk in ["bad", "huge", "late"] {
         assert!(!srt.contains(junk), "{srt}");
     }
+}
+
+#[test]
+fn a_speaker_the_file_does_not_list_is_read_without_a_label() {
+    let json = r#"{"language": "en-us", "speakers": [{"id": "a", "name": "Anna"}, {"id": "b", "name": "Boris"}], "segments": [
+        {"language": "en-us", "speaker": "zzz", "start": 0, "duration": 1, "words": [
+            {"text": "Mystery", "start": 0.0, "duration": 0.5, "type": "word"}]},
+        {"language": "en-us", "speaker": "a", "start": 3, "duration": 1, "words": [
+            {"text": "Hello", "start": 3.0, "duration": 0.5, "type": "word"}]},
+        {"language": "en-us", "speaker": "b", "start": 6, "duration": 1, "words": [
+            {"text": "Hi", "start": 6.0, "duration": 0.5, "type": "word"}]}]}"#;
+    let labelled = Layout { speaker_labels: true, ..Layout::default() };
+    let (srt, _) = to_srt(json, &labelled).expect("read");
+    assert!(srt.contains("Mystery"), "{srt}");
+    assert!(!srt.contains(": Mystery"), "{srt}");
+    assert!(srt.contains("Anna: Hello"), "{srt}");
+    assert!(srt.contains("Boris: Hi"), "{srt}");
 }

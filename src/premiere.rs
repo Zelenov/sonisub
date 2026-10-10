@@ -176,7 +176,8 @@ pub fn build(transcript: &Value, layout: &Layout, default_language: Option<&str>
 /// like the SRT made from the same speech: `None` when `source` is not a Premiere transcript or has
 /// no words. Speakers are named as the file names them (a speaker without a name is "Speaker N");
 /// `layout.speaker_names` is not used. Premiere's own sentence ends (`eos`) are not used either:
-/// the layout decides where a cue ends.
+/// the layout decides where a cue ends. Tested on transcripts sonisub wrote; others are read on a
+/// best-effort basis.
 pub fn to_srt(source: &str, layout: &Layout) -> Option<(String, usize)> {
     let transcript: Value = serde_json::from_str(source.strip_prefix('\u{feff}').unwrap_or(source)).ok()?;
     let speakers = transcript["speakers"].as_array()?;
