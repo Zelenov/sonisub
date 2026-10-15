@@ -10,6 +10,7 @@ use serde_json::{Value, json};
 
 use crate::audio;
 use crate::cancel::{CancelToken, Cancelled};
+use crate::progress::{Callback, Estimate, Reporter, Stage};
 use crate::soniox::{self, Client, RemoteGuard};
 use crate::{premiere, srt};
 
@@ -65,6 +66,9 @@ pub struct Options {
     pub reference: String,
     /// Draw stage bars here, under a batch's overall bar; they are cleared when the file is done.
     pub progress: Option<MultiProgress>,
+    /// Called with where the job is: extract, upload, transcribe (estimated), download, write.
+    /// See [`crate::progress`]. `None` reports nothing.
+    pub on_progress: Option<Callback>,
     /// Stops this job's extraction and polling; give the [`Client`] the same token
     /// ([`Client::with_cancel`]) to stop its uploads and retries too. The process-wide
     /// [`crate::cancel::interrupt`] stops every job.
@@ -90,6 +94,7 @@ impl Default for Options {
             prefix: String::new(),
             reference: "sonisub".into(),
             progress: None,
+            on_progress: None,
             cancel: CancelToken::new(),
         }
     }
@@ -158,6 +163,7 @@ pub fn process(input: &Path, output: &Path, opts: &Options, client: Option<&Clie
         return Ok(Outcome::Skipped { files: opts.formats.iter().map(|f| f.path(output)).collect() });
     }
 
+    let rep = Reporter::new(opts.on_progress.clone());
     let cache = transcript_path(output);
     let source = if is_transcript(input) {
         Source::Input(read_transcript(input)?)
@@ -165,7 +171,7 @@ pub fn process(input: &Path, output: &Path, opts: &Options, client: Option<&Clie
         Source::Cache(read_transcript(&cache).context("use --force to transcribe again")?, cache.clone())
     } else {
         let client = client.ok_or_else(soniox::missing_key)?;
-        match transcribe(input, opts, client) {
+        match transcribe_with(input, opts, client, &rep) {
             Ok(Some((t, secs))) => Source::Api(t, secs),
             Ok(None) => {
                 // Digital silence: nothing was sent; the marker still tells later runs (and plans) it's checked.
@@ -196,6 +202,7 @@ pub fn process(input: &Path, output: &Path, opts: &Options, client: Option<&Clie
     if !srt::has_speech(&transcript) {
         return Ok(Outcome::NoSpeech { marker: json, cached, uploaded_s });
     }
+    rep.mark(Stage::Writing, 0.0);
     let layout = srt::Layout { by_speaker: opts.diarization, ..opts.layout.clone() };
     let mut cues = 0;
     let mut files = Vec::new();
@@ -215,6 +222,7 @@ pub fn process(input: &Path, output: &Path, opts: &Options, client: Option<&Clie
         std::fs::write(&path, text).with_context(|| format!("cannot write {}", path.display()))?;
         files.push(path);
     }
+    rep.mark(Stage::Writing, 1.0);
     Ok(Outcome::Written { files, cues, json, cached, uploaded_s })
 }
 
@@ -233,6 +241,10 @@ fn read_transcript(path: &Path) -> Result<Value> {
 /// Media file -> Soniox transcript JSON and the seconds of audio sent; `None` if the audio is digital
 /// silence (nothing is uploaded then). Fails with [`audio::NoAudio`] when there is no audio at all.
 pub fn transcribe(input: &Path, opts: &Options, client: &Client) -> Result<Option<(Value, f64)>> {
+    transcribe_with(input, opts, client, &Reporter::new(opts.on_progress.clone()))
+}
+
+fn transcribe_with(input: &Path, opts: &Options, client: &Client, rep: &Reporter) -> Result<Option<(Value, f64)>> {
     // The temp dir (and the audio inside) is removed when it goes out of scope, whatever happens.
     let mut tmp = match &opts.temp_dir {
         Some(d) => tempfile::Builder::new().prefix("sonisub-").tempdir_in(d),
@@ -243,8 +255,9 @@ pub fn transcribe(input: &Path, opts: &Options, client: &Client) -> Result<Optio
     let audio_path = tmp.path().join(format!("{stem}.flac"));
 
     let pb = bar(opts, "extract", "{prefix} {msg:9} [{bar:30.cyan/blue}] {percent:>3}%  {elapsed}");
-    let audio =
-        audio::extract(input, &audio_path, opts.audio, &pb, &opts.cancel).inspect_err(|_| pb.finish_and_clear())?;
+    let audio = rep
+        .watch(Stage::Extracting, &pb, || audio::extract(input, &audio_path, opts.audio, &pb, &opts.cancel))
+        .inspect_err(|_| pb.finish_and_clear())?;
     finish(opts, &pb, format!("extracted {} ({})", fmt_dur(audio.duration_s), fmt_size(&audio.path)));
     if opts.keep_audio {
         tmp.disable_cleanup(true);
@@ -261,7 +274,8 @@ pub fn transcribe(input: &Path, opts: &Options, client: &Client) -> Result<Optio
     }
 
     let pb = bar(opts, "upload", "{prefix} {msg:9} [{bar:30.cyan/blue}] {bytes}/{total_bytes}  {bytes_per_sec}");
-    let file_id = client.upload(&audio.path, &pb).inspect_err(|_| pb.finish_and_clear())?;
+    let file_id =
+        rep.watch(Stage::Uploading, &pb, || client.upload(&audio.path, &pb)).inspect_err(|_| pb.finish_and_clear())?;
     remote.file_id = Some(file_id.clone());
     finish(opts, &pb, "uploaded".into());
 
@@ -282,6 +296,8 @@ pub fn transcribe(input: &Path, opts: &Options, client: &Client) -> Result<Optio
     pb.enable_steady_tick(Duration::from_millis(120));
     // Clears the spinner however this loop is left.
     let _clear = ClearOnDrop(&pb);
+    let estimate = Estimate::new(audio.duration_s);
+    rep.mark(Stage::Transcribing, 0.0);
     loop {
         if opts.cancel.is_cancelled() {
             return Err(Cancelled.into());
@@ -291,12 +307,23 @@ pub fn transcribe(input: &Path, opts: &Options, client: &Client) -> Result<Optio
             break;
         }
         pb.set_message(format!("transcribing ({})", st.status));
-        if !opts.cancel.sleep(opts.poll) {
-            return Err(Cancelled.into());
+        // Wait out the poll interval in short slices, so the estimate keeps moving between status checks.
+        let mut left = opts.poll;
+        while !left.is_zero() {
+            let slice = left.min(Duration::from_millis(250));
+            if !opts.cancel.sleep(slice) {
+                return Err(Cancelled.into());
+            }
+            left -= slice;
+            rep.emit(Stage::Transcribing, Some(estimate.fraction()), Some(st.status.clone()), estimate.remaining());
         }
     }
+    estimate.finish(audio.duration_s);
+    rep.mark(Stage::Transcribing, 1.0);
+    rep.mark(Stage::Downloading, 0.0);
     pb.set_message("downloading transcript");
     let transcript = client.transcript(&id)?;
+    rep.mark(Stage::Downloading, 1.0);
     finish(opts, &pb, "transcribed".into());
 
     remote.cleanup();
