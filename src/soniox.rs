@@ -193,15 +193,18 @@ impl Client {
         // No fixed limit for an upload, but one that grows with its size (at least 50 KB/s), so a
         // connection that stalls mid-upload does not hang the job, and its cancel, for good.
         let limit = Duration::from_secs(120) + Duration::from_secs(len / 50_000);
-        let r = self.send_create(|| {
-            pb.set_position(0);
-            let reader = Progress { inner: File::open(path)?, pb: pb.clone(), cancel: self.cancel.clone() };
-            let part = multipart::Part::reader_with_length(reader, len).file_name(name.clone());
-            Ok(self
-                .req_untimed(reqwest::Method::POST, "/files")
-                .timeout(limit)
-                .multipart(multipart::Form::new().part("file", part)))
-        })?;
+        let r = self
+            .send_create(|| {
+                pb.set_position(0);
+                let reader = Progress { inner: File::open(path)?, pb: pb.clone(), cancel: self.cancel.clone() };
+                let part = multipart::Part::reader_with_length(reader, len).file_name(name.clone());
+                Ok(self
+                    .req_untimed(reqwest::Method::POST, "/files")
+                    .timeout(limit)
+                    .multipart(multipart::Form::new().part("file", part)))
+            })
+            // The reader gives up on cancel, which reqwest reports as a failed request: say what happened.
+            .map_err(|e| if self.cancel.is_cancelled() && !e.is::<ApiError>() { Cancelled.into() } else { e })?;
         Ok(r.json::<Id>()?.id)
     }
 

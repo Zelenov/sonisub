@@ -219,6 +219,7 @@ impl RunArgs {
             prefix: String::new(),
             reference: "sonisub".into(),
             progress: None,
+            on_progress: None,
             // Ctrl+C sets the process-wide flag, which every token also obeys.
             cancel: Default::default(),
         }

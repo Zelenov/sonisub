@@ -167,7 +167,7 @@ Exit codes: `0` ok, `1` some files failed, `2` fatal (key/balance/usage), `130` 
 ### As a library
 
 ```toml
-sonisub = { version = "0.4", default-features = false }
+sonisub = { version = "0.5", default-features = false }
 ```
 
 `premiere::to_srt(&json, &layout)` turns a `clip.premiere.json` back into SRT text and the cue count
@@ -181,6 +181,17 @@ error `cancel::Cancelled`; what was created on Soniox is still deleted. Requests
 after 60 s and are retried. Failed remote deletes are logged with the `log` crate and counted by
 `Client::failed_deletes`. `reqwest::blocking::Client` must not be created or dropped on an async runtime
 thread, so create the `Client` where the job runs. On Windows, ffmpeg and ffprobe run without a console window.
+
+To show progress without a console, set `Options::on_progress` to `progress::Callback::new(|p| ..)`. Each
+`Progress` names the stage (extracting, uploading, transcribing, downloading, writing), how far it is, and
+`overall` for one bar (extract 15 %, upload 15 %, transcribe 60 %, download 5 %, write 5 %). Extraction and
+upload are real fractions. Soniox only reports `queued` / `processing`, so while it transcribes the fraction is
+an estimate from the audio length and the speed of earlier jobs in the process; it stops at 95 % until Soniox is
+done, and nothing ever goes backwards.
+`fraction` is `None` while the length of the media is not known yet: show a busy bar. While transcribing,
+`detail` is the Soniox status (from the second report on) and `remaining` the estimated time left; `remaining: None`
+there means the estimate has run out and Soniox is still working (the bar sits at 95 % of the stage): say "finishing". The callback runs on the job's threads: send the value
+over a channel to your UI instead of touching it there.
 
 ## Tests
 

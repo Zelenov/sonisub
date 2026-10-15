@@ -1,3 +1,11 @@
+# 0.5.0
+## Added
+- Library: `job::Options::on_progress` takes a `progress::Callback` that is told where a job is: extracting, uploading, transcribing (an estimate, held at 95 % until Soniox is done), downloading, writing. Each report has the stage's fraction and one `overall` fraction for a single bar. `None` (the default) reports nothing.
+
+## Changed
+- Library: `job::Options` has a new field `on_progress`; callers that build it without `..Options::default()` add `on_progress: None`.
+- Cancelling during an upload now ends the job with `cancel::Cancelled`, like cancelling at any other stage, instead of a "request failed" error.
+
 # 0.4.0
 ## Added
 - Library: `premiere::to_srt(source, &layout)` reads a Premiere Pro transcript back as SRT text and the number of cues, laid out by the same `srt::Layout` rules as an SRT made from the same speech. Speaker names come from the file (`layout.speaker_labels` turns them on; `layout.speaker_names` is ignored). `None` for JSON that is not a Premiere transcript or has no words. Tested on transcripts sonisub wrote; others are read on a best-effort basis. No caller has to change.
