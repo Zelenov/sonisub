@@ -67,7 +67,7 @@ pub struct Options {
     /// Draw stage bars here, under a batch's overall bar; they are cleared when the file is done.
     pub progress: Option<MultiProgress>,
     /// Called with where the job is: extract, upload, transcribe (estimated), download, write.
-    /// See [`crate::progress`]. `None` reports nothing.
+    /// See [`crate::progress`]; it runs on the job's threads. `None` reports nothing.
     pub on_progress: Option<Callback>,
     /// Stops this job's extraction and polling; give the [`Client`] the same token
     /// ([`Client::with_cancel`]) to stop its uploads and retries too. The process-wide
@@ -178,6 +178,7 @@ pub fn process(input: &Path, output: &Path, opts: &Options, client: Option<&Clie
                 let marker = json!({"text": "", "tokens": [], "sonisub": "digital silence, not sent to Soniox"});
                 std::fs::write(&cache, serde_json::to_string_pretty(&marker)?)
                     .with_context(|| format!("cannot write {}", cache.display()))?;
+                rep.mark(Stage::Writing, 1.0);
                 return Ok(Outcome::NoSpeech { marker: Some(cache), cached: false, uploaded_s: None });
             }
             // Anything but "no audio track" is a real error.
@@ -200,6 +201,7 @@ pub fn process(input: &Path, output: &Path, opts: &Options, client: Option<&Clie
     };
 
     if !srt::has_speech(&transcript) {
+        rep.mark(Stage::Writing, 1.0);
         return Ok(Outcome::NoSpeech { marker: json, cached, uploaded_s });
     }
     rep.mark(Stage::Writing, 0.0);
@@ -238,6 +240,7 @@ fn read_transcript(path: &Path) -> Result<Value> {
     Ok(v)
 }
 
+/// (Reports [`crate::progress::Stage::Extracting`] to `Downloading`, not `Writing`: `overall` ends at 0.95.)
 /// Media file -> Soniox transcript JSON and the seconds of audio sent; `None` if the audio is digital
 /// silence (nothing is uploaded then). Fails with [`audio::NoAudio`] when there is no audio at all.
 pub fn transcribe(input: &Path, opts: &Options, client: &Client) -> Result<Option<(Value, f64)>> {
@@ -297,7 +300,7 @@ fn transcribe_with(input: &Path, opts: &Options, client: &Client, rep: &Reporter
     // Clears the spinner however this loop is left.
     let _clear = ClearOnDrop(&pb);
     let estimate = Estimate::new(audio.duration_s);
-    rep.mark(Stage::Transcribing, 0.0);
+    rep.emit(Stage::Transcribing, Some(0.0), None, estimate.remaining());
     loop {
         if opts.cancel.is_cancelled() {
             return Err(Cancelled.into());

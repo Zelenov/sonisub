@@ -42,6 +42,11 @@ fn slow_soniox(polls: usize) -> MockSoniox {
     })
 }
 
+/// A client whose server is never asked.
+fn idle() -> Client {
+    Client::new("http://127.0.0.1:9/v1", "key").unwrap()
+}
+
 fn stages(log: &[Progress]) -> Vec<Stage> {
     let mut out: Vec<Stage> = Vec::new();
     for p in log {
@@ -94,7 +99,7 @@ fn a_run_passes_through_every_stage_and_only_goes_forward() {
 }
 
 #[test]
-fn the_transcribing_estimate_moves_holds_at_its_cap_and_never_decreases() {
+fn the_transcribing_estimate_moves_and_never_decreases() {
     let (_dir, temp, srt) = setup();
     let log = Log::default();
     // Soniox is slow: far more polls than the estimate for 29 s of audio allows.
@@ -107,15 +112,12 @@ fn the_transcribing_estimate_moves_holds_at_its_cap_and_never_decreases() {
     opts.on_progress = Some(Callback::new(move |p| {
         let mut l = watcher.lock().unwrap();
         l.push(p);
-        // Stop once the estimate has been sitting at its cap for a while.
-        let at_cap = l.iter().filter(|p| p.stage == Stage::Transcribing && p.fraction == Some(TRANSCRIBE_CAP)).count();
-        if at_cap >= 5 {
+        // Stop once the estimate has been moving for a while.
+        let moving = l.iter().filter(|p| p.stage == Stage::Transcribing && p.fraction > Some(0.0)).count();
+        if moving >= 8 {
             cancel.cancel();
         }
     }));
-    // A fast "speed" so the cap is reached within the test.
-    sonisub::progress::record_speed(29.0, Duration::from_millis(4_500));
-    sonisub::progress::record_speed(29.0, Duration::from_millis(4_500));
 
     let err = job::process(&common::fixture("dialog.mp4"), &srt, &opts, Some(&client)).unwrap_err();
     assert!(err.is::<Cancelled>(), "{err:#}");
@@ -125,6 +127,7 @@ fn the_transcribing_estimate_moves_holds_at_its_cap_and_never_decreases() {
     let transcribing: Vec<_> = log.iter().filter(|p| p.stage == Stage::Transcribing).collect();
     assert!(transcribing.iter().any(|p| p.fraction.is_some_and(|f| f > 0.0 && f < TRANSCRIBE_CAP)), "it moves");
     assert!(transcribing.iter().all(|p| p.fraction.unwrap() <= TRANSCRIBE_CAP), "never past the cap before completion");
+    assert!(transcribing.first().unwrap().remaining.is_some(), "the time left is there from the start");
     assert!(transcribing.iter().any(|p| p.detail.as_deref() == Some("processing")));
     assert!(log.iter().all(|p| p.stage <= Stage::Transcribing), "nothing after transcribing without `completed`");
 }
@@ -144,7 +147,21 @@ fn a_saved_transcript_only_writes() {
 }
 
 #[test]
-fn a_skipped_file_and_a_file_without_audio_report_no_work() {
+fn files_without_speech_end_the_bar_and_files_without_audio_or_work_report_nothing_more() {
+    // Digital silence: nothing is sent, the bar still ends.
+    let (_dir, temp, srt) = setup();
+    let log = Log::default();
+    let out = job::process(&common::fixture("silence.m4a"), &srt, &options(&temp, &log), Some(&idle())).unwrap();
+    assert!(matches!(out, Outcome::NoSpeech { .. }), "{out:?}");
+    assert!((log.lock().unwrap().last().unwrap().overall - 1.0).abs() < 1e-4);
+
+    // No audio track: it ends at extraction.
+    let (_dir, temp, srt) = setup();
+    let log = Log::default();
+    let out = job::process(&common::fixture("noaudio.mp4"), &srt, &options(&temp, &log), Some(&idle())).unwrap();
+    assert!(matches!(out, Outcome::NoAudio { .. }), "{out:?}");
+    assert!(log.lock().unwrap().iter().all(|p| p.stage == Stage::Extracting));
+
     let (_dir, temp, srt) = setup();
     std::fs::write(&srt, "x").unwrap();
     let log = Log::default();

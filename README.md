@@ -188,6 +188,9 @@ To show progress without a console, set `Options::on_progress` to `progress::Cal
 upload are real fractions. Soniox only reports `queued` / `processing`, so while it transcribes the fraction is
 an estimate from the audio length and the speed of earlier jobs in the process; it stops at 95 % until Soniox is
 done, and nothing ever goes backwards.
+`fraction` is `None` when the length of the media is unknown: show a busy bar. `detail` carries the Soniox status
+and `remaining` the estimated time left while transcribing. The callback runs on the job's threads: send the value
+over a channel to your UI instead of touching it there.
 
 ## Tests
 

@@ -1,8 +1,9 @@
 # NEXT
 ## Added
-- Library: `job::Options::on_progress` takes a `progress::Callback` that is told where a job is: extracting, uploading, transcribing (an estimate, held at 95 % until Soniox is done), downloading, writing. Each report has the stage's fraction and one `overall` fraction for a single bar. `None` (the default) reports nothing; callers using `..Options::default()` need no change.
+- Library: `job::Options::on_progress` takes a `progress::Callback` that is told where a job is: extracting, uploading, transcribing (an estimate, held at 95 % until Soniox is done), downloading, writing. Each report has the stage's fraction and one `overall` fraction for a single bar. `None` (the default) reports nothing.
 
 ## Changed
+- Library: `job::Options` has a new field `on_progress`; callers that build it without `..Options::default()` add `on_progress: None`.
 - Cancelling during an upload now ends the job with `cancel::Cancelled`, like cancelling at any other stage, instead of a "request failed" error.
 
 # 0.4.0

@@ -20,6 +20,7 @@ use indicatif::ProgressBar;
 /// Where a job is. In this order; a job that needs no API call (a saved transcript, digital silence)
 /// skips the early ones.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+#[non_exhaustive]
 pub enum Stage {
     /// Audio is taken out of the media file.
     Extracting,
@@ -44,7 +45,7 @@ impl Stage {
         }
     }
 
-    /// `overall` when this stage starts: the weights of the stages before it.
+    /// `Progress::overall` at the moment this stage starts: the weights of the stages before it.
     pub fn start(self) -> f32 {
         const ALL: [Stage; 5] =
             [Stage::Extracting, Stage::Uploading, Stage::Transcribing, Stage::Downloading, Stage::Writing];
@@ -54,15 +55,20 @@ impl Stage {
 
 /// One progress report.
 #[derive(Debug, Clone, PartialEq)]
+#[non_exhaustive]
 pub struct Progress {
+    /// The stage the job is in.
     pub stage: Stage,
-    /// How far the stage is, 0..=1; `None` when it cannot be told (the length of the media is unknown).
+    /// How far the stage is, 0..=1; `None` when it cannot be told (the length of the media is unknown):
+    /// show a busy bar then, `overall` stays where the stage began.
     pub fraction: Option<f32>,
-    /// The whole job, 0..=1, from the stage weights. Never decreases within a job.
+    /// The whole job, 0..=1, from the stage weights. Never decreases within a job. It reaches 1 when the
+    /// outputs are written or Soniox found no speech; a file without audio track ends at extraction.
     pub overall: f32,
     /// While transcribing: the Soniox status (`queued`, `processing`).
     pub detail: Option<String>,
-    /// While transcribing: the estimated time left, `None` once the estimate has run out.
+    /// While transcribing: the estimated time left. `None` when the estimate has run out (Soniox is
+    /// still working) and in the other stages.
     pub remaining: Option<Duration>,
 }
 
@@ -72,6 +78,7 @@ pub struct Progress {
 pub struct Callback(Arc<dyn Fn(Progress) + Send + Sync>);
 
 impl Callback {
+    /// Wraps `f`; see the type for what it must not do.
     pub fn new(f: impl Fn(Progress) + Send + Sync + 'static) -> Self {
         Self(Arc::new(f))
     }
@@ -87,7 +94,7 @@ impl std::fmt::Debug for Callback {
 pub const TRANSCRIBE_CAP: f32 = 0.95;
 /// Seconds of audio Soniox transcribes per second, before a job of this process has measured it.
 /// Deliberately slow, so the estimate does not hit its cap early.
-pub const DEFAULT_SPEED: f64 = 5.0;
+const DEFAULT_SPEED: f64 = 5.0;
 /// Fixed time a transcription takes whatever the length (queue, start, download).
 const OVERHEAD_S: f64 = 4.0;
 
@@ -95,13 +102,17 @@ const OVERHEAD_S: f64 = 4.0;
 static SPEED: Mutex<Option<f64>> = Mutex::new(None);
 
 /// The time a transcription of `audio_s` seconds is expected to take, in seconds.
-pub fn expected_s(audio_s: f64) -> f64 {
+fn expected_s(audio_s: f64) -> f64 {
+    let audio_s = if audio_s.is_finite() { audio_s.max(0.0) } else { 0.0 };
     let speed = SPEED.lock().ok().and_then(|s| *s).unwrap_or(DEFAULT_SPEED);
     OVERHEAD_S + audio_s / speed
 }
 
 /// Remembers how fast Soniox was for a job that took `elapsed` for `audio_s`, so the next estimate is better.
-pub fn record_speed(audio_s: f64, elapsed: Duration) {
+fn record_speed(audio_s: f64, elapsed: Duration) {
+    if !audio_s.is_finite() || audio_s <= 0.0 {
+        return;
+    }
     let secs = (elapsed.as_secs_f64() - OVERHEAD_S).max(0.1);
     let measured = (audio_s / secs).clamp(0.5, 100.0);
     if let Ok(mut s) = SPEED.lock() {
@@ -122,7 +133,7 @@ impl Reporter {
 
     pub fn emit(&self, stage: Stage, fraction: Option<f32>, detail: Option<String>, remaining: Option<Duration>) {
         let Some(cb) = &self.cb else { return };
-        let report = {
+        {
             let Ok(mut last) = self.last.lock() else { return };
             let fraction = fraction.map(|f| if f.is_finite() { f.clamp(0.0, 1.0) } else { 0.0 });
             // A stage already left stays left; within a stage the fraction does not go back
@@ -135,10 +146,10 @@ impl Reporter {
                 (stage, fraction)
             };
             let overall = (stage.start() + stage.weight() * fraction.unwrap_or(0.0)).max(last.2).min(1.0);
-            *last = (stage, fraction.unwrap_or(0.0), overall);
-            Progress { stage, fraction, overall, detail, remaining }
-        };
-        (cb.0)(report);
+            *last = (stage, fraction.unwrap_or(last.1), overall);
+            // Delivered under the lock, so two threads cannot hand reports over out of order.
+            (cb.0)(Progress { stage, fraction, overall, detail, remaining });
+        }
     }
 
     /// A stage that begins (0) or ends (1).
@@ -158,18 +169,30 @@ impl Reporter {
         }
         self.mark(stage, 0.0);
         let done = AtomicBool::new(false);
+        /// Ends the polling thread however `work` ends, a panic included (the scope joins it).
+        struct Stop<'a>(&'a AtomicBool);
+        impl Drop for Stop<'_> {
+            fn drop(&mut self) {
+                self.0.store(true, Ordering::Relaxed);
+            }
+        }
         let result = std::thread::scope(|scope| {
             scope.spawn(|| {
                 while !done.load(Ordering::Relaxed) {
                     if let Some(len) = pb.length().filter(|l| *l > 0) {
                         self.mark(stage, (pb.position() as f64 / len as f64).min(1.0) as f32);
                     }
-                    std::thread::sleep(Duration::from_millis(100));
+                    // Short slices: the scope joins this thread when the work is done.
+                    for _ in 0..5 {
+                        if done.load(Ordering::Relaxed) {
+                            break;
+                        }
+                        std::thread::sleep(Duration::from_millis(20));
+                    }
                 }
             });
-            let r = work();
-            done.store(true, Ordering::Relaxed);
-            r
+            let _stop = Stop(&done);
+            work()
         });
         if result.is_ok() {
             self.mark(stage, 1.0);
@@ -186,7 +209,11 @@ pub(crate) struct Estimate {
 
 impl Estimate {
     pub fn new(audio_s: f64) -> Self {
-        Self { started: Instant::now(), expected: Duration::from_secs_f64(expected_s(audio_s)) }
+        Self::expecting(Duration::from_secs_f64(expected_s(audio_s)))
+    }
+
+    fn expecting(expected: Duration) -> Self {
+        Self { started: Instant::now(), expected }
     }
 
     pub fn fraction(&self) -> f32 {
@@ -200,5 +227,49 @@ impl Estimate {
     /// Soniox is done: teach the next estimate.
     pub fn finish(&self, audio_s: f64) {
         record_speed(audio_s, self.started.elapsed());
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn the_estimate_moves_stops_at_its_cap_and_never_goes_back() {
+        let e = Estimate::expecting(Duration::from_millis(200));
+        let mut last = e.fraction();
+        let mut moved = false;
+        for _ in 0..40 {
+            std::thread::sleep(Duration::from_millis(10));
+            let f = e.fraction();
+            assert!(f >= last && f <= TRANSCRIBE_CAP, "{last} -> {f}");
+            moved |= f > 0.0 && f < TRANSCRIBE_CAP;
+            last = f;
+        }
+        assert!(moved);
+        assert_eq!(last, TRANSCRIBE_CAP, "held at the cap while Soniox is still working");
+        assert_eq!(e.remaining(), None, "an estimate that ran out has no time left");
+    }
+
+    #[test]
+    fn the_expected_time_grows_with_the_audio() {
+        assert!(expected_s(3600.0) > expected_s(60.0));
+        assert!(expected_s(0.0) > 0.0);
+    }
+
+    #[test]
+    fn junk_durations_do_not_panic() {
+        for bad in [f64::NAN, f64::INFINITY, -5.0] {
+            assert!(expected_s(bad).is_finite());
+            record_speed(bad, Duration::from_secs(3));
+            let _ = Estimate::new(bad);
+        }
+    }
+
+    #[test]
+    fn measured_speeds_are_clamped() {
+        record_speed(10.0, Duration::from_secs(0));
+        record_speed(0.0, Duration::from_secs(1000));
+        assert!(expected_s(60.0).is_finite());
     }
 }
