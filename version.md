@@ -1,4 +1,4 @@
-# NEXT
+# 0.5.0
 ## Added
 - Library: `job::Options::on_progress` takes a `progress::Callback` that is told where a job is: extracting, uploading, transcribing (an estimate, held at 95 % until Soniox is done), downloading, writing. Each report has the stage's fraction and one `overall` fraction for a single bar. `None` (the default) reports nothing.
 
