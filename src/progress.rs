@@ -73,7 +73,7 @@ pub struct Progress {
 }
 
 /// The callback in [`crate::job::Options::on_progress`]: `Callback::new(|p| ...)`. It is called often,
-/// from threads of the job, so it must be quick and must not block.
+/// from threads of the job, so it must be quick; it must not block or panic.
 #[derive(Clone)]
 pub struct Callback(Arc<dyn Fn(Progress) + Send + Sync>);
 
@@ -113,42 +113,52 @@ fn record_speed(audio_s: f64, elapsed: Duration) {
     if !audio_s.is_finite() || audio_s <= 0.0 {
         return;
     }
+    if let Ok(mut s) = SPEED.lock() {
+        *s = Some(blend(*s, audio_s, elapsed));
+    }
+}
+
+/// The speed after a job of `audio_s` took `elapsed`: the mean of the old speed and the measured one.
+fn blend(old: Option<f64>, audio_s: f64, elapsed: Duration) -> f64 {
     let secs = (elapsed.as_secs_f64() - OVERHEAD_S).max(0.1);
     let measured = (audio_s / secs).clamp(0.5, 100.0);
-    if let Ok(mut s) = SPEED.lock() {
-        *s = Some(s.map_or(measured, |old| (old + measured) / 2.0));
-    }
+    old.map_or(measured, |old| (old + measured) / 2.0)
 }
 
 /// Hands reports to the callback and keeps them monotonic.
 pub(crate) struct Reporter {
     cb: Option<Callback>,
-    last: Mutex<(Stage, f32, f32)>,
+    last: Mutex<(Stage, f32, f32, Option<Progress>)>,
 }
 
 impl Reporter {
     pub fn new(cb: Option<Callback>) -> Self {
-        Self { cb, last: Mutex::new((Stage::Extracting, 0.0, 0.0)) }
+        Self { cb, last: Mutex::new((Stage::Extracting, 0.0, 0.0, None)) }
     }
 
     pub fn emit(&self, stage: Stage, fraction: Option<f32>, detail: Option<String>, remaining: Option<Duration>) {
         let Some(cb) = &self.cb else { return };
         {
-            let Ok(mut last) = self.last.lock() else { return };
+            // A callback that panicked must not silence the reports after it.
+            let mut last = self.last.lock().unwrap_or_else(std::sync::PoisonError::into_inner);
             let fraction = fraction.map(|f| if f.is_finite() { f.clamp(0.0, 1.0) } else { 0.0 });
             // A stage already left stays left; within a stage the fraction does not go back
             // (an upload that restarts after a retry keeps showing how far it got).
-            let (stage, fraction) = if stage < last.0 {
+            let same_stage = stage == last.0;
+            if stage < last.0 {
                 return;
-            } else if stage == last.0 {
-                (stage, fraction.map(|f| f.max(last.1)))
-            } else {
-                (stage, fraction)
-            };
-            let overall = (stage.start() + stage.weight() * fraction.unwrap_or(0.0)).max(last.2).min(1.0);
-            *last = (stage, fraction.unwrap_or(last.1), overall);
+            }
+            let fraction = if same_stage { fraction.map(|f| f.max(last.1)) } else { fraction };
+            let known = if same_stage { last.1 } else { 0.0 };
+            let overall = (stage.start() + stage.weight() * fraction.unwrap_or(known)).max(last.2).min(1.0);
+            let report = Progress { stage, fraction, overall, detail, remaining };
+            // Nothing new to say.
+            if last.3.as_ref() == Some(&report) {
+                return;
+            }
+            *last = (stage, fraction.unwrap_or(known), overall, Some(report.clone()));
             // Delivered under the lock, so two threads cannot hand reports over out of order.
-            (cb.0)(Progress { stage, fraction, overall, detail, remaining });
+            (cb.0)(report);
         }
     }
 
@@ -167,7 +177,8 @@ impl Reporter {
         if self.cb.is_none() {
             return work();
         }
-        self.mark(stage, 0.0);
+        // The length of the media or the file is not always known yet: `None` until it is.
+        self.emit(stage, pb.length().filter(|l| *l > 0).map(|_| 0.0), None, None);
         let done = AtomicBool::new(false);
         /// Ends the polling thread however `work` ends, a panic included (the scope joins it).
         struct Stop<'a>(&'a AtomicBool);
@@ -179,8 +190,9 @@ impl Reporter {
         let result = std::thread::scope(|scope| {
             scope.spawn(|| {
                 while !done.load(Ordering::Relaxed) {
-                    if let Some(len) = pb.length().filter(|l| *l > 0) {
-                        self.mark(stage, (pb.position() as f64 / len as f64).min(1.0) as f32);
+                    match pb.length().filter(|l| *l > 0) {
+                        Some(len) => self.mark(stage, (pb.position() as f64 / len as f64).min(1.0) as f32),
+                        None => self.emit(stage, None, None, None),
                     }
                     // Short slices: the scope joins this thread when the work is done.
                     for _ in 0..5 {
@@ -267,9 +279,40 @@ mod tests {
     }
 
     #[test]
-    fn measured_speeds_are_clamped() {
-        record_speed(10.0, Duration::from_secs(0));
-        record_speed(0.0, Duration::from_secs(1000));
-        assert!(expected_s(60.0).is_finite());
+    fn measured_speeds_are_averaged_and_clamped() {
+        // 60 s of audio in 4 s overhead + 6 s: 10x; first measurement stands alone.
+        assert!((blend(None, 60.0, Duration::from_secs(10)) - 10.0).abs() < 1e-9);
+        assert!((blend(Some(5.0), 60.0, Duration::from_secs(10)) - 7.5).abs() < 1e-9);
+        assert_eq!(blend(None, 1e9, Duration::from_secs(5)), 100.0);
+        assert_eq!(blend(None, 0.001, Duration::from_secs(500)), 0.5);
+    }
+
+    #[test]
+    fn a_stage_without_a_known_length_starts_from_zero() {
+        use std::sync::{Arc, Mutex};
+        let log: Arc<Mutex<Vec<Progress>>> = Arc::default();
+        let l = log.clone();
+        let rep = Reporter::new(Some(Callback::new(move |p| l.lock().unwrap().push(p))));
+        rep.mark(Stage::Uploading, 1.0);
+        rep.emit(Stage::Transcribing, None, None, None);
+        rep.mark(Stage::Transcribing, 0.3);
+        let log = log.lock().unwrap();
+        assert_eq!(log[1].fraction, None);
+        assert_eq!(log[2].fraction, Some(0.3), "not pinned to the stage before");
+    }
+
+    #[test]
+    fn a_panicking_callback_does_not_silence_later_reports() {
+        use std::sync::atomic::AtomicU32;
+        let seen = Arc::new(AtomicU32::new(0));
+        let n = seen.clone();
+        let rep = Reporter::new(Some(Callback::new(move |_| {
+            if n.fetch_add(1, Ordering::Relaxed) == 0 {
+                panic!("callback bug");
+            }
+        })));
+        let _ = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| rep.mark(Stage::Extracting, 0.1)));
+        rep.mark(Stage::Extracting, 0.2);
+        assert_eq!(seen.load(Ordering::Relaxed), 2);
     }
 }

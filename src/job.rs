@@ -240,9 +240,11 @@ fn read_transcript(path: &Path) -> Result<Value> {
     Ok(v)
 }
 
-/// (Reports [`crate::progress::Stage::Extracting`] to `Downloading`, not `Writing`: `overall` ends at 0.95.)
 /// Media file -> Soniox transcript JSON and the seconds of audio sent; `None` if the audio is digital
 /// silence (nothing is uploaded then). Fails with [`audio::NoAudio`] when there is no audio at all.
+///
+/// With `on_progress` set it reports `Extracting` through `Downloading`; `overall` stops at 0.95 because
+/// `Writing` belongs to [`process`].
 pub fn transcribe(input: &Path, opts: &Options, client: &Client) -> Result<Option<(Value, f64)>> {
     transcribe_with(input, opts, client, &Reporter::new(opts.on_progress.clone()))
 }

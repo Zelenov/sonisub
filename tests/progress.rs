@@ -88,7 +88,8 @@ fn a_run_passes_through_every_stage_and_only_goes_forward() {
     assert_only_forward(&log);
     for stage in [Stage::Extracting, Stage::Uploading, Stage::Transcribing, Stage::Downloading, Stage::Writing] {
         let of_stage: Vec<_> = log.iter().filter(|p| p.stage == stage).collect();
-        assert_eq!(of_stage.first().unwrap().fraction, Some(0.0), "{stage:?} starts at 0");
+        // `None` while the length is not known yet.
+        assert!(matches!(of_stage.first().unwrap().fraction, None | Some(0.0)), "{stage:?} starts at 0");
         assert_eq!(of_stage.last().unwrap().fraction, Some(1.0), "{stage:?} ends at 1");
     }
     assert!((log.last().unwrap().overall - 1.0).abs() < 1e-4);
