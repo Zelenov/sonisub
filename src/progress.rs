@@ -73,7 +73,7 @@ pub struct Progress {
 }
 
 /// The callback in [`crate::job::Options::on_progress`]: `Callback::new(|p| ...)`. It is called often,
-/// from threads of the job, so it must be quick; it must not block or panic.
+/// from threads of the job, so it must be quick; it must not block (a panic in it is caught and ignored).
 #[derive(Clone)]
 pub struct Callback(Arc<dyn Fn(Progress) + Send + Sync>);
 
@@ -103,7 +103,7 @@ static SPEED: Mutex<Option<f64>> = Mutex::new(None);
 
 /// The time a transcription of `audio_s` seconds is expected to take, in seconds.
 fn expected_s(audio_s: f64) -> f64 {
-    let audio_s = if audio_s.is_finite() { audio_s.max(0.0) } else { 0.0 };
+    let audio_s = if audio_s.is_finite() { audio_s.clamp(0.0, 1e7) } else { 0.0 };
     let speed = SPEED.lock().ok().and_then(|s| *s).unwrap_or(DEFAULT_SPEED);
     OVERHEAD_S + audio_s / speed
 }
@@ -158,7 +158,8 @@ impl Reporter {
             }
             *last = (stage, fraction.unwrap_or(known), overall, Some(report.clone()));
             // Delivered under the lock, so two threads cannot hand reports over out of order.
-            (cb.0)(report);
+            // A callback that panics must not take the job down (an upload would leak its remote file).
+            let _ = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| (cb.0)(report)));
         }
     }
 
@@ -271,7 +272,7 @@ mod tests {
 
     #[test]
     fn junk_durations_do_not_panic() {
-        for bad in [f64::NAN, f64::INFINITY, -5.0] {
+        for bad in [f64::NAN, f64::INFINITY, -5.0, 1e300] {
             assert!(expected_s(bad).is_finite());
             record_speed(bad, Duration::from_secs(3));
             let _ = Estimate::new(bad);
@@ -302,7 +303,7 @@ mod tests {
     }
 
     #[test]
-    fn a_panicking_callback_does_not_silence_later_reports() {
+    fn a_panicking_callback_is_contained_and_later_reports_still_come() {
         use std::sync::atomic::AtomicU32;
         let seen = Arc::new(AtomicU32::new(0));
         let n = seen.clone();
@@ -311,7 +312,7 @@ mod tests {
                 panic!("callback bug");
             }
         })));
-        let _ = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| rep.mark(Stage::Extracting, 0.1)));
+        rep.mark(Stage::Extracting, 0.1);
         rep.mark(Stage::Extracting, 0.2);
         assert_eq!(seen.load(Ordering::Relaxed), 2);
     }
