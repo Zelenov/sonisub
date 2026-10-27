@@ -477,3 +477,30 @@ fn empty_transcripts_give_nothing() {
     }
     assert!(!sonisub::srt::has_speech(&common::transcript_of("nospeech")));
 }
+
+// ---------------------------------------------------------------- words
+
+#[test]
+fn words_join_tokens_and_keep_timing_speaker_and_language() {
+    let words = sonisub::srt::words(&common::transcript());
+    let first = &words[0];
+    assert_eq!(first.text, "Hi,");
+    assert_eq!((first.start, first.end), (870, 1110));
+    assert_eq!(first.speaker.as_deref(), Some("1"));
+    assert_eq!(first.language.as_deref(), Some("en"));
+    assert_eq!(words[1].text, "today");
+    assert!(words.windows(2).all(|w| w[0].start <= w[1].start), "in spoken order");
+    assert!(words.iter().all(|w| !w.text.contains(char::is_whitespace) && !w.text.is_empty()));
+}
+
+#[test]
+fn words_leave_out_audio_events_and_spaces() {
+    let transcript = json!({"tokens": [
+        {"text": " Hello", "start_ms": 0, "end_ms": 100, "speaker": "1"},
+        {"text": " ", "start_ms": 100, "end_ms": 100, "speaker": "1"},
+        {"text": "[music]", "start_ms": 100, "end_ms": 900, "is_audio_event": true},
+        {"text": "world.", "start_ms": 900, "end_ms": 1000, "speaker": "1"},
+    ]});
+    let texts: Vec<String> = sonisub::srt::words(&transcript).into_iter().map(|w| w.text).collect();
+    assert_eq!(texts, ["Hello", "world."]);
+}
