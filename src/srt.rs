@@ -55,11 +55,15 @@ impl Layout {
     }
 }
 
-#[derive(Debug, Clone)]
-pub(crate) struct Word {
+/// One word of a transcript, as [`words`] reads it.
+#[derive(Debug, Clone, PartialEq)]
+pub struct Word {
+    /// The word with the punctuation written next to it ("Hello,"), without spaces.
     pub text: String,
+    /// Start and end, milliseconds from the start of the audio.
     pub start: u64,
     pub end: u64,
+    /// Soniox speaker label ("1", "2"); `None` without diarization.
     pub speaker: Option<String>,
     /// Soniox language code of the word's first token ("en", "ru").
     pub language: Option<String>,
@@ -103,8 +107,9 @@ fn split_dashes(w: Word) -> Vec<Word> {
 }
 
 /// Joins sub-word tokens (Soniox marks a new word with a leading space, sometimes as a separate " " token) into words.
-/// "finally—and" stays one word; [`split_dashes`] cuts it for subtitles.
-pub(crate) fn words(transcript: &Value) -> Vec<Word> {
+/// "finally—and" stays one word; [`split_dashes`] cuts it for subtitles. Audio events and
+/// translated tokens are left out.
+pub fn words(transcript: &Value) -> Vec<Word> {
     let mut out: Vec<Word> = Vec::new();
     let mut tokens: Vec<u32> = Vec::new();
     let mut space = false;
