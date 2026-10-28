@@ -221,7 +221,7 @@ pub struct SegArgs {
 
     /// The language of sound and voice labels (--sdh): en ([laughs]) or ru ((смеётся)).
     /// Default: ru for a Russian transcript, else en.
-    #[arg(long, value_parser = captions::labels::LANGUAGES, help_heading = "Outputs")]
+    #[arg(long, value_parser = captions::labels::LANGUAGES, requires = "sdh", help_heading = "Outputs")]
     pub labels: Option<String>,
 }
 
@@ -236,7 +236,7 @@ fn parse_frame(s: &str) -> Result<(u32, u32), String> {
 impl SegArgs {
     /// The frame --vertical or --frame gives, if either does.
     pub fn frame_given(&self) -> Option<(u32, u32)> {
-        if self.vertical { Some((1080, 1920)) } else { self.frame }
+        self.vertical.then(|| srt::Layout::vertical().frame).or(self.frame)
     }
 
     /// The cue layout; `by_speaker`: a speaker change ends a cue. `file_frame` is a CAPT file's
@@ -263,7 +263,6 @@ impl SegArgs {
             ass: ass::Options { karaoke: self.karaoke, ..Default::default() },
             sdh: self.sdh,
             labels: self.labels.clone(),
-            frame: self.frame_given(),
         }
     }
 }

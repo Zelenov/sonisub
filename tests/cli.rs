@@ -90,10 +90,27 @@ fn render_writes_subtitles_from_saved_words() {
     let err = plain(&out);
     assert!(out.status.success(), "{err}");
     assert!(err.starts_with("✓ dialog.words.json — 10 cues -> "), "{err}");
-    for (file, golden) in [("dialog.srt", "dialog.srt"), ("dialog.vtt", "dialog.vtt"), ("dialog.ass", "dialog.ass")] {
+    for (file, golden) in [("dialog.srt", "dialog.srt"), ("dialog.ass", "dialog.ass")] {
         let written = std::fs::read_to_string(dir.path().join(file)).unwrap();
         assert_eq!(common::normalize(&written), common::golden(golden), "{file}");
     }
+    // Saved words are laid out as they are: no CAPT marks, so no <lang> in WebVTT.
+    let vtt = std::fs::read_to_string(dir.path().join("dialog.vtt")).unwrap();
+    let layout = sonisub::captions::Layout::default();
+    assert_eq!(common::normalize(&vtt), sonisub::captions::vtt::build(&words, &layout).0);
+
+    // A glued word and times off the 10 ms grid come out as given.
+    let glued = dir.path().join("glued.words.json");
+    std::fs::write(
+        &glued,
+        r#"[{"text":"Well,","start":1234,"end":1567},{"text":"finally—","start":1601,"end":1999},
+            {"text":"and","start":2003,"end":2111,"glued":true},{"text":"here.","start":3005,"end":3333}]"#,
+    )
+    .unwrap();
+    let out = sonisub(&["render".as_ref(), glued.as_os_str(), "-t".as_ref(), "srt".as_ref()]).output().unwrap();
+    assert!(out.status.success(), "{}", plain(&out));
+    let srt = std::fs::read_to_string(dir.path().join("glued.srt")).unwrap();
+    assert_eq!(srt, "1\n00:00:01,234 --> 00:00:03,333\nWell, finally—and here.\n\n");
 
     let again = render(&[]);
     assert!(plain(&again).contains("skipped, .srt, .vtt, .ass exist (--force to redo)"));
@@ -254,4 +271,14 @@ fn a_capt_file_of_sounds_only_gives_sdh_subtitles() {
     let out =
         sonisub(&["render".as_ref(), capt.as_os_str(), "-t".as_ref(), "srt".as_ref(), "-f".as_ref()]).output().unwrap();
     assert!(!out.status.success());
+}
+
+#[test]
+fn labels_without_sdh_are_refused() {
+    let dir = tempfile::tempdir().unwrap();
+    let capt = dir.path().join("marks.capt");
+    std::fs::copy(common::fixture("marks.capt"), &capt).unwrap();
+    let out = sonisub(&["render".as_ref(), capt.as_os_str(), "--labels".as_ref(), "ru".as_ref()]).output().unwrap();
+    assert!(!out.status.success());
+    assert!(plain(&out).contains("--sdh"), "{}", plain(&out));
 }

@@ -83,8 +83,8 @@ impl Layout {
     /// The layout for a video's frame: [`Layout::vertical`] for a frame taller than wide, else
     /// [`Layout::default`], with the frame set.
     pub fn for_frame(frame: (u32, u32)) -> Self {
-        let base = if frame.1 > frame.0 { Self::vertical() } else { Self::default() };
-        Self { frame, ..base }
+        let given = Self { frame, ..Self::default() };
+        if given.is_vertical() { Self { frame, ..Self::vertical() } } else { given }
     }
 
     /// Whether the frame is taller than it is wide.
@@ -187,7 +187,7 @@ pub(crate) fn cut_level(prev: &Word, next: &Word) -> usize {
 }
 
 /// A sentence ends after `w`: its punctuation, unless a CAPT file says otherwise.
-pub(crate) fn ends(w: &Word) -> bool {
+pub(crate) fn sentence_ends(w: &Word) -> bool {
     w.marks.sentence.unwrap_or_else(|| ends_sentence(&w.text))
 }
 
@@ -233,7 +233,7 @@ pub(crate) fn sentences(words: Vec<Word>, s: &Layout) -> Vec<Vec<Word>> {
         if let Some(prev) = cur.last() {
             let hard = (s.by_speaker && w.speaker != prev.speaker)
                 || (gap_ms > 0 && w.start.saturating_sub(prev.end) > gap_ms)
-                || ends(prev);
+                || sentence_ends(prev);
             if hard {
                 blocks.push(std::mem::take(&mut cur));
             }
@@ -248,9 +248,9 @@ pub(crate) fn sentences(words: Vec<Word>, s: &Layout) -> Vec<Vec<Word>> {
     for mut b in blocks {
         if let Some(prev) = out.last_mut() {
             let last = prev.last().expect("blocks are non-empty");
-            let tail = b.iter().take(2).position(ends).map(|i| i + 1);
+            let tail = b.iter().take(2).position(sentence_ends).map(|i| i + 1);
             if let Some(k) = tail
-                && !ends(last)
+                && !sentence_ends(last)
                 && last.speaker == b[0].speaker
             {
                 prev.extend(b.drain(..k));
@@ -396,7 +396,8 @@ fn split_readable(ws: &[Word], prefix: &str, s: &Layout) -> Vec<Range<usize>> {
         let short = if dur < s.min_duration { 80.0 } else { 0.0 };
         let fast = if dur > 0.0 && chars / dur > 20.0 { (chars / dur - 20.0) * 4.0 } else { 0.0 };
         let last = &ws[j - 1];
-        let weak = if j < n && !ends(last) && (is_weak(&last.text) || is_subject(&last.text)) { 120.0 } else { 0.0 };
+        let weak =
+            if j < n && !sentence_ends(last) && (is_weak(&last.text) || is_subject(&last.text)) { 120.0 } else { 0.0 };
         Some(base + short + fast + weak)
     };
     let cut = |j: usize| -> f64 {
@@ -415,7 +416,9 @@ fn split_readable(ws: &[Word], prefix: &str, s: &Layout) -> Vec<Range<usize>> {
         let mut chars = 0;
         for i in (0..j).rev() {
             chars += ws[i].text.chars().count() + usize::from(i + 1 < j);
-            if i + 1 < j && (chars > capacity || ws[j - 1].end.saturating_sub(ws[i].start) > max_ms) {
+            // Without a length limit (`--max-line 0`), words packed in time are still bounded.
+            let too_many = s.max_line == 0 && j - i > 200;
+            if i + 1 < j && (chars > capacity || ws[j - 1].end.saturating_sub(ws[i].start) > max_ms || too_many) {
                 break;
             }
             let Some((c0, _)) = best[i] else { continue };

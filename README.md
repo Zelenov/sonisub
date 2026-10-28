@@ -133,8 +133,8 @@ highlight (`\k`).
 
 `--sdh` makes `.srt`, `.vtt` and `.ass` subtitles for the deaf and hard of hearing from the sounds and voices
 marked in a CAPT file (`sound:phone`, `voice:whisper` → `[phone ringing]`, `[whispering]`; `--labels en|ru`).
-Soniox reports no sounds, so a fresh transcript has none until they are added to `clip.capt`. For Reels, Shorts and TikTok add `--vertical`: short two-line subtitles cut
-where they read well; `.ass` and `.vtt` also keep them clear of the app's buttons (`.srt` has no position).
+Soniox reports no sounds, so a fresh transcript has none until they are added to `clip.capt`.
+For Reels, Shorts and TikTok add `--vertical`: short two-line subtitles cut where they read well; `.ass` and `.vtt` also keep them clear of the app's buttons (`.srt` has no position).
 
 `sonisub render` makes the same files without Soniox: from a CAPT file (`-t capt` writes `clip.capt`, the whole
 transcript as small text you can read and edit, see [docs/capt.md](docs/capt.md)), or from words saved as JSON
@@ -239,8 +239,13 @@ committing regenerated fixtures.
 
 ## Building for other platforms
 
-`cargo build --release --target x86_64-unknown-linux-gnu` (or `aarch64-apple-darwin` on a Mac). TLS is rustls,
-so there is no OpenSSL dependency.
+```sh
+cargo build --release                                   # this machine
+cargo build --release --target x86_64-unknown-linux-gnu # needs the target + linker
+cargo build --release --target aarch64-apple-darwin     # build on a Mac
+```
+
+TLS is rustls, so there is no OpenSSL dependency.
 
 ## Releases
 

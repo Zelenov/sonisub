@@ -144,12 +144,17 @@ pub(crate) struct Sound {
 /// The sound blocks of `doc` as subtitles, labels in `lang`; speakers named like the speech
 /// around them ([`speaker_label`]), so one file never names a person two ways.
 pub(crate) fn sounds(doc: &Doc, layout: &Layout, lang: &str) -> Vec<Sound> {
+    // As speech is labelled: by speaker, when more than one is heard.
+    let mut heard: Vec<&str> = doc.blocks.iter().filter_map(|b| b.speaker.as_deref()).collect();
+    heard.sort_unstable();
+    heard.dedup();
+    let label = layout.speaker_labels && layout.by_speaker && heard.len() > 1;
     doc.sounds()
         .map(|b| {
             let (start, end, speaker, code) =
                 (b.start, b.end, b.speaker.as_deref(), b.sound.as_deref().unwrap_or_default());
             let who = match speaker {
-                Some(sp) if layout.speaker_labels => format!("{}: ", speaker_label(sp, &layout.speaker_names)),
+                Some(sp) if label => format!("{}: ", speaker_label(sp, &layout.speaker_names)),
                 _ => String::new(),
             };
             Sound {
@@ -162,7 +167,7 @@ pub(crate) fn sounds(doc: &Doc, layout: &Layout, lang: &str) -> Vec<Sound> {
         .collect()
 }
 
-/// The numpad alignment of SRT and ASS (7 8 9 / 4 5 6 / 1 2 3) nearest to a place.
+/// The numpad alignment of SRT's `{\anN}` (7 8 9 / 4 5 6 / 1 2 3) nearest to a place.
 pub(crate) fn numpad(pos: Option<Pos>) -> u8 {
     let (cx, cy) = match pos {
         None | Some(Pos::Bottom) => return 2,

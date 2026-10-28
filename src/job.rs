@@ -55,9 +55,14 @@ pub struct Outputs {
     /// The language of sound and voice labels (`en`, `ru`); `None`: Russian for a Russian
     /// transcript, else English.
     pub labels: Option<String>,
-    /// The video's frame the user gave (`--vertical`, `--frame`), written into a CAPT file's
-    /// header so `render` lays it out the same.
-    pub frame: Option<(u32, u32)>,
+}
+
+/// The layout's frame into a CAPT file's header when it is not the one the file already says, so
+/// the next `render` of the file lays it out the same.
+pub fn frame_into(doc: &mut captions::capt::Doc, layout: &srt::Layout) {
+    if doc.frame.unwrap_or(captions::cues::DEFAULT_FRAME) != layout.frame {
+        doc.frame = Some(layout.frame);
+    }
 }
 
 /// What to do with a file.
@@ -244,9 +249,9 @@ pub fn process(input: &Path, output: &Path, opts: &Options, client: Option<&Clie
         doc.media = input.file_name().map(|n| n.to_string_lossy().into_owned());
     }
     name_speakers(&mut doc, &layout, &opts.outputs.ass);
-    doc.frame = opts.outputs.frame.or(doc.frame);
+    frame_into(&mut doc, &layout);
     let words = soniox::words(&transcript);
-    let (files, cues) = write_outputs(&targets, &words, &doc, &layout, &opts.outputs, hint, seed)?;
+    let (files, cues) = write_outputs(&targets, &doc.to_words(), &words, &doc, &layout, &opts.outputs, hint, seed)?;
     rep.mark(Stage::Writing, 1.0);
     Ok(Outcome::Written { files, cues, json, cached, uploaded_s })
 }
@@ -279,13 +284,16 @@ pub fn name_speakers(doc: &mut captions::capt::Doc, layout: &srt::Layout, ass: &
     }
 }
 
-/// Writes every format of `targets`: subtitles and CAPT from `doc`, the Premiere transcript from
-/// `words` (the same speech as the recogniser gave it, confidence to the third decimal). The files
-/// written and the number of cues of the first subtitles written (0 with only a Premiere transcript
-/// or CAPT). `default_language` and `seed` are for [`Format::Premiere`]
-/// ([`captions::premiere::build`]).
+/// Writes every format of `targets`: subtitles from `cue_words`, the Premiere transcript from
+/// `words`, SDH subtitles and CAPT from `doc` (the same speech with its sounds). A transcript from
+/// Soniox passes `doc.to_words()` and Soniox's words (confidence to the third decimal), saved words
+/// pass themselves twice. The files written and the number of cues of the first subtitles written
+/// (0 with only a Premiere transcript or CAPT). `default_language` and `seed` are for
+/// [`Format::Premiere`] ([`captions::premiere::build`]); with no `words` nothing is written.
+#[allow(clippy::too_many_arguments)]
 pub fn write_outputs(
     targets: &[(Format, PathBuf)],
+    cue_words: &[captions::Word],
     words: &[captions::Word],
     doc: &captions::capt::Doc,
     layout: &srt::Layout,
@@ -293,11 +301,11 @@ pub fn write_outputs(
     default_language: Option<&str>,
     seed: &str,
 ) -> Result<(Vec<PathBuf>, usize)> {
+    if words.is_empty() && targets.iter().any(|(f, _)| *f == Format::Premiere) {
+        bail!("no words for a Premiere transcript");
+    }
     let mut cues = 0;
     let mut files = Vec::new();
-    // Subtitles follow the CAPT document: its marks, its 10 ms grid.
-    let cue_words = doc.to_words();
-    let cue_words = cue_words.as_slice();
     let labels = outputs.labels.clone().unwrap_or_else(|| captions::labels::for_language(doc.lang.as_deref()).into());
     for (format, path) in targets {
         let (text, n) = match format {

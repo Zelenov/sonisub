@@ -141,3 +141,29 @@ fn karaoke_and_plain_ass_label_the_same_voices() {
     };
     assert_eq!(labels(true), labels(false));
 }
+
+#[test]
+fn a_sound_is_labelled_with_its_speaker_only_when_speech_is() {
+    // One speaker: no "Anna:" on her speech, so none on her laugh.
+    let d = Doc::parse(
+        "CAPT 1
+speaker:1 name:Anna
+
+00:00:01.000 --> 00:00:02.000 speaker:1
+{0}Hi.{50}
+
+00:00:02.500 --> 00:00:03.000 speaker:1 sound:laughter
+",
+    )
+    .unwrap();
+    let l = Layout { speaker_labels: true, speaker_names: vec!["Anna".into()], ..Layout::default() };
+    let text = sdh::srt(&d, &l, "en").0;
+    assert!(
+        text.contains(
+            "
+[laughs]
+"
+        ) && !text.contains("Anna:"),
+        "{text}"
+    );
+}

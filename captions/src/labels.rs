@@ -45,10 +45,10 @@ pub fn for_language(lang: Option<&str>) -> &'static str {
 }
 
 fn label(table: &[(&str, &str, &str)], code: &str, lang: &str) -> String {
-    let words =
-        table.iter().find(|(c, _, _)| *c == code).map_or(code, |(_, en, ru)| if lang == "ru" { ru } else { en });
+    let ru = for_language(Some(lang)) == "ru";
+    let words = table.iter().find(|(c, _, _)| *c == code).map_or(code, |(_, en, r)| if ru { r } else { en });
     // Russian subtitles put a sound in parentheses, English ones in square brackets.
-    if lang == "ru" { format!("({words})") } else { format!("[{words}]") }
+    if ru { format!("({words})") } else { format!("[{words}]") }
 }
 
 /// The label of a sound (`laughter` -> `[laughs]`, `(смеётся)`).
@@ -71,5 +71,7 @@ mod tests {
         assert_eq!(voice("whisper", "en"), "[whispering]");
         assert_eq!(sound("didgeridoo", "en"), "[didgeridoo]");
         assert_eq!(sound("didgeridoo", "ru"), "(didgeridoo)");
+        // A language as a caller may spell it.
+        assert_eq!(sound("laughter", "RU"), sound("laughter", "ru"));
     }
 }
