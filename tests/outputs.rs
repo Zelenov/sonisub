@@ -8,7 +8,7 @@
 mod common;
 
 use sonisub::captions::capt::Doc;
-use sonisub::captions::{Layout, ass, sdh, srt, vtt};
+use sonisub::captions::{Layout, ass, lrc, sdh, srt, vtt};
 
 fn doc(name: &str) -> Doc {
     Doc::parse(&common::golden(&format!("{name}.capt"))).unwrap()
@@ -41,6 +41,7 @@ fn outputs_of_both_fixtures() {
         let d = doc(name);
         let (l, _) = layouts(&d);
         check(name, "sdh.srt", &sdh::srt(&d, &l, "en").0);
+        check(name, "lrc", &lrc::build(&d.to_words(), &l).0);
     }
 }
 

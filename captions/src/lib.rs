@@ -8,6 +8,7 @@
 //! - [`capt`] reads and writes CAPT, the transcript format between a recogniser and these writers.
 //! - From a CAPT file, with its sounds and voices: [`sdh`] (SRT, WebVTT and ASS for the deaf and
 //!   hard of hearing), labels from [`labels`].
+//! - [`lrc`] writes Enhanced LRC, a time before every word of the same cues.
 
 use serde::{Deserialize, Serialize};
 
@@ -15,6 +16,7 @@ pub mod ass;
 pub mod capt;
 pub mod cues;
 pub mod labels;
+pub mod lrc;
 pub mod premiere;
 pub mod sdh;
 pub mod srt;
