@@ -2,6 +2,7 @@ use std::path::PathBuf;
 use std::time::Duration;
 
 use clap::{Args, Parser, Subcommand};
+use sonisub::captions::ass;
 use sonisub::job::Format;
 use sonisub::{audio, job, soniox, srt};
 
@@ -35,6 +36,8 @@ pub enum Command {
         #[command(flatten)]
         api: ApiArgs,
     },
+    /// Write subtitles from saved words (a JSON list of words with timing), without transcribing again.
+    Render(RenderArgs),
     /// List (and with --yes delete) all files and transcriptions stored in the Soniox account.
     Purge {
         /// Actually delete. Without it only prints what would be deleted.
@@ -80,8 +83,9 @@ pub struct RunArgs {
     #[command(flatten)]
     pub api: ApiArgs,
 
-    /// What to write, comma separated: srt (subtitles), premiere (Premiere Pro transcript, clip.premiere.json).
-    /// Only missing files are written, so adding a format later reuses the saved transcript for free.
+    /// What to write, comma separated: srt, vtt (WebVTT), ass (a style per speaker), premiere (Premiere Pro
+    /// transcript, clip.premiere.json). Only missing files are written, so adding a format later reuses the
+    /// saved transcript for free.
     #[arg(short = 't', long = "format", value_enum, value_delimiter = ',', default_value = "srt")]
     pub formats: Vec<Format>,
 
@@ -188,9 +192,57 @@ pub struct SegArgs {
     #[arg(long, short = 's')]
     pub speakers: bool,
 
-    /// Speaker names instead of "Speaker N", comma separated in order of appearance: "Eugene,Sasha". Implies --speakers.
+    /// Speaker names instead of "Speaker N", comma separated in order of appearance: "Eugene,Sasha". Implies
+    /// --speakers (in .ass the names are also the speakers' styles).
     #[arg(long, value_delimiter = ',')]
     pub speaker_names: Vec<String>,
+
+    /// In .ass, light up each word as it is spoken (\k karaoke).
+    #[arg(long)]
+    pub karaoke: bool,
+}
+
+impl SegArgs {
+    /// The cue layout; `by_speaker`: a speaker change ends a cue.
+    pub fn layout(&self, by_speaker: bool) -> srt::Layout {
+        srt::Layout {
+            max_line: if self.unlimited { 0 } else { self.max_line },
+            max_lines: self.max_lines,
+            max_duration: if self.unlimited { 0.0 } else { self.max_duration },
+            gap: self.gap,
+            min_duration: self.min_duration,
+            by_speaker,
+            speaker_labels: self.speakers || !self.speaker_names.is_empty(),
+            speaker_names: self.speaker_names.clone(),
+            wrap_lines: self.wrap,
+        }
+    }
+
+    pub fn ass(&self) -> ass::Options {
+        ass::Options { karaoke: self.karaoke, ..Default::default() }
+    }
+}
+
+#[derive(Args, Debug)]
+pub struct RenderArgs {
+    /// Words saved as JSON: [{"text": "Hello,", "start": 120, "end": 480, "speaker": "1", "language": "en"}, ...]
+    /// (start and end in milliseconds; speaker and language optional).
+    pub input: PathBuf,
+
+    /// What to write, comma separated: srt, vtt, ass, premiere.
+    #[arg(short = 't', long = "format", value_enum, value_delimiter = ',', default_value = "srt")]
+    pub formats: Vec<Format>,
+
+    /// Output path; other formats get their own extension next to it. Default: next to the input, same name.
+    #[arg(short, long)]
+    pub output: Option<PathBuf>,
+
+    /// Overwrite existing outputs.
+    #[arg(short, long)]
+    pub force: bool,
+
+    #[command(flatten)]
+    pub seg: SegArgs,
 }
 
 impl RunArgs {
@@ -208,17 +260,8 @@ impl RunArgs {
             keep_json: !self.no_json,
             formats: self.formats.clone(),
             force: self.force,
-            layout: srt::Layout {
-                max_line: if self.seg.unlimited { 0 } else { self.seg.max_line },
-                max_lines: self.seg.max_lines,
-                max_duration: if self.seg.unlimited { 0.0 } else { self.seg.max_duration },
-                gap: self.seg.gap,
-                min_duration: self.seg.min_duration,
-                by_speaker: !self.no_diarization,
-                speaker_labels: self.seg.speakers || !self.seg.speaker_names.is_empty(),
-                speaker_names: self.seg.speaker_names.clone(),
-                wrap_lines: self.seg.wrap,
-            },
+            layout: self.seg.layout(!self.no_diarization),
+            ass: self.seg.ass(),
             poll: Duration::from_secs_f64(self.poll.max(0.2)),
             prefix: String::new(),
             reference: "sonisub".into(),

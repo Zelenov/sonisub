@@ -4,13 +4,20 @@ This file is what an agent needs to build, test and ship sonisub without a human
 
 ## Layout
 
-- `src/job.rs` — one file: media → audio → Soniox → `.srt` / `.premiere.json`, cleanup;
-  `job::process`, `Options`, `Outcome`.
+A Cargo workspace of two crates: `sonisub` (the root) and `captions/`.
+
+- `captions/` — its own crate (`captions` on crates.io): `Word`, `cues` (the layout rules: words → cues),
+  and the writers `srt`, `vtt`, `ass`, `premiere`. No network, no ffmpeg, nothing about Soniox.
+  Unit tests in `captions/tests/`; golden tests against the fixtures stay in `tests/formats.rs`.
+- `src/job.rs` — one file: media → audio → Soniox → `.srt` / `.vtt` / `.ass` / `.premiere.json`, cleanup;
+  `job::process`, `Options`, `Outcome`, `write_outputs`.
 - `src/batch.rs` — folders into a list of files and a plan. `src/usage.rs` — what was spent.
 - `src/audio.rs` — audio track → 16 kHz mono FLAC (symphonia, or ffmpeg when it is on `PATH`).
-- `src/soniox.rs` — the Soniox REST client, error types, the remote cleanup guard.
+- `src/soniox.rs` — the Soniox REST client, error types, the remote cleanup guard; `soniox::words`
+  (tokens → `captions::Word`).
 - `src/languages.rs` — language codes from Soniox. `src/cancel.rs` — Ctrl+C and `CancelToken`.
-- `src/srt.rs` — transcript tokens → cues → SRT. `src/premiere.rs` — → Premiere Pro transcript.
+- `src/srt.rs`, `src/premiere.rs` — the old names (`srt::Layout`, `srt::build`, `premiere::build`, …) as
+  re-exports and thin wrappers over `captions`, so callers keep building.
 - `src/main.rs`, `src/cli.rs` — the `sonisub` command line (feature `cli`).
 - `tests/` — integration tests against a mock Soniox; `tests/fixtures/` — real Soniox output with
   its media and the expected `.srt` / `.premiere.json` (made by `scripts/make-fixture.sh`);
@@ -26,6 +33,12 @@ This file is what an agent needs to build, test and ship sonisub without a human
   release PR, convert it to a draft.
 
 Features: `cli` (default; clap, ctrlc, the binary), none (the library alone; frename uses this).
+
+`default-members` lists both crates, so every command below covers both. `captions` has its own
+`version` in `captions/Cargo.toml`: a change to `captions/src` bumps it in the same PR (third number
+for fixes, second for features or a breaking change), and sonisub's dependency line follows a minor
+bump. `release.yml` publishes `captions` before `sonisub` and fails when a `captions` version already
+on crates.io differs from `captions/src`.
 
 ## Commands
 

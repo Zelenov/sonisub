@@ -2,7 +2,7 @@
 
 <img src="https://raw.githubusercontent.com/Zelenov/sonisub/main/docs/icon/sonisub-256.png" align="left" width="128" height="128" alt="sonisub icon">
 
-Generate `.srt` subtitles (and Premiere Pro transcripts) for video and audio files with
+Generate subtitles (`.srt`, WebVTT, ASS) and Premiere Pro transcripts for video and audio files with
 [Soniox](https://soniox.com) speech-to-text.
 One self-contained binary: no Python, no ffmpeg required.
 
@@ -64,6 +64,9 @@ sonisub *.MOV -d subs -l en --strict-lang # English only, into ./subs
 sonisub clip.MP4 -c "Nairobi, Maasai, UAT, QA"   # context terms improve recognition
 sonisub clip.MP4 -t srt,premiere          # also clip.premiere.json for Premiere Pro's Text panel
 sonisub . -t premiere                     # only the Premiere transcript; saved .soniox.json files are reused
+sonisub clip.MP4 -t srt,vtt,ass           # also clip.vtt (WebVTT) and clip.ass (a style per speaker)
+sonisub clip.MP4 -t ass --karaoke         # each word lights up as it is spoken
+sonisub render clip.words.json -t srt,ass # subtitles from saved words, no Soniox
 sonisub clip.MP4 --no-json                # don't keep clip.soniox.json
 sonisub clip.MP4 -u                       # no length limit: one cue per sentence
 sonisub clip.MP4 -s                       # "Speaker 1: ..." when the speaker changes
@@ -123,6 +126,18 @@ or bins, press **Import transcripts**.
 - Only missing outputs are written: `-t srt,premiere` on a folder that already has `.srt` and `.soniox.json`
   files adds the Premiere transcripts for free and leaves hand-edited `.srt` alone.
 
+## WebVTT and ASS
+
+`-t vtt` and `-t ass` write the same cues as the `.srt`. In `clip.ass` every speaker has a style of their own
+(`Speaker 1`, or the name from `--speaker-names`) with its own text colour (white, yellow, cyan, green, pink,
+orange, violet, red, then repeating), black outline, bottom centre. Every line names its speaker, so in Aegisub
+you restyle or rename a person in one place. Without diarization all lines use the `Default` style. `--karaoke` adds word-by-word
+highlight (`\k`).
+
+`sonisub render words.json` makes the same files from words saved as JSON
+(`[{"text": "Hello,", "start": 120, "end": 480, "speaker": "1", "language": "en"}, ...]`, times in milliseconds),
+for example words a program stored after transcribing. It takes `-t`, `-o`, `-f` and the layout options.
+
 ## How subtitles are cut
 
 - A cue never mixes speakers and never runs past the end of a sentence (`Dr.`, `e.g.`, `3.5`, `...` are not ends).
@@ -165,20 +180,23 @@ Exit codes: `0` ok, `1` some files failed, `2` fatal (key/balance/usage), `130` 
 
 | Module | Does |
 |---|---|
-| `src/job.rs` | **one file**: media → audio → Soniox → `.srt` / `.premiere.json`, cleanup. `job::process(input, output, &Options, client)` |
+| `src/job.rs` | **one file**: media → audio → Soniox → `.srt` / `.vtt` / `.ass` / `.premiere.json`, cleanup. `job::process(input, output, &Options, client)` |
 | `src/audio.rs` | audio track → 16 kHz mono FLAC (built-in decoder or ffmpeg) |
-| `src/soniox.rs` | Soniox REST client, error types, remote cleanup guard |
+| `src/soniox.rs` | Soniox REST client, error types, remote cleanup guard; `soniox::words` reads a transcript as words |
 | `src/languages.rs` | language codes `-l` takes, from Soniox (`languages::fetch(client)`) |
-| `src/srt.rs` | transcript tokens → cues → SRT text (`srt::Layout`) |
-| `src/premiere.rs` | transcript tokens → Premiere Pro transcript JSON; `premiere::to_srt` reads one back as SRT text |
+| `captions/` | the [`captions`](captions/README.md) crate: words → cues → SRT, WebVTT, ASS, Premiere Pro transcript; no Soniox |
+| `src/srt.rs`, `src/premiere.rs` | a Soniox transcript straight to SRT / Premiere Pro transcript, through `captions` |
 | `src/cancel.rs` | Ctrl+C flag and per-job `CancelToken` |
 | `src/main.rs`, `src/cli.rs`, `src/ui.rs` | command line only: arguments, the list of files, log, stopping on fatal errors, the batch bar and its ETA |
 
 ### As a library
 
 ```toml
-sonisub = { version = "0.6", default-features = false }
+sonisub = { version = "0.7", default-features = false }
 ```
+
+Subtitle formats live in the [`captions`](captions/README.md) crate, re-exported as `sonisub::captions`:
+`soniox::words(&transcript)` gives the words, `captions::vtt::build(&words, &layout)` and the others lay them out.
 
 `premiere::to_srt(&json, &layout)` turns a `clip.premiere.json` back into SRT text and the cue count
 (`None` when it is not a Premiere transcript). Tested on transcripts sonisub wrote; transcripts from
@@ -214,7 +232,7 @@ cargo test --test live -- --ignored   # real Soniox round trip (needs SONIOX_API
 `dialog` (English voices plus a Russian and a Spanish line), `punctuation` (dense punctuation, abbreviations,
 numbers, a sentence without commas), `nospeech` (noise and music: Soniox's empty transcript), plus `noaudio.mp4`
 and `silence.m4a`. Each has the video, the transcript and expected subtitles for the default, `-u` and `-s`
-layouts, and `dialog`/`punctuation` the expected Premiere transcript. Review the `.srt` diff before committing regenerated fixtures.
+layouts, and `dialog`/`punctuation` the expected Premiere transcript; `dialog` also `.vtt`, `.ass` and `.karaoke.ass`. Review the `.srt` diff before committing regenerated fixtures.
 
 ## Building for other platforms
 
@@ -234,8 +252,10 @@ The workflow runs the tests and builds Windows x64, Linux x64 and macOS arm64.
 
 - Push to `main`: a published release `vX.Y.Z` (skipped if that release already exists).
 - Push to any other branch: a draft `vX.Y.Z-<branch>`, rebuilt on every push.
-- From `main`, the crate is also published to [crates.io](https://crates.io/crates/sonisub) (needs the
-  `CARGO_REGISTRY_TOKEN` secret); a version already there is skipped.
+- From `main`, the crates are also published to crates.io, [`captions`](https://crates.io/crates/captions) first,
+  then [`sonisub`](https://crates.io/crates/sonisub) (needs the `CARGO_REGISTRY_TOKEN` secret); a version already
+  there is skipped. A change to `captions/` needs a new `version` in `captions/Cargo.toml`: the release fails if the
+  published `captions` differs from the repository's.
 
 ## License
 

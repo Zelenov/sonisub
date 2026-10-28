@@ -36,6 +36,18 @@ jobs:
           if [ "$VERSION" != "$CARGO_VERSION" ]; then
             echo "::error::version.md says $VERSION, Cargo.toml says $CARGO_VERSION"; exit 1
           fi
+          # sonisub on crates.io builds against the published captions, so a captions version that is
+          # already there must be exactly this code: a change to captions/src needs a new version.
+          CAPTIONS=$(sed -n 's/^version[[:space:]]*=[[:space:]]*"\(.*\)"/\1/p' captions/Cargo.toml | head -1)
+          mkdir -p "$RUNNER_TEMP/published"
+          if curl -sSfL -A "sonisub-release (github.com/Zelenov/sonisub)" -o "$RUNNER_TEMP/captions.crate" \
+            "https://static.crates.io/crates/captions/captions-$CAPTIONS.crate"; then
+            tar -xzf "$RUNNER_TEMP/captions.crate" -C "$RUNNER_TEMP/published"
+            if ! diff -r "$RUNNER_TEMP/published/captions-$CAPTIONS/src" captions/src; then
+              echo "::error::captions/src differs from captions $CAPTIONS on crates.io: bump version in captions/Cargo.toml"
+              exit 1
+            fi
+          fi
           BRANCH="${{ github.ref_name }}"
           SAFE=$(echo "$BRANCH" | sed 's/\//-/g;s/[^a-zA-Z0-9._-]/-/g;s/-*$//')
           [ -z "$SAFE" ] && SAFE=branch
@@ -168,9 +180,10 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ github.token }}
 
-  # Publishes the crate to crates.io from main, once per version: a version already there is
-  # skipped, so re-running the workflow is safe. Runs after the builds' tests passed, or when
-  # the GitHub release already existed (a manual run to publish an earlier version).
+  # Publishes the crates to crates.io from main, once per version: captions first (sonisub depends
+  # on it), then sonisub. A version already there is skipped, so re-running the workflow is safe.
+  # Runs after the builds' tests passed, or when the GitHub release already existed (a manual run
+  # to publish an earlier version).
   publish:
     needs: [prepare, build]
     if: >-
@@ -185,10 +198,20 @@ jobs:
       - name: Already on crates.io?
         id: check
         run: |
+          on_crates() {
+            CODE=$(curl -s -o /dev/null -w '%{http_code}' -A "sonisub-release (github.com/Zelenov/sonisub)" \
+              "https://crates.io/api/v1/crates/$1/$2")
+            [ "$CODE" = 200 ]
+          }
+          CAPTIONS=$(sed -n 's/^version[[:space:]]*=[[:space:]]*"\(.*\)"/\1/p' captions/Cargo.toml | head -1)
+          if on_crates captions "$CAPTIONS"; then
+            echo "captions $CAPTIONS is already on crates.io"
+            echo "captions=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "captions=true" >> "$GITHUB_OUTPUT"
+          fi
           VERSION="${{ needs.prepare.outputs.version }}"
-          CODE=$(curl -s -o /dev/null -w '%{http_code}' -A "sonisub-release (github.com/Zelenov/sonisub)" \
-            "https://crates.io/api/v1/crates/sonisub/$VERSION")
-          if [ "$CODE" = 200 ]; then
+          if on_crates sonisub "$VERSION"; then
             echo "sonisub $VERSION is already on crates.io"
             echo "publish=false" >> "$GITHUB_OUTPUT"
           else
@@ -196,11 +219,17 @@ jobs:
           fi
 
       - name: Install Rust toolchain
-        if: steps.check.outputs.publish == 'true'
+        if: steps.check.outputs.captions == 'true' || steps.check.outputs.publish == 'true'
         uses: dtolnay/rust-toolchain@stable
 
-      - name: Publish
+      - name: Publish captions
+        if: steps.check.outputs.captions == 'true'
+        run: cargo publish --locked -p captions
+        env:
+          CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}
+
+      - name: Publish sonisub
         if: steps.check.outputs.publish == 'true'
-        run: cargo publish --locked
+        run: cargo publish --locked -p sonisub
         env:
           CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}

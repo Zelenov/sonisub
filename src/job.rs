@@ -12,7 +12,8 @@ use crate::audio;
 use crate::cancel::{CancelToken, Cancelled};
 use crate::progress::{Callback, Estimate, Reporter, Stage};
 use crate::soniox::{self, Client, RemoteGuard};
-use crate::{premiere, srt};
+use crate::srt;
+use captions::{ass, vtt};
 
 /// What gets written for a file.
 #[cfg_attr(feature = "cli", derive(clap::ValueEnum))]
@@ -20,6 +21,10 @@ use crate::{premiere, srt};
 pub enum Format {
     /// Subtitles: `clip.srt`.
     Srt,
+    /// WebVTT subtitles, the same cues: `clip.vtt`.
+    Vtt,
+    /// ASS subtitles, the same cues, a style per speaker: `clip.ass`.
+    Ass,
     /// Premiere Pro transcript (Text panel > Transcript > ... > Import Static Transcript): `clip.premiere.json`.
     Premiere,
 }
@@ -29,6 +34,8 @@ impl Format {
     pub fn path(self, output: &Path) -> PathBuf {
         match self {
             Format::Srt => output.to_path_buf(),
+            Format::Vtt => output.with_extension("vtt"),
+            Format::Ass => output.with_extension("ass"),
             Format::Premiere => output.with_extension("premiere.json"),
         }
     }
@@ -58,6 +65,8 @@ pub struct Options {
     /// Overwrite existing outputs and ignore a saved `.soniox.json` (transcribe again).
     pub force: bool,
     pub layout: srt::Layout,
+    /// Speaker names and word highlight for [`Format::Ass`].
+    pub ass: ass::Options,
     /// Interval between transcription status checks.
     pub poll: Duration,
     /// Printed before progress lines, e.g. "[2/5]".
@@ -90,6 +99,7 @@ impl Default for Options {
             formats: vec![Format::Srt],
             force: false,
             layout: srt::Layout::default(),
+            ass: ass::Options::default(),
             poll: Duration::from_secs(3),
             prefix: String::new(),
             reference: "sonisub".into(),
@@ -102,7 +112,7 @@ impl Default for Options {
 
 #[derive(Debug)]
 pub enum Outcome {
-    /// Outputs written (`files`; `cues` counts subtitles, 0 without .srt). `cached`: the transcript came
+    /// Outputs written (`files`; `cues` counts subtitles, 0 with only a Premiere transcript). `cached`: the transcript came
     /// from an existing `.soniox.json`, no API call. `uploaded_s`: seconds of audio sent to Soniox (what is paid for).
     Written { files: Vec<PathBuf>, cues: usize, json: Option<PathBuf>, cached: bool, uploaded_s: Option<f64> },
     /// Every output already exists and `force` is off.
@@ -206,26 +216,43 @@ pub fn process(input: &Path, output: &Path, opts: &Options, client: Option<&Clie
     }
     rep.mark(Stage::Writing, 0.0);
     let layout = srt::Layout { by_speaker: opts.diarization, ..opts.layout.clone() };
+    let hint = opts.languages.first().map(String::as_str);
+    let words = soniox::words(&transcript);
+    let seed = transcript["id"].as_str().unwrap_or_default();
+    let (files, cues) = write_outputs(&targets, &words, &layout, &opts.ass, hint, seed)?;
+    rep.mark(Stage::Writing, 1.0);
+    Ok(Outcome::Written { files, cues, json, cached, uploaded_s })
+}
+
+/// Writes `words` in every format of `targets`; the files written and the number of cues (0 with
+/// only a Premiere transcript). `default_language` and `seed` are for [`Format::Premiere`]
+/// ([`captions::premiere::build`]).
+pub fn write_outputs(
+    targets: &[(Format, PathBuf)],
+    words: &[captions::Word],
+    layout: &srt::Layout,
+    ass: &ass::Options,
+    default_language: Option<&str>,
+    seed: &str,
+) -> Result<(Vec<PathBuf>, usize)> {
     let mut cues = 0;
     let mut files = Vec::new();
     for (format, path) in targets {
-        let text = match format {
-            Format::Srt => {
-                let (text, n) = srt::build(&transcript, &layout);
-                cues = n;
-                text
-            }
+        let (text, n) = match format {
+            Format::Srt => captions::srt::build(words, layout),
+            Format::Vtt => vtt::build(words, layout),
+            Format::Ass => ass::build(words, layout, ass),
             Format::Premiere => {
-                let hint = opts.languages.first().map(String::as_str);
-                let t = premiere::build(&transcript, &layout, hint).expect("the transcript has speech");
-                serde_json::to_string_pretty(&t)?
+                let t = captions::premiere::build(words, layout, default_language, seed)
+                    .ok_or_else(|| anyhow!("no words to write"))?;
+                (serde_json::to_string_pretty(&t)?, 0)
             }
         };
-        std::fs::write(&path, text).with_context(|| format!("cannot write {}", path.display()))?;
-        files.push(path);
+        cues = cues.max(n);
+        std::fs::write(path, text).with_context(|| format!("cannot write {}", path.display()))?;
+        files.push(path.clone());
     }
-    rep.mark(Stage::Writing, 1.0);
-    Ok(Outcome::Written { files, cues, json, cached, uploaded_s })
+    Ok((files, cues))
 }
 
 fn read_transcript(path: &Path) -> Result<Value> {
@@ -355,7 +382,7 @@ pub fn default_output(input: &Path, out_dir: Option<&Path>) -> PathBuf {
 /// The .srt base for an `-o` path given with any output extension: `clip.premiere.json` -> `clip.srt`.
 pub fn output_base(path: &Path) -> PathBuf {
     let name = path.file_name().map_or_else(String::new, |n| n.to_string_lossy().into_owned());
-    let stem = [".premiere.json", ".soniox.json", ".srt", ".json"]
+    let stem = [".premiere.json", ".soniox.json", ".words.json", ".srt", ".vtt", ".ass", ".json"]
         .iter()
         .find_map(|s| strip_suffix(&name, s))
         .unwrap_or(&name);

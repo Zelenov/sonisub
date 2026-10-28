@@ -150,8 +150,32 @@ fn a_new_format_is_made_from_the_saved_transcript_leaving_the_srt_alone() {
 }
 
 #[test]
+fn vtt_and_ass_are_written_next_to_the_srt() {
+    let s = setup();
+    copy_fixture(&s, "dialog.soniox.json");
+    let opts = Options { formats: vec![Format::Vtt, Format::Ass], ..options(&s.temp) };
+    let out = job::process(&common::fixture("dialog.mp4"), &s.srt, &opts, None).unwrap();
+    let (vtt, ass) = (s.dir.path().join("dialog.vtt"), s.dir.path().join("dialog.ass"));
+    let Outcome::Written { files, cues: 10, cached: true, .. } = out else { panic!("{out:?}") };
+    assert_eq!(files, [vtt.clone(), ass.clone()]);
+    assert!(!s.srt.exists());
+    assert_eq!(common::normalize(&std::fs::read_to_string(&vtt).unwrap()), common::golden("dialog.vtt"));
+    assert_eq!(common::normalize(&std::fs::read_to_string(&ass).unwrap()), common::golden("dialog.ass"));
+}
+
+#[test]
 fn output_base_accepts_any_output_extension() {
-    for given in ["out/clip.srt", "out/clip.premiere.json", "out/clip.json", "out/clip.SRT", "out/clip"] {
+    let given = [
+        "out/clip.srt",
+        "out/clip.premiere.json",
+        "out/clip.json",
+        "out/clip.SRT",
+        "out/clip",
+        "out/clip.vtt",
+        "out/clip.ass",
+        "out/clip.words.json",
+    ];
+    for given in given {
         assert_eq!(job::output_base(Path::new(given)), Path::new("out/clip.srt"), "{given}");
     }
     assert_eq!(Format::Premiere.path(Path::new("out/clip.v2.srt")), Path::new("out/clip.v2.premiere.json"));

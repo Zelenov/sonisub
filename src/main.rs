@@ -14,7 +14,7 @@ use anyhow::{Context, Result, anyhow, bail};
 use clap::Parser;
 use indicatif::{MultiProgress, ProgressBar, ProgressDrawTarget};
 
-use cli::{ApiArgs, Cli, Command, RunArgs};
+use cli::{ApiArgs, Cli, Command, RenderArgs, RunArgs};
 use sonisub::batch::{self, Item, Selection, Totals};
 use sonisub::cancel::{Cancelled, interrupt, interrupted};
 use sonisub::job::{self, Outcome};
@@ -57,6 +57,7 @@ fn main() -> ExitCode {
         Some(Command::Purge { yes, api }) => purge(&api, yes).map(|_| ExitCode::SUCCESS),
         Some(Command::Usage { days, api }) => show_usage(&api, days).map(|_| ExitCode::SUCCESS),
         Some(Command::Languages { api }) => show_languages(&api).map(|_| ExitCode::SUCCESS),
+        Some(Command::Render(args)) => render(&args).map(|_| ExitCode::SUCCESS),
         None => run(&cli.run),
     };
     result.unwrap_or_else(|e| {
@@ -421,6 +422,30 @@ fn show_usage(api: &ApiArgs, days: u64) -> Result<()> {
         .cloned()
         .collect();
     print!("{}", usage::report(&Summary::of(&logs), &Summary::of(&today), days));
+    Ok(())
+}
+
+/// `sonisub render`: subtitles from saved words, no Soniox.
+fn render(args: &RenderArgs) -> Result<()> {
+    let input = &args.input;
+    let text = std::fs::read_to_string(input).with_context(|| format!("cannot read {}", input.display()))?;
+    let words: Vec<sonisub::captions::Word> = serde_json::from_str(text.strip_prefix('\u{feff}').unwrap_or(&text))
+        .with_context(|| format!("{} is not a JSON list of words", input.display()))?;
+    if words.is_empty() {
+        bail!("{} has no words", input.display());
+    }
+    let output = job::output_base(args.output.as_deref().unwrap_or(input));
+    let name = input.file_name().map_or_else(|| input.display().to_string(), |n| n.to_string_lossy().into_owned());
+    let targets = job::missing_outputs(&output, &args.formats, args.force);
+    if targets.is_empty() {
+        eprintln!("· {name} — skipped, {} (--force to redo)", exists_label(&args.formats));
+        return Ok(());
+    }
+    let layout = args.seg.layout(true);
+    let (files, cues) = job::write_outputs(&targets, &words, &layout, &args.seg.ass(), None, &name)?;
+    let what = if cues > 0 { format!("{cues} cues") } else { "transcript".into() };
+    let paths: Vec<String> = files.iter().map(|f| f.display().to_string()).collect();
+    eprintln!("✓ {name} — {what} -> {}", paths.join(", "));
     Ok(())
 }
 
