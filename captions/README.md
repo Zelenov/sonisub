@@ -36,7 +36,7 @@ let (ass, _) = ass::build(&words, &layout, &ass::Options { karaoke: true, ..Defa
 - `capt`: the CAPT transcript format ([spec](https://github.com/Zelenov/sonisub/blob/main/docs/capt.md)), every piece
   of a word with its time, words, cut points, sentences, speakers, languages and confidence as small text.
   `capt::Doc::parse` reads a file (every problem with its line), `write` writes one, `from_spoken` makes one from a
-  recogniser's words with their pieces, `from_words` from plain `Word`s, and `words` gives the `Word`s back for the
+  recogniser's words with their pieces, `from_words` from plain `Word`s, and `to_words` gives the `Word`s back for the
   writers above.
 
 MIT licensed.

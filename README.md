@@ -199,7 +199,7 @@ sonisub = { version = "0.8", default-features = false }
 
 Subtitle formats live in the [`captions`](captions/README.md) crate, re-exported as `sonisub::captions`:
 `soniox::words(&transcript)` gives the words, `captions::vtt::build(&words, &layout)` and the others lay them out.
-`soniox::capt(&transcript)` makes a CAPT file (`captions::capt::Doc`; `write`, `parse`, `words`).
+`soniox::capt(&transcript)` makes a CAPT file (`captions::capt::Doc`; `write`, `parse`, `to_words`).
 
 `premiere::to_srt(&json, &layout)` turns a `clip.premiere.json` back into SRT text and the cue count
 (`None` when it is not a Premiere transcript). Tested on transcripts sonisub wrote; transcripts from

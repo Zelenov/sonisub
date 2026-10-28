@@ -2,7 +2,7 @@
 ## Added
 - `-t capt` writes `clip.capt`: the whole transcript as small text (about 1/15 of the Soniox JSON) with every piece of a word and its time, words, sentences, cut points, speakers, languages and confidence. It is readable and editable by hand; the format is in [docs/capt.md](docs/capt.md).
 - `sonisub render clip.capt -t srt,vtt,ass,premiere` makes the other formats from a CAPT file, the same subtitles as from the transcript, with the speaker names its header gives; `--speaker-names` replace them, also in a CAPT it writes. A broken file is reported line by line.
-- Library: `captions::capt` (captions 0.2.0) reads, writes and makes CAPT files (`Doc::parse`, `Doc::write`, `Doc::from_spoken`, `Doc::words`); `soniox::spoken` and `soniox::capt` make them from a Soniox transcript.
+- Library: `captions::capt` (captions 0.2.0) reads, writes and makes CAPT files (`Doc::parse`, `Doc::write`, `Doc::from_spoken`, `Doc::to_words`); `soniox::spoken` and `soniox::capt` make them from a Soniox transcript.
 
 ## Changed
 - Library: `job::Format` has `Capt` (a `match` on it needs the new arm), and `job::write_outputs` takes `Option<&captions::capt::Doc>` after the words: the CAPT file to write for `Format::Capt` (`soniox::capt(&transcript)`, or `Doc::from_words(&words, None)`), `None` when it is not asked for.
