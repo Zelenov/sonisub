@@ -1,4 +1,4 @@
-# NEXT
+# 0.6.1
 ## Added
 - `sonisub.exe` has an icon: Explorer, the taskbar and the file properties show it instead of the generic one. The README shows it too. Only the Windows command line build changes; the library and other systems build as before.
 
