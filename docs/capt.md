@@ -178,7 +178,8 @@ that overlaps speech is shown with it: players draw both, the sound's subtitle s
 
 ## Vertical video
 
-`frame:1080,1920` in the header (`--vertical` or `--frame 1080x1920` writes it) makes a file
+`frame:1080,1920` in the header (`--vertical` or `--frame 1080x1920` writes it into a CAPT file
+being written; `render clip.capt -t capt -f --vertical` rewrites an existing one) makes a file
 vertical. Subtitles then get short lines broken in two (22 characters) and short cues (4 s), unless
 `--max-line` or `--max-duration` says otherwise. Outputs that place text keep it clear of a phone
 app's caption and buttons: the bottom place ends at 72% of the height (ASS `MarginV`, WebVTT

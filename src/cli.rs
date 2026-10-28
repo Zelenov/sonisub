@@ -204,7 +204,7 @@ pub struct SegArgs {
     pub karaoke: bool,
 
     /// A vertical video (Reels, Shorts, TikTok; same as --frame 1080x1920): short lines broken in two, short cues,
-    /// and in .ass, .vtt and .ttml the text kept clear of the phone app's buttons.
+    /// and in .ass and .vtt the text kept clear of the phone app's buttons.
     #[arg(long, conflicts_with = "frame")]
     pub vertical: bool,
 

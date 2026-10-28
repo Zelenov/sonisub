@@ -460,7 +460,7 @@ fn render(args: &RenderArgs) -> Result<()> {
     // so every subtitle is made the same way as from a CAPT file.
     let mut doc = doc.unwrap_or_else(|| Doc::from_words(&words, None));
     // --vertical or --frame go into the CAPT written, so the next render lays it out the same.
-    job::frame_into(&mut doc, &outputs);
+    doc.frame = outputs.frame.or(doc.frame);
     if given {
         // --speaker-names win over a CAPT file's names, and go into the CAPT written.
         job::name_speakers(&mut doc, &layout, &outputs.ass);
@@ -470,8 +470,7 @@ fn render(args: &RenderArgs) -> Result<()> {
     outputs.ass.names = doc.speakers.iter().filter_map(|s| Some((s.id.clone(), s.name.clone()?))).collect();
     let seed = doc.id.clone().unwrap_or_else(|| name.clone());
     let language = if is_capt { doc.lang.clone() } else { None };
-    let (files, cues) =
-        job::write_outputs(&targets, &words, Some(&doc), &layout, &outputs, language.as_deref(), &seed)?;
+    let (files, cues) = job::write_outputs(&targets, &words, &doc, &layout, &outputs, language.as_deref(), &seed)?;
     let what = if cues > 0 { format!("{cues} cues") } else { "transcript".into() };
     let paths: Vec<String> = files.iter().map(|f| f.display().to_string()).collect();
     eprintln!("✓ {name} — {what} -> {}", paths.join(", "));

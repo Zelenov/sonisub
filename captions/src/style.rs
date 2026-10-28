@@ -170,7 +170,7 @@ pub(crate) fn numpad(pos: Option<Pos>) -> u8 {
     row + col
 }
 
-/// A share as a WebVTT/TTML percentage: `0.725` -> `72.5%`.
+/// A share as a WebVTT percentage: `0.725` -> `72.5%`.
 pub(crate) fn pct(v: f64) -> String {
     format!("{}%", (v * 1000.0).round() / 10.0)
 }

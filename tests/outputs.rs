@@ -127,3 +127,17 @@ fn karaoke_keeps_voice_labels_with_sdh() {
     assert!(ass.contains("[whispering]"), "{ass}");
     assert!(ass.contains("\\k"), "{ass}");
 }
+
+#[test]
+fn karaoke_and_plain_ass_label_the_same_voices() {
+    let d = doc("marks");
+    let (l, _) = layouts(&d);
+    let labels = |karaoke: bool| {
+        let ass = sdh::ass(&d, &l, &ass::Options { karaoke, ..Default::default() }, "en").0;
+        ass.lines()
+            .filter(|l| l.starts_with("Dialogue:"))
+            .map(|l| l.matches("[whispering]").count())
+            .collect::<Vec<_>>()
+    };
+    assert_eq!(labels(true), labels(false));
+}
