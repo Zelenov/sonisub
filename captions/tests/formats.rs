@@ -185,3 +185,16 @@ fn a_word_with_a_space_keeps_the_marks_of_its_cue() {
         ass::build(&doc.to_words(), &Layout::default(), &ass::Options { karaoke: true, ..Default::default() }).0;
     assert!(karaoke.contains(r"{\i1}{\k40}love {\i0}{\k70}New York {\k20}a"), "{karaoke}");
 }
+
+#[test]
+fn an_adr_row_names_a_voice_once_where_it_starts() {
+    let file = "CAPT 1\nspeaker:1 name:Anna\n\n\
+                00:00:01.000 --> 00:00:02.000 speaker:1 voice:whisper\n{0}Come{30} {40}here.{90}\n\n\
+                00:00:02.500 --> 00:00:03.500 speaker:1 voice:whisper\n{0}Quietly{40} {50}now.{90}\n";
+    let doc = captions::capt::Doc::parse(file).unwrap();
+    // Two subtitles, joined into one row.
+    assert_eq!(srt::build(&doc.to_words(), &Layout::default()).1, 2);
+    let (csv, rows) = captions::adr::build(&doc, &Layout::default(), &Default::default(), "en");
+    assert_eq!(rows, 1, "{csv}");
+    assert_eq!(csv.matches("[whispering]").count(), 1, "{csv}");
+}

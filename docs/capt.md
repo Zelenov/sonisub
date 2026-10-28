@@ -168,6 +168,7 @@ file it writes.
 | SRT | `<i>` | | `{\anN}`, the nearest of nine | with `--sdh` | with `--sdh` |
 | WebVTT | `<i>` | `<lang xx>` | cue settings; a rectangle's width and top | with `--sdh` | with `--sdh` |
 | ASS | `{\i1}` | | alignment and margins; a rectangle's width and top | with `--sdh` | with `--sdh`, in the speaker's style |
+| Fairlight ADR (`.adr.csv`) | | | | `[whispering]`, once a row | the speaker's own, in their cue |
 | Premiere | | | | | |
 
 With `--sdh` a voice is a label where it starts (`[whispering] please`), and every sound is a subtitle of its

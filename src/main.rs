@@ -85,6 +85,7 @@ fn run(args: &RunArgs) -> Result<ExitCode> {
         items[0].output = job::output_base(o);
     }
 
+    args.seg.check(&args.formats)?;
     let mut opts = args.job_options();
     let scanning = spinner(format!("reading {} file(s)...", items.len()), folder_mode && !args.quiet);
     let plan = batch::plan(&items, &opts);
@@ -428,6 +429,7 @@ fn show_usage(api: &ApiArgs, days: u64) -> Result<()> {
 /// `sonisub render`: subtitles from a CAPT file or saved words, no Soniox.
 fn render(args: &RenderArgs) -> Result<()> {
     use sonisub::captions::capt::Doc;
+    args.seg.check(&args.formats)?;
     let input = &args.input;
     let text = std::fs::read_to_string(input).with_context(|| format!("cannot read {}", input.display()))?;
     let text = text.strip_prefix('\u{feff}').unwrap_or(&text);

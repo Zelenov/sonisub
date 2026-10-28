@@ -1,0 +1,8 @@
+﻿"1","01:00:00:21","01:00:03:09","Speaker 1","Hi, today we're testing the subtitle generator."
+"2","01:00:03:21","01:00:10:12","Speaker 2","Great. I've prepared a very long sentence with plenty of commas so we can check how the tool splits it into parts,"
+"3","01:00:10:19","01:00:14:22","Speaker 2","without breaking a phrase in the middle, and without exceeding the line length."
+"4","01:00:15:11","01:00:18:12","Speaker 1","What happens if I pause... and then continue?"
+"5","01:00:20:09","01:00:22:03","Speaker 3","А теперь короткая фраза по-русски."
+"6","01:00:22:22","01:00:24:09","Speaker 4","Y una frase corta en español."
+"7","01:00:25:02","01:00:25:09","Speaker 2","Yes."
+"8","01:00:26:13","01:00:28:08","Speaker 1","Okay, that's the end of the test."

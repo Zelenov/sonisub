@@ -85,7 +85,7 @@ pub struct RunArgs {
 
     /// What to write, comma separated: srt, vtt (WebVTT), ass (a style per speaker), premiere (Premiere Pro
     /// transcript, clip.premiere.json), capt (the whole transcript as small text, clip.capt; `sonisub render`
-    /// makes the other formats from it). Only missing files are written, so adding a format later reuses the saved
+    /// makes the other formats from it), adr (a DaVinci Resolve Fairlight ADR cue list, clip.adr.csv). Only missing files are written, so adding a format later reuses the saved
     /// transcript for free.
     #[arg(short = 't', long = "format", value_enum, value_delimiter = ',', default_value = "srt")]
     pub formats: Vec<Format>,
@@ -219,10 +219,31 @@ pub struct SegArgs {
     #[arg(long, help_heading = "Outputs")]
     pub sdh: bool,
 
-    /// The language of sound and voice labels (--sdh): en ([laughs]) or ru ((смеётся)).
+    /// The language of sound and voice labels (--sdh, -t adr): en ([laughs]) or ru ((смеётся)).
     /// Default: ru for a Russian transcript, else en.
-    #[arg(long, value_parser = captions::labels::LANGUAGES, requires = "sdh", help_heading = "Outputs")]
+    #[arg(long, value_parser = captions::labels::LANGUAGES, help_heading = "Outputs")]
     pub labels: Option<String>,
+
+    /// Frame rate of the Fairlight timeline (-t adr): 23.976, 24, 25, 29.97, 30, 50, 59.94 or 60.
+    #[arg(long, default_value = "25", value_parser = captions::adr::Rate::parse, help_heading = "Fairlight ADR")]
+    pub fps: captions::adr::Rate,
+
+    /// Where the Fairlight timeline starts (-t adr), HH:MM:SS:FF, non-drop frame.
+    #[arg(long, default_value = "01:00:00:00", value_parser = captions::adr::Timecode::parse, help_heading = "Fairlight ADR")]
+    pub timeline_start: captions::adr::Timecode,
+}
+
+impl SegArgs {
+    /// Options that make no sense for `formats`, said instead of ignored.
+    pub fn check(&self, formats: &[Format]) -> anyhow::Result<()> {
+        if self.labels.is_some() && !self.sdh && !formats.contains(&Format::Adr) {
+            anyhow::bail!("--labels needs --sdh or -t adr: nothing else writes a label");
+        }
+        if formats.contains(&Format::Adr) {
+            self.timeline_start.frames_at(self.fps).map_err(|e| anyhow::anyhow!("--timeline-start: {e}"))?;
+        }
+        Ok(())
+    }
 }
 
 fn parse_frame(s: &str) -> Result<(u32, u32), String> {
@@ -261,6 +282,7 @@ impl SegArgs {
     pub fn outputs(&self) -> job::Outputs {
         job::Outputs {
             ass: ass::Options { karaoke: self.karaoke, ..Default::default() },
+            adr: captions::adr::Options { rate: self.fps, start: self.timeline_start, ..Default::default() },
             sdh: self.sdh,
             labels: self.labels.clone(),
         }
@@ -274,7 +296,7 @@ pub struct RenderArgs {
     /// (start and end in milliseconds; speaker and language optional).
     pub input: PathBuf,
 
-    /// What to write, comma separated: srt, vtt, ass, premiere, capt.
+    /// What to write, comma separated: srt, vtt, ass, premiere, capt, adr.
     #[arg(short = 't', long = "format", value_enum, value_delimiter = ',', default_value = "srt")]
     pub formats: Vec<Format>,
 

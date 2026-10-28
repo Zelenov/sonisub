@@ -131,6 +131,8 @@ orange, violet, red, then repeating), black outline, bottom centre. Every line n
 you restyle or rename a person in one place. Without diarization all lines use the `Default` style. `--karaoke` adds word-by-word
 highlight (`\k`).
 
+`-t adr` writes a DaVinci Resolve Fairlight ADR cue list (`clip.adr.csv`, ADR > List > Import Cue List): a row per breath of speech, joined per speaker, with the speaker's own sounds and voices as directions; `--fps 23.976|24|25|29.97|30|50|59.94|60` and `--timeline-start 01:00:00:00` (non-drop frame) match the timeline.
+
 `--sdh` makes `.srt`, `.vtt` and `.ass` subtitles for the deaf and hard of hearing from the sounds and voices
 marked in a CAPT file (`sound:phone`, `voice:whisper` → `[phone ringing]`, `[whispering]`; `--labels en|ru`).
 Soniox reports no sounds, so a fresh transcript has none until they are added to `clip.capt`.

@@ -8,9 +8,11 @@
 //! - [`capt`] reads and writes CAPT, the transcript format between a recogniser and these writers.
 //! - From a CAPT file, with its sounds and voices: [`sdh`] (SRT, WebVTT and ASS for the deaf and
 //!   hard of hearing), labels from [`labels`].
+//! - [`adr`] writes a DaVinci Resolve Fairlight ADR cue list from a CAPT file.
 
 use serde::{Deserialize, Serialize};
 
+pub mod adr;
 pub mod ass;
 pub mod capt;
 pub mod cues;

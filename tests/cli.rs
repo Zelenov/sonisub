@@ -282,3 +282,35 @@ fn labels_without_sdh_are_refused() {
     assert!(!out.status.success());
     assert!(plain(&out).contains("--sdh"), "{}", plain(&out));
 }
+
+#[test]
+fn render_writes_adr() {
+    let dir = tempfile::tempdir().unwrap();
+    let capt = dir.path().join("marks.capt");
+    std::fs::copy(common::fixture("marks.capt"), &capt).unwrap();
+    let out = sonisub(&["render".as_ref(), capt.as_os_str(), "-t".as_ref(), "adr".as_ref()]).output().unwrap();
+    assert!(out.status.success(), "{}", plain(&out));
+    let written = std::fs::read_to_string(dir.path().join("marks.adr.csv")).unwrap();
+    assert_eq!(common::normalize(&written), common::golden("marks.adr.csv"));
+}
+
+#[test]
+fn a_timeline_start_past_the_frame_rate_is_refused_only_for_adr() {
+    let dir = tempfile::tempdir().unwrap();
+    let capt = dir.path().join("marks.capt");
+    std::fs::copy(common::fixture("marks.capt"), &capt).unwrap();
+    let args = ["render".as_ref(), capt.as_os_str(), "-t".as_ref(), "adr".as_ref(), "--timeline-start".as_ref()];
+    let out = sonisub(&[&args[..], &["01:00:00:25".as_ref()]].concat()).output().unwrap();
+    assert!(!out.status.success());
+    assert!(plain(&out).contains("--timeline-start"), "{}", plain(&out));
+    let rate = ["01:00:00:29".as_ref(), "--fps".as_ref(), "29.97".as_ref(), "-f".as_ref()];
+    let out = sonisub(&[&args[..], &rate[..]].concat()).output().unwrap();
+    assert!(out.status.success(), "{}", plain(&out));
+    // Drop-frame timecode is refused with what to do.
+    let out = sonisub(&[&args[..], &["01:00:00;00".as_ref()]].concat()).output().unwrap();
+    assert!(plain(&out).contains("non-drop frame"), "{}", plain(&out));
+    // Other formats do not care about the timeline.
+    let srt = ["render".as_ref(), capt.as_os_str(), "-t".as_ref(), "srt".as_ref(), "--timeline-start".as_ref()];
+    let out = sonisub(&[&srt[..], &["01:00:00:25".as_ref()]].concat()).output().unwrap();
+    assert!(out.status.success(), "{}", plain(&out));
+}

@@ -29,6 +29,8 @@ pub enum Format {
     Premiere,
     /// CAPT, the whole transcript as small text, every other format can be made from: `clip.capt`.
     Capt,
+    /// A DaVinci Resolve Fairlight ADR cue list: `clip.adr.csv`.
+    Adr,
 }
 
 impl Format {
@@ -40,6 +42,7 @@ impl Format {
             Format::Ass => output.with_extension("ass"),
             Format::Premiere => output.with_extension("premiere.json"),
             Format::Capt => output.with_extension("capt"),
+            Format::Adr => output.with_extension("adr.csv"),
         }
     }
 }
@@ -49,6 +52,8 @@ impl Format {
 pub struct Outputs {
     /// Speaker names and word highlight for [`Format::Ass`].
     pub ass: ass::Options,
+    /// Frame rate, timeline start and cue limits for [`Format::Adr`].
+    pub adr: captions::adr::Options,
     /// Subtitles for the deaf and hard of hearing: SRT, WebVTT and ASS get sounds as
     /// subtitles and voices as labels (`[phone ringing]`, `[whispering]`).
     pub sdh: bool,
@@ -315,6 +320,7 @@ pub fn write_outputs(
             Format::Srt => captions::srt::build(cue_words, layout),
             Format::Vtt => vtt::build(cue_words, layout),
             Format::Ass => ass::build(cue_words, layout, &outputs.ass),
+            Format::Adr => captions::adr::build(doc, layout, &outputs.adr, &labels),
             Format::Premiere => {
                 let t = captions::premiere::build(words, layout, default_language, seed)
                     .ok_or_else(|| anyhow!("no words to write"))?;
@@ -458,7 +464,7 @@ pub fn default_output(input: &Path, out_dir: Option<&Path>) -> PathBuf {
 /// The .srt base for an `-o` path given with any output extension: `clip.premiere.json` -> `clip.srt`.
 pub fn output_base(path: &Path) -> PathBuf {
     let name = path.file_name().map_or_else(String::new, |n| n.to_string_lossy().into_owned());
-    let stem = [".premiere.json", ".soniox.json", ".words.json", ".srt", ".vtt", ".ass", ".capt", ".json"]
+    let stem = [".premiere.json", ".soniox.json", ".words.json", ".srt", ".vtt", ".ass", ".capt", ".adr.csv", ".json"]
         .iter()
         .find_map(|s| strip_suffix(&name, s))
         .unwrap_or(&name);

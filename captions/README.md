@@ -39,6 +39,7 @@ let (ass, _) = ass::build(&words, &layout, &ass::Options { karaoke: true, ..Defa
   recogniser's words with their pieces, `from_words` from plain `Word`s, and `to_words` gives the `Word`s back for the
   writers above; a CAPT file's cut points, sentence ends, places and italic reach every writer through
   `Word::marks`.
+- `adr`: a DaVinci Resolve Fairlight ADR cue list from a CAPT file (`adr::Rate`, `adr::Timecode`).
 - From a CAPT file with its sounds and voices: `sdh::srt`, `sdh::vtt`, `sdh::ass` (subtitles for the deaf and
   hard of hearing). `labels` writes sounds and voices in English or Russian.
 - `Layout::for_frame` and `Layout::vertical()`: short lines for a vertical video, cut where they read well, and
