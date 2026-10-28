@@ -91,8 +91,8 @@ single file too) by audio length: files sent, minutes done, cost so far and `eta
 file's stages under it. The bar moves while a file is extracted, uploaded and transcribed, so it does not stand
 still on a long file; Soniox gives no percentage, so transcribing shows `~60% (est.)` and stays under 95% until
 it is done. The ETA is hidden until a file is done or 30 s have passed. Each finished file leaves one line:
-`✓` subtitled, `·` skipped, `∅` no speech, `–` no audio, `✗` error; a summary ends the run. After Ctrl+C the
-summary says what finished and that the temp audio and Soniox uploads were removed.
+`✓` subtitled, `·` skipped, `∅` no speech, `–` no audio, `✗` error; several files end with a summary. After
+Ctrl+C the summary says what finished, what did not, and what was removed (the temp audio and the Soniox uploads).
 
 `-q` / `--quiet`, or output that is not a terminal (a pipe, CI), draws no bars: only the result lines and the summary.
 

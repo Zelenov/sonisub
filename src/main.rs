@@ -16,7 +16,7 @@ use indicatif::{MultiProgress, ProgressBar, ProgressDrawTarget};
 
 use cli::{ApiArgs, Cli, Command, RunArgs};
 use sonisub::batch::{self, Item, Selection, Totals};
-use sonisub::cancel::{interrupt, interrupted};
+use sonisub::cancel::{Cancelled, interrupt, interrupted};
 use sonisub::job::{self, Outcome};
 use sonisub::languages;
 use sonisub::progress::Callback;
@@ -96,7 +96,7 @@ fn run(args: &RunArgs) -> Result<ExitCode> {
         _ if needs_api && !args.dry_run => return Err(soniox::missing_key()),
         _ => None,
     };
-    let price = match (&client, needs_api && (folder_mode || args.dry_run)) {
+    let price = match (&client, needs_api) {
         (Some(c), true) => recent_price(c),
         _ => usage::FALLBACK_USD_PER_HOUR,
     };
@@ -189,7 +189,10 @@ fn run(args: &RunArgs) -> Result<ExitCode> {
         t.finish();
     }
     if folder_mode || interrupted() {
-        eprintln!("{}", stats.summary(&exists, interrupted(), total, run_began.elapsed()));
+        eprintln!(
+            "{}",
+            stats.summary(&exists, interrupted().then(|| cleanup_note(args.keep_audio)), total, run_began.elapsed())
+        );
     }
     report_run_cost(client.as_ref(), &opts.reference, run_started, sent_audio_s, sent_files);
     Ok(if interrupted() {
@@ -211,13 +214,14 @@ struct Stats {
     no_speech: usize,
     no_audio: usize,
     failed: usize,
+    /// The file Ctrl+C stopped.
+    cancelled: usize,
     fatal: bool,
 }
 
 impl Stats {
-    /// The end line. After Ctrl+C it says how much was finished; by then the library has removed the
-    /// temp audio and everything it made on Soniox.
-    fn summary(&self, exists: &str, interrupted: bool, total: usize, took: Duration) -> String {
+    /// The end line. After Ctrl+C (`cleanup` says what the library removed) it says how much was finished.
+    fn summary(&self, exists: &str, cleanup: Option<&str>, total: usize, took: Duration) -> String {
         let skipped = format!("skipped ({exists})");
         let parts = [
             (self.written, "processed"),
@@ -231,16 +235,19 @@ impl Stats {
         let text = if text.is_empty() { "nothing to do".into() } else { text.join(", ") };
         let secs = took.as_secs();
         let time = if secs >= 5 { format!(" in {}", usage::fmt_minutes(secs * 1000)) } else { String::new() };
-        if interrupted {
+        if let Some(cleanup) = cleanup {
             let done = self.written + self.from_saved + self.skipped + self.no_speech + self.no_audio + self.failed;
             let rest = total.saturating_sub(done);
-            format!(
-                "interrupted: {text}{time}, {rest} of {total} file(s) not finished; temp audio and Soniox uploads removed"
-            )
+            format!("interrupted: {text}{time}, {rest} of {total} file(s) not finished; {cleanup}")
         } else {
             format!("done: {text}{time}")
         }
     }
+}
+
+/// What was removed after Ctrl+C: the job guards delete the uploads, and the temp audio unless it is kept.
+fn cleanup_note(keep_audio: bool) -> &'static str {
+    if keep_audio { "Soniox uploads removed (audio kept)" } else { "temp audio and Soniox uploads removed" }
 }
 
 /// ".srt exists", ".srt, .premiere.json exist": why a file is skipped.
@@ -289,6 +296,10 @@ fn describe(name: &str, result: &Result<Outcome>, stats: &mut Stats, secs: f64, 
                 (None, false, Some(_)) => "nothing recognised".to_string(),
             };
             (format!("∅ {name} — no speech, {note}"), format!("NO SPEECH ({note})"))
+        }
+        Err(e) if e.is::<Cancelled>() => {
+            stats.cancelled += 1;
+            (format!("⏹ {name} — interrupted"), "INTERRUPTED".into())
         }
         Err(e) => {
             stats.failed += 1;
@@ -463,5 +474,27 @@ fn log_line(log: &Path, input: &Path, msg: &str) {
     let res = OpenOptions::new().create(true).append(true).open(log).and_then(|mut f| f.write_all(line.as_bytes()));
     if let Err(e) = res {
         eprintln!("  warning: cannot write log {}: {e}", log.display());
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn a_cancelled_file_is_not_a_failure_and_counts_as_not_finished() {
+        let mut stats = Stats::default();
+        let (line, _) = describe("c.mp4", &Err(Cancelled.into()), &mut stats, 1.0, ".srt exists");
+        assert_eq!(line, "⏹ c.mp4 — interrupted");
+        assert_eq!((stats.failed, stats.cancelled), (0, 1));
+        stats.written = 3;
+        let s = stats.summary(".srt exists", Some(cleanup_note(false)), 10, Duration::from_secs(130));
+        assert_eq!(
+            s,
+            "interrupted: 3 processed in 2:10, 7 of 10 file(s) not finished; temp audio and Soniox uploads removed"
+        );
+        let kept = stats.summary(".srt exists", Some(cleanup_note(true)), 10, Duration::ZERO);
+        assert!(kept.ends_with("Soniox uploads removed (audio kept)"), "{kept}");
+        assert_eq!(Stats::default().summary("x", None, 2, Duration::ZERO), "done: nothing to do");
     }
 }

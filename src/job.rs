@@ -266,7 +266,12 @@ fn transcribe_with(input: &Path, opts: &Options, client: &Client, rep: &Reporter
     finish(opts, &pb, format!("extracted {} ({})", fmt_dur(audio.duration_s), fmt_size(&audio.path)));
     if opts.keep_audio {
         tmp.disable_cleanup(true);
-        pb.println(format!("  audio kept: {}", audio.path.display()));
+        let line = format!("  audio kept: {}", audio.path.display());
+        match &opts.progress {
+            // A hidden draw target (no terminal, --quiet) would swallow the line.
+            Some(m) if m.is_hidden() => eprintln!("{line}"),
+            _ => pb.println(line),
+        }
     }
     if audio.peak.is_some_and(|p| p < audio::SILENCE_PEAK) {
         return Ok(None);
@@ -311,7 +316,6 @@ fn transcribe_with(input: &Path, opts: &Options, client: &Client, rep: &Reporter
         if st.status == "completed" {
             break;
         }
-        pb.set_message(transcribing_text(estimate.fraction(), &st.status));
         // Wait out the poll interval in short slices, so the estimate keeps moving between status checks.
         let mut left = opts.poll;
         while !left.is_zero() {
@@ -386,7 +390,8 @@ fn attach(opts: &Options, pb: ProgressBar) -> ProgressBar {
     }
 }
 
-/// Alone, a finished stage stays on screen as a log line; in a batch it disappears (the batch prints a result line).
+/// Without a `MultiProgress` a finished stage stays on screen as a log line; with one it disappears (the caller
+/// prints a result line).
 fn finish(opts: &Options, pb: &ProgressBar, msg: String) {
     if opts.progress.is_some() {
         pb.finish_and_clear();

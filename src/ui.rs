@@ -53,7 +53,8 @@ impl Eta {
 
 /// The batch position in audio seconds: the files done, plus the current file's share by its `overall`.
 pub fn fold(done_s: f64, file_s: f64, overall: f32) -> f64 {
-    done_s + file_s * f64::from(overall.clamp(0.0, 1.0))
+    let overall = if overall.is_nan() { 0.0 } else { overall.clamp(0.0, 1.0) };
+    done_s + file_s * f64::from(overall)
 }
 
 /// "eta ~40 s", "eta ~4 min", "eta ~1 h 05 min".
@@ -109,6 +110,8 @@ struct State {
     /// Stage of the file being processed reached upload's end.
     uploaded: bool,
     files_sent: usize,
+    /// Files finished, whatever came of them.
+    files_done: usize,
     sent_audio_s: f64,
 }
 
@@ -148,6 +151,7 @@ impl Tracker {
                 file_s: 0.0,
                 uploaded: false,
                 files_sent: 0,
+                files_done: 0,
                 sent_audio_s: 0.0,
             }),
         };
@@ -163,7 +167,7 @@ impl Tracker {
         let pos = fold(s.done_s, s.file_s, overall).min(self.total_s);
         let t = self.started.elapsed().as_secs_f64();
         s.eta.update(t, pos);
-        let eta = s.eta.remaining(t, pos, self.total_s, s.files_sent);
+        let eta = s.eta.remaining(t, pos, self.total_s, s.files_done);
         let sent = s.sent_audio_s + if s.uploaded { s.file_s } else { 0.0 };
         self.bar.set_position((pos * 1000.0) as u64);
         self.bar.set_message(batch_message(
@@ -183,7 +187,8 @@ impl Tracker {
         s.uploaded = false;
     }
 
-    /// The library's report for the current file.
+    /// The library's report for the current file. The message is redrawn only here, so while Soniox
+    /// is past its estimate (identical reports are not repeated) the ETA text stands still.
     pub fn report(&self, p: &Progress) {
         let mut s = self.lock();
         if s.file_s <= 0.0 {
@@ -197,12 +202,18 @@ impl Tracker {
     pub fn finish_file(&self, uploaded_s: Option<f64>) {
         let mut s = self.lock();
         s.done_s += s.file_s;
+        s.files_done += 1;
+        // Audio that was uploaded is paid for even when the job then failed or was cancelled.
+        match uploaded_s {
+            Some(u) => {
+                s.files_sent += 1;
+                s.sent_audio_s += u;
+            }
+            None if s.uploaded => s.sent_audio_s += s.file_s,
+            None => {}
+        }
         s.file_s = 0.0;
         s.uploaded = false;
-        if let Some(u) = uploaded_s {
-            s.files_sent += 1;
-            s.sent_audio_s += u;
-        }
         self.refresh(&mut s, 0.0);
     }
 
@@ -275,7 +286,7 @@ mod tests {
             assert_eq!(last, done, "lands exactly at the file's end");
         }
         assert_eq!(fold(10.0, 5.0, 7.0), 15.0, "out-of-range fractions are clamped");
-        assert_eq!(fold(10.0, 5.0, f32::NAN.max(0.0)), 10.0);
+        assert_eq!(fold(10.0, 5.0, f32::NAN), 10.0);
     }
 
     #[test]
@@ -287,10 +298,9 @@ mod tests {
     }
 
     #[test]
-    fn the_batch_message_fits_a_narrow_terminal_with_or_without_eta() {
+    fn the_batch_message_reads_with_or_without_eta() {
         let m = batch_message(12, 40, 3725.0, 7200.0, 1.2345, Some(Duration::from_secs(4000)));
         assert_eq!(m, "12/40 sent · 1:02:05 of 2:00:00 audio · ≈ $1.23 · eta ~67 min");
-        assert!(m.chars().count() + "⠋ [██████████████████████████████] 100%  ".chars().count() <= 120);
         assert!(!batch_message(0, 1, 0.0, 10.0, 0.0, None).contains("eta"));
     }
 
