@@ -266,7 +266,12 @@ fn transcribe_with(input: &Path, opts: &Options, client: &Client, rep: &Reporter
     finish(opts, &pb, format!("extracted {} ({})", fmt_dur(audio.duration_s), fmt_size(&audio.path)));
     if opts.keep_audio {
         tmp.disable_cleanup(true);
-        pb.println(format!("  audio kept: {}", audio.path.display()));
+        let line = format!("  audio kept: {}", audio.path.display());
+        match &opts.progress {
+            // A hidden draw target (no terminal, --quiet) would swallow the line.
+            Some(m) if m.is_hidden() => eprintln!("{line}"),
+            _ => pb.println(line),
+        }
     }
     if audio.peak.is_some_and(|p| p < audio::SILENCE_PEAK) {
         return Ok(None);
@@ -296,8 +301,8 @@ fn transcribe_with(input: &Path, opts: &Options, client: &Client, rep: &Reporter
     let id = client.create(&cfg)?;
     remote.transcription_id = Some(id.clone());
 
-    let pb = attach(opts, ProgressBar::new_spinner().with_prefix(opts.prefix.clone()));
-    pb.set_style(ProgressStyle::with_template("{prefix} {spinner} {msg}  {elapsed}").unwrap());
+    let pb = bar(opts, "", "{prefix} {spinner} [{bar:30.cyan/blue}] {msg}  {elapsed}");
+    pb.set_length(1000);
     pb.enable_steady_tick(Duration::from_millis(120));
     // Clears the spinner however this loop is left.
     let _clear = ClearOnDrop(&pb);
@@ -311,7 +316,6 @@ fn transcribe_with(input: &Path, opts: &Options, client: &Client, rep: &Reporter
         if st.status == "completed" {
             break;
         }
-        pb.set_message(format!("transcribing ({})", st.status));
         // Wait out the poll interval in short slices, so the estimate keeps moving between status checks.
         let mut left = opts.poll;
         while !left.is_zero() {
@@ -320,7 +324,10 @@ fn transcribe_with(input: &Path, opts: &Options, client: &Client, rep: &Reporter
                 return Err(Cancelled.into());
             }
             left -= slice;
-            rep.emit(Stage::Transcribing, Some(estimate.fraction()), Some(st.status.clone()), estimate.remaining());
+            let fraction = estimate.fraction();
+            pb.set_position((fraction * 1000.0) as u64);
+            pb.set_message(transcribing_text(fraction, &st.status));
+            rep.emit(Stage::Transcribing, Some(fraction), Some(st.status.clone()), estimate.remaining());
         }
     }
     estimate.finish(audio.duration_s);
@@ -365,6 +372,11 @@ pub fn is_transcript(p: &Path) -> bool {
     p.extension().is_some_and(|e| e.eq_ignore_ascii_case("json"))
 }
 
+/// "transcribing ~60% (est.), processing": Soniox gives no percentage, so it is an estimate.
+fn transcribing_text(fraction: f32, status: &str) -> String {
+    format!("transcribing ~{:.0}% (est.), {status}", fraction * 100.0)
+}
+
 fn bar(opts: &Options, msg: &str, template: &str) -> ProgressBar {
     let pb = attach(opts, ProgressBar::new(0).with_prefix(opts.prefix.clone()).with_message(msg.to_string()));
     pb.set_style(ProgressStyle::with_template(template).unwrap().progress_chars("=> "));
@@ -378,7 +390,8 @@ fn attach(opts: &Options, pb: ProgressBar) -> ProgressBar {
     }
 }
 
-/// Alone, a finished stage stays on screen as a log line; in a batch it disappears (the batch prints a result line).
+/// Without a `MultiProgress` a finished stage stays on screen as a log line; with one it disappears (the caller
+/// prints a result line).
 fn finish(opts: &Options, pb: &ProgressBar, msg: String) {
     if opts.progress.is_some() {
         pb.finish_and_clear();
@@ -405,4 +418,15 @@ fn fmt_dur(s: f64) -> String {
 fn fmt_size(p: &Path) -> String {
     let b = std::fs::metadata(p).map(|m| m.len()).unwrap_or(0) as f64;
     if b > 1e6 { format!("{:.1} MB", b / 1e6) } else { format!("{:.0} KB", b / 1e3) }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn the_transcribing_text_is_marked_as_an_estimate_and_keeps_the_status() {
+        assert_eq!(transcribing_text(0.6, "processing"), "transcribing ~60% (est.), processing");
+        assert_eq!(transcribing_text(0.95, "queued"), "transcribing ~95% (est.), queued");
+    }
 }

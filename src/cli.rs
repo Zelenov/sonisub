@@ -136,6 +136,10 @@ pub struct RunArgs {
     #[arg(long)]
     pub keep_audio: bool,
 
+    /// No progress bars: only the result lines and the summary.
+    #[arg(short, long)]
+    pub quiet: bool,
+
     /// Log file. Default: sonisub.log next to each input.
     #[arg(long)]
     pub log: Option<PathBuf>,

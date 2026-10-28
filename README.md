@@ -86,9 +86,15 @@ Before anything is uploaded, sonisub reads the headers and shows the plan:
      4  .srt exists, skipped (--force to redo)
 ```
 
-`-n` / `--dry-run` also lists every file and stops there. While running, one bar tracks the whole batch by
-audio length (files sent, minutes done, cost so far, ETA) with the current file's stages under it, and each
-finished file leaves one line: `✓` subtitled, `·` skipped, `∅` no speech, `–` no audio, `✗` error.
+`-n` / `--dry-run` also lists every file and stops there. While running, one bar tracks the whole batch (a
+single file too) by audio length: files sent, minutes done, cost so far and `eta ~4 min`, with the current
+file's stages under it. The bar moves while a file is extracted, uploaded and transcribed, so it does not stand
+still on a long file; Soniox gives no percentage, so transcribing shows `~60% (est.)` and stays under 95% until
+it is done. The ETA is hidden until a file is done or 30 s have passed. Each finished file leaves one line:
+`✓` subtitled, `·` skipped, `∅` no speech, `–` no audio, `✗` error; several files end with a summary. After
+Ctrl+C the summary says what finished, what did not, and what was removed (the temp audio and the Soniox uploads).
+
+`-q` / `--quiet`, or output that is not a terminal (a pipe, CI), draws no bars: only the result lines and the summary.
 
 ## Premiere Pro transcript
 
@@ -162,12 +168,12 @@ Exit codes: `0` ok, `1` some files failed, `2` fatal (key/balance/usage), `130` 
 | `src/srt.rs` | transcript tokens → cues → SRT text (`srt::Layout`) |
 | `src/premiere.rs` | transcript tokens → Premiere Pro transcript JSON; `premiere::to_srt` reads one back as SRT text |
 | `src/cancel.rs` | Ctrl+C flag and per-job `CancelToken` |
-| `src/main.rs`, `src/cli.rs` | command line only: arguments, the list of files, log, stopping on fatal errors |
+| `src/main.rs`, `src/cli.rs`, `src/ui.rs` | command line only: arguments, the list of files, log, stopping on fatal errors, the batch bar and its ETA |
 
 ### As a library
 
 ```toml
-sonisub = { version = "0.5", default-features = false }
+sonisub = { version = "0.6", default-features = false }
 ```
 
 `premiere::to_srt(&json, &layout)` turns a `clip.premiere.json` back into SRT text and the cue count

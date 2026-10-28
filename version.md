@@ -1,3 +1,13 @@
+# 0.6.0
+## Added
+- The batch bar now moves while a file is worked on, not only when one finishes: extracting, uploading and transcribing count toward it by audio length. It shows `eta ~4 min`, computed from the audio left and the smoothed speed of the run (hidden until a file is done or 30 s have passed), and the cost so far. A single file gets the same bar.
+- Transcribing shows `~60% (est.)` beside Soniox's real status, as a bar that stays under 95% until the transcript is ready.
+- `-q` / `--quiet`: no bars, only result lines and the summary (output that is not a terminal already did this).
+- The end summary of several files shows how long the run took; after Ctrl+C it says what finished, what did not, and what was removed. The file Ctrl+C stopped is reported as `⏹ interrupted`, not as failed.
+
+## Changed
+- A single file no longer leaves the `extracted … / uploaded / transcribed` lines on screen; its bar and the result line replace them. The cost estimate for one file now uses your recent price from Soniox, like a batch does.
+
 # 0.5.1
 ## Added
 - Library: `srt::words(transcript)` reads a Soniox transcript as words — text with its punctuation, start and end in milliseconds, speaker, language, confidence — the same words subtitles are built from. For programs that lay words out themselves (word-by-word captions, their own cue rules). No caller has to change.

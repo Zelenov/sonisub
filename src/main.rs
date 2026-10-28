@@ -1,22 +1,25 @@
 //! Command line: runs [`job::process`] over the input files, keeps the log, stops the batch on fatal errors.
 
 mod cli;
+mod ui;
 
 use std::fs::OpenOptions;
 use std::io::Write;
 use std::path::Path;
 use std::process::ExitCode;
+use std::sync::Arc;
 use std::time::{Duration, Instant, SystemTime};
 
 use anyhow::{Context, Result, anyhow, bail};
 use clap::Parser;
-use indicatif::{MultiProgress, ProgressBar, ProgressStyle};
+use indicatif::{MultiProgress, ProgressBar, ProgressDrawTarget};
 
 use cli::{ApiArgs, Cli, Command, RunArgs};
 use sonisub::batch::{self, Item, Selection, Totals};
-use sonisub::cancel::{interrupt, interrupted};
+use sonisub::cancel::{Cancelled, interrupt, interrupted};
 use sonisub::job::{self, Outcome};
 use sonisub::languages;
+use sonisub::progress::Callback;
 use sonisub::soniox::{self, Client, api_error};
 use sonisub::usage::{self, Summary};
 
@@ -82,7 +85,7 @@ fn run(args: &RunArgs) -> Result<ExitCode> {
     }
 
     let mut opts = args.job_options();
-    let scanning = spinner(format!("reading {} file(s)...", items.len()), folder_mode);
+    let scanning = spinner(format!("reading {} file(s)...", items.len()), folder_mode && !args.quiet);
     let plan = batch::plan(&items, &opts);
     scanning.finish_and_clear();
     let totals = Totals::of(&plan);
@@ -93,7 +96,7 @@ fn run(args: &RunArgs) -> Result<ExitCode> {
         _ if needs_api && !args.dry_run => return Err(soniox::missing_key()),
         _ => None,
     };
-    let price = match (&client, needs_api && (folder_mode || args.dry_run)) {
+    let price = match (&client, needs_api) {
         (Some(c), true) => recent_price(c),
         _ => usage::FALLBACK_USD_PER_HOUR,
     };
@@ -111,14 +114,18 @@ fn run(args: &RunArgs) -> Result<ExitCode> {
     let run_started = SystemTime::now();
     opts.reference =
         format!("sonisub-{}", run_started.duration_since(SystemTime::UNIX_EPOCH).unwrap_or_default().as_millis());
-    let multi = MultiProgress::new();
-    let overall = (folder_mode && needs_api).then(|| overall_bar(&multi, &totals));
-    if folder_mode {
-        opts.progress = Some(multi.clone());
+    // Without a terminal indicatif draws nothing (no escape codes); --quiet draws nothing either.
+    let multi =
+        if args.quiet { MultiProgress::with_draw_target(ProgressDrawTarget::hidden()) } else { MultiProgress::new() };
+    opts.progress = Some(multi.clone());
+    let tracker = needs_api.then(|| Arc::new(ui::Tracker::new(&multi, &plan, price)));
+    if let Some(t) = &tracker {
+        let t = t.clone();
+        opts.on_progress = Some(Callback::new(move |p| t.report(&p)));
     }
-    // Result lines go above the bars; without a terminal (or for one file) they are plain lines.
+    // Result lines go above the bars; without a terminal they are plain lines.
     let say = |line: String| {
-        if folder_mode && !multi.is_hidden() {
+        if !multi.is_hidden() {
             let _ = multi.println(line);
         } else {
             eprintln!("{line}");
@@ -127,19 +134,27 @@ fn run(args: &RunArgs) -> Result<ExitCode> {
 
     let exists = exists_label(&args.formats);
     let mut stats = Stats::default();
-    let (mut sent_files, mut sent_audio_s, mut planned_done_s) = (0usize, 0.0, 0.0);
+    let (mut sent_files, mut sent_audio_s) = (0usize, 0.0);
     let total = plan.len();
+    let run_began = Instant::now();
     for (i, planned) in plan.iter().enumerate() {
         if interrupted() {
             break;
         }
         let Item { input, output, name } = &planned.item;
-        opts.prefix = if folder_mode { format!("  {}", short(name, 28)) } else { String::new() };
+        opts.prefix = if folder_mode { format!("  {}", ui::short(name, 28)) } else { String::new() };
         if let Some(dir) = output.parent().filter(|d| !d.as_os_str().is_empty()) {
             std::fs::create_dir_all(dir).with_context(|| format!("cannot create {}", dir.display()))?;
         }
         let log = args.log.clone().unwrap_or_else(|| input.parent().unwrap_or(Path::new(".")).join("sonisub.log"));
         let started = Instant::now();
+        let planned_s = match planned.action {
+            batch::Action::Transcribe { audio_s } => Some(audio_s),
+            _ => None,
+        };
+        if let (Some(t), Some(audio_s)) = (&tracker, planned_s) {
+            t.start_file(audio_s);
+        }
 
         let result = job::process(input, output, &opts, client.as_ref());
         if let Some(secs) = result.as_ref().ok().and_then(Outcome::uploaded_s) {
@@ -154,16 +169,8 @@ fn run(args: &RunArgs) -> Result<ExitCode> {
             eprintln!("  (logged to {})", log.display());
         }
 
-        if let (Some(bar), batch::Action::Transcribe { audio_s }) = (&overall, &planned.action) {
-            planned_done_s += audio_s.unwrap_or(0.0);
-            bar.set_position((planned_done_s * 1000.0) as u64);
-            bar.set_message(overall_message(
-                sent_files,
-                totals.transcribe,
-                planned_done_s,
-                totals.audio_s,
-                price * sent_audio_s / 3600.0,
-            ));
+        if let (Some(t), Some(_)) = (&tracker, planned_s) {
+            t.finish_file(result.as_ref().ok().and_then(Outcome::uploaded_s));
         }
         if interrupted() {
             break;
@@ -178,11 +185,14 @@ fn run(args: &RunArgs) -> Result<ExitCode> {
             break;
         }
     }
-    if let Some(bar) = overall {
-        bar.finish_and_clear();
+    if let Some(t) = tracker {
+        t.finish();
     }
-    if folder_mode {
-        eprintln!("{}", stats.summary(&exists));
+    if folder_mode || interrupted() {
+        eprintln!(
+            "{}",
+            stats.summary(&exists, interrupted().then(|| cleanup_note(args.keep_audio)), total, run_began.elapsed())
+        );
     }
     report_run_cost(client.as_ref(), &opts.reference, run_started, sent_audio_s, sent_files);
     Ok(if interrupted() {
@@ -204,11 +214,14 @@ struct Stats {
     no_speech: usize,
     no_audio: usize,
     failed: usize,
+    /// The file Ctrl+C stopped.
+    cancelled: usize,
     fatal: bool,
 }
 
 impl Stats {
-    fn summary(&self, exists: &str) -> String {
+    /// The end line. After Ctrl+C (`cleanup` says what the library removed) it says how much was finished.
+    fn summary(&self, exists: &str, cleanup: Option<&str>, total: usize, took: Duration) -> String {
         let skipped = format!("skipped ({exists})");
         let parts = [
             (self.written, "processed"),
@@ -219,8 +232,22 @@ impl Stats {
             (self.failed, "failed"),
         ];
         let text: Vec<String> = parts.iter().filter(|(n, _)| *n > 0).map(|(n, what)| format!("{n} {what}")).collect();
-        format!("done: {}", if text.is_empty() { "nothing to do".into() } else { text.join(", ") })
+        let text = if text.is_empty() { "nothing to do".into() } else { text.join(", ") };
+        let secs = took.as_secs();
+        let time = if secs >= 5 { format!(" in {}", usage::fmt_minutes(secs * 1000)) } else { String::new() };
+        if let Some(cleanup) = cleanup {
+            let done = self.written + self.from_saved + self.skipped + self.no_speech + self.no_audio + self.failed;
+            let rest = total.saturating_sub(done);
+            format!("interrupted: {text}{time}, {rest} of {total} file(s) not finished; {cleanup}")
+        } else {
+            format!("done: {text}{time}")
+        }
     }
+}
+
+/// What was removed after Ctrl+C: the job guards delete the uploads, and the temp audio unless it is kept.
+fn cleanup_note(keep_audio: bool) -> &'static str {
+    if keep_audio { "Soniox uploads removed (audio kept)" } else { "temp audio and Soniox uploads removed" }
 }
 
 /// ".srt exists", ".srt, .premiere.json exist": why a file is skipped.
@@ -269,6 +296,10 @@ fn describe(name: &str, result: &Result<Outcome>, stats: &mut Stats, secs: f64, 
                 (None, false, Some(_)) => "nothing recognised".to_string(),
             };
             (format!("∅ {name} — no speech, {note}"), format!("NO SPEECH ({note})"))
+        }
+        Err(e) if e.is::<Cancelled>() => {
+            stats.cancelled += 1;
+            (format!("⏹ {name} — interrupted"), "INTERRUPTED".into())
         }
         Err(e) => {
             stats.failed += 1;
@@ -326,27 +357,6 @@ fn plan_text(plan: &[batch::Planned], t: &Totals, usd_per_hour: f64, detailed: b
     out
 }
 
-fn overall_bar(multi: &MultiProgress, t: &Totals) -> ProgressBar {
-    let bar = multi.add(ProgressBar::new((t.audio_s * 1000.0).max(1.0) as u64));
-    bar.set_style(
-        ProgressStyle::with_template("{spinner} [{bar:30.green/white}] {percent:>3}%  {msg}  eta {eta}")
-            .unwrap()
-            .progress_chars("█▉▊▋▌▍▎▏ "),
-    );
-    bar.enable_steady_tick(Duration::from_millis(200));
-    bar.set_message(overall_message(0, t.transcribe, 0.0, t.audio_s, 0.0));
-    bar
-}
-
-fn overall_message(files: usize, total_files: usize, done_s: f64, total_s: f64, usd: f64) -> String {
-    format!(
-        "{files}/{total_files} sent · {} of {} audio · ≈ {}",
-        usage::fmt_minutes((done_s * 1000.0) as u64),
-        usage::fmt_minutes((total_s * 1000.0) as u64),
-        usage::fmt_usd(usd)
-    )
-}
-
 fn spinner(msg: String, visible: bool) -> ProgressBar {
     if !visible {
         return ProgressBar::hidden();
@@ -363,14 +373,6 @@ fn recent_price(client: &Client) -> f64 {
         .ok()
         .and_then(|logs| Summary::of(&logs).stt_usd_per_hour())
         .unwrap_or(usage::FALLBACK_USD_PER_HOUR)
-}
-
-fn short(name: &str, max: usize) -> String {
-    if name.chars().count() <= max {
-        return format!("{name:<max$}");
-    }
-    let tail: String = name.chars().rev().take(max - 1).collect::<Vec<_>>().into_iter().rev().collect();
-    format!("…{tail}")
 }
 
 /// "this run: 3:31 audio, $0.0057" — exact from the usage logs (they lag a few seconds, so wait a
@@ -472,5 +474,27 @@ fn log_line(log: &Path, input: &Path, msg: &str) {
     let res = OpenOptions::new().create(true).append(true).open(log).and_then(|mut f| f.write_all(line.as_bytes()));
     if let Err(e) = res {
         eprintln!("  warning: cannot write log {}: {e}", log.display());
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn a_cancelled_file_is_not_a_failure_and_counts_as_not_finished() {
+        let mut stats = Stats::default();
+        let (line, _) = describe("c.mp4", &Err(Cancelled.into()), &mut stats, 1.0, ".srt exists");
+        assert_eq!(line, "⏹ c.mp4 — interrupted");
+        assert_eq!((stats.failed, stats.cancelled), (0, 1));
+        stats.written = 3;
+        let s = stats.summary(".srt exists", Some(cleanup_note(false)), 10, Duration::from_secs(130));
+        assert_eq!(
+            s,
+            "interrupted: 3 processed in 2:10, 7 of 10 file(s) not finished; temp audio and Soniox uploads removed"
+        );
+        let kept = stats.summary(".srt exists", Some(cleanup_note(true)), 10, Duration::ZERO);
+        assert!(kept.ends_with("Soniox uploads removed (audio kept)"), "{kept}");
+        assert_eq!(Stats::default().summary("x", None, 2, Duration::ZERO), "done: nothing to do");
     }
 }
