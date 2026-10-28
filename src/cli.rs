@@ -85,7 +85,7 @@ pub struct RunArgs {
 
     /// What to write, comma separated: srt, vtt (WebVTT), ass (a style per speaker), premiere (Premiere Pro
     /// transcript, clip.premiere.json), capt (the whole transcript as small text, clip.capt; `sonisub render`
-    /// makes the other formats from it). Only missing files are written, so adding a format later reuses the saved
+    /// makes the other formats from it), ttml (TTML / IMSC 1.1 Text, clip.ttml). Only missing files are written, so adding a format later reuses the saved
     /// transcript for free.
     #[arg(short = 't', long = "format", value_enum, value_delimiter = ',', default_value = "srt")]
     pub formats: Vec<Format>,
@@ -204,7 +204,7 @@ pub struct SegArgs {
     pub karaoke: bool,
 
     /// A vertical video (Reels, Shorts, TikTok; same as --frame 1080x1920): short lines broken in two, short cues,
-    /// and in .ass and .vtt the text kept clear of the phone app's buttons.
+    /// and in .ass, .vtt and .ttml the text kept clear of the phone app's buttons.
     #[arg(long, conflicts_with = "frame")]
     pub vertical: bool,
 
@@ -213,7 +213,7 @@ pub struct SegArgs {
     #[arg(long, value_parser = parse_frame)]
     pub frame: Option<(u32, u32)>,
 
-    /// Subtitles for the deaf and hard of hearing: .srt, .vtt and .ass get a subtitle for every sound
+    /// Subtitles for the deaf and hard of hearing: .srt, .vtt, .ass and .ttml get a subtitle for every sound
     /// ([phone ringing]) and a label before words said in a voice of their own ([whispering]), as a CAPT file marks
     /// them (Soniox reports no sounds: add them to clip.capt and `render` it).
     #[arg(long, help_heading = "Outputs")]
@@ -274,7 +274,7 @@ pub struct RenderArgs {
     /// (start and end in milliseconds; speaker and language optional).
     pub input: PathBuf,
 
-    /// What to write, comma separated: srt, vtt, ass, premiere, capt.
+    /// What to write, comma separated: srt, vtt, ass, premiere, capt, ttml.
     #[arg(short = 't', long = "format", value_enum, value_delimiter = ',', default_value = "srt")]
     pub formats: Vec<Format>,
 

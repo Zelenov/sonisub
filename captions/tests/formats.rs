@@ -185,3 +185,28 @@ fn a_word_with_a_space_keeps_the_marks_of_its_cue() {
         ass::build(&doc.to_words(), &Layout::default(), &ass::Options { karaoke: true, ..Default::default() }).0;
     assert!(karaoke.contains(r"{\i1}{\k40}love {\i0}{\k70}New York {\k20}a"), "{karaoke}");
 }
+
+#[test]
+fn ttml_agent_ids_are_xml_names_and_differ() {
+    let file = "CAPT 1\nspeaker:\"Anna Lee\"\nspeaker:Anna_Lee\n\n\
+                00:00:01.000 --> 00:00:02.000 speaker:\"Anna Lee\"\n{0}Hi.{50}\n\n\
+                00:00:02.500 --> 00:00:03.500 speaker:Anna_Lee\n{0}Hello.{50}\n\n\
+                00:00:04.000 --> 00:00:05.000 speaker:3\n{0}Hey.{50}\n";
+    let doc = captions::capt::Doc::parse(file).unwrap();
+    let ttml = captions::ttml::build(&doc, &Layout::default()).0;
+    for id in ["speaker_Anna_Lee", "speaker_Anna_Lee_2", "speaker_3"] {
+        assert!(ttml.contains(&format!("xml:id=\"{id}\"")), "{id}\n{ttml}");
+    }
+    assert!(ttml.contains("ttm:agent=\"speaker_Anna_Lee_2\">Hello."), "{ttml}");
+}
+
+#[test]
+fn a_point_at_the_edge_gets_a_whole_region_and_tt_always_has_a_language() {
+    let file = "CAPT 1\n\n00:00:01.000 --> 00:00:02.000 pos:0.5,0\n{0}Top.{50}\n\n\
+                00:00:03.000 --> 00:00:04.000 pos:0.03,0.5\n{0}Near{20} {30}the{40} {50}edge.{80}\n";
+    let doc = captions::capt::Doc::parse(file).unwrap();
+    let ttml = captions::ttml::build(&doc, &Layout::default()).0;
+    assert!(ttml.contains(r#"<region xml:id="r1" tts:origin="10% 0%" tts:extent="80% 20%" tts:displayAlign="before" tts:textAlign="center"/>"#), "{ttml}");
+    assert!(ttml.contains(r#"<region xml:id="r2" tts:origin="0% 40%" tts:extent="80% 20%" tts:displayAlign="center" tts:textAlign="left"/>"#), "{ttml}");
+    assert!(ttml.contains(r#"xml:lang="und""#), "{ttml}");
+}

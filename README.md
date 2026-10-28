@@ -131,6 +131,8 @@ orange, violet, red, then repeating), black outline, bottom centre. Every line n
 you restyle or rename a person in one place. Without diarization all lines use the `Default` style. `--karaoke` adds word-by-word
 highlight (`\k`).
 
+`-t ttml` writes TTML / IMSC 1.1 Text (`clip.ttml`), what broadcasters and streaming services ask for: speakers as agents, places as regions (a rectangle exactly), italic and languages; `--sdh` adds sounds and voices, `--vertical` keeps the regions clear of a phone app.
+
 `--sdh` makes `.srt`, `.vtt` and `.ass` subtitles for the deaf and hard of hearing from the sounds and voices
 marked in a CAPT file (`sound:phone`, `voice:whisper` → `[phone ringing]`, `[whispering]`; `--labels en|ru`).
 Soniox reports no sounds, so a fresh transcript has none until they are added to `clip.capt`.

@@ -35,7 +35,7 @@ pub struct Doc {
     /// The source's length, milliseconds.
     pub duration: Option<u64>,
     /// The video's frame, width and height in pixels (`frame:1080,1920` for a vertical video):
-    /// outputs that place text (ASS, WebVTT) keep it clear of the edges and a phone app's
+    /// outputs that place text (ASS, WebVTT, TTML) keep it clear of the edges and a phone app's
     /// buttons.
     pub frame: Option<(u32, u32)>,
     /// Every speaker the writer knows, in order of appearance.

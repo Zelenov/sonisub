@@ -30,7 +30,7 @@ pub struct Layout {
     /// Break a cue's text into up to `max_lines` lines of `max_line` chars. Off: one line per cue,
     /// up to `max_line × max_lines` chars.
     pub wrap_lines: bool,
-    /// The video's frame, width and height in pixels. Writers that place text (ASS, WebVTT)
+    /// The video's frame, width and height in pixels. Writers that place text (ASS, WebVTT, TTML)
     /// use it; a vertical frame keeps text clear of a phone app's buttons ([`Layout::vertical`]).
     pub frame: (u32, u32),
     /// Cut for reading on a phone: weigh every cut at once, and avoid a cue or a line that ends on

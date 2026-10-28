@@ -167,6 +167,16 @@ pub(crate) fn sounds(doc: &Doc, layout: &Layout, lang: &str) -> Vec<Sound> {
         .collect()
 }
 
+/// The name a speaker is shown by where no subtitle shows it next to speech (TTML agents): the
+/// file's name, else the layout's, else "Speaker N".
+pub(crate) fn speaker_name(doc: &Doc, layout: &Layout, speaker: &str) -> String {
+    doc.speakers
+        .iter()
+        .find(|s| s.id == speaker)
+        .and_then(|s| s.name.clone())
+        .unwrap_or_else(|| speaker_label(speaker, &layout.speaker_names))
+}
+
 /// The numpad alignment of SRT's `{\anN}` (7 8 9 / 4 5 6 / 1 2 3) nearest to a place.
 pub(crate) fn numpad(pos: Option<Pos>) -> u8 {
     let (cx, cy) = match pos {
