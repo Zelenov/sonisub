@@ -8,7 +8,9 @@
 use std::collections::BTreeMap;
 
 use crate::Word;
+use crate::capt::Pos;
 use crate::cues::{Cue, Layout, cues, pieces, speaker_label};
+use crate::style::{self, Markup};
 
 /// What ASS adds to the layout.
 #[derive(Debug, Clone, Default)]
@@ -76,6 +78,7 @@ fn karaoke(cue: &Cue) -> Option<String> {
     let base = cue.start / 10;
     let mut prefix_pieces = if cue.prefix.is_empty() { 0 } else { pieces(cue.prefix.trim_end()).len() };
     let mut out = String::new();
+    let mut italic = false;
     for (l, line) in cue.lines.iter().enumerate() {
         if l > 0 {
             out.push_str("\\N");
@@ -90,12 +93,34 @@ fn karaoke(cue: &Cue) -> Option<String> {
                 continue;
             }
             let w = words.next().filter(|w| w.text == piece)?;
+            if w.marks.italic != italic {
+                italic = w.marks.italic;
+                out.push_str(if italic { "{\\i1}" } else { "{\\i0}" });
+            }
             let until = words.peek().map_or(cue.end.max(w.end), |n| n.start) / 10;
             let from = (w.start / 10).max(base);
             out.push_str(&format!("{{\\k{}}}{}", until.saturating_sub(from), escape(piece)));
         }
     }
+    if italic {
+        out.push_str("{\\i0}");
+    }
     words.next().is_none().then_some(out)
+}
+
+/// The override tag and the margins (left, right, vertical) that put a cue in its place on the
+/// frame. A vertical frame keeps the bottom and the top clear for a phone app's buttons.
+fn placement(cue: &Cue, layout: &Layout) -> (String, u32, u32, u32) {
+    let (w, h) = (layout.frame.0 as f64, layout.frame.1 as f64);
+    let share = |v: f64, of: f64| (v * of).round() as u32;
+    match style::place(cue) {
+        None | Some(Pos::Bottom) => (String::new(), 0, 0, share(style::bottom_clear(layout), h)),
+        Some(Pos::Top) => ("{\\an8}".into(), 0, 0, if layout.is_vertical() { share(0.12, h) } else { 0 }),
+        Some(Pos::Middle) => ("{\\an5}".into(), 0, 0, 0),
+        Some(Pos::Point { x, y }) => (format!("{{\\an5\\pos({},{})}}", share(x, w), share(y, h)), 0, 0, 0),
+        // The rectangle's width (left and right margins) and its top edge; ASS has no height.
+        Some(Pos::Rect { x, y, w: rw, .. }) => ("{\\an8}".into(), share(x, w), share(1.0 - x - rw, w), share(y, h)),
+    }
 }
 
 /// ASS text for `words` laid out by `layout`, and the number of cues.
@@ -117,18 +142,19 @@ pub fn build(words: &[Word], layout: &Layout, opts: &Options) -> (String, usize)
         styles.push((sp.to_string(), style, name));
     }
 
-    let mut out = String::from(
+    let mut out = format!(
         "[Script Info]\n\
          ScriptType: v4.00+\n\
          WrapStyle: 0\n\
          ScaledBorderAndShadow: yes\n\
-         PlayResX: 1920\n\
-         PlayResY: 1080\n\
+         PlayResX: {}\n\
+         PlayResY: {}\n\
          \n\
          [V4+ Styles]\n\
          Format: Name, Fontname, Fontsize, PrimaryColour, SecondaryColour, OutlineColour, BackColour, Bold, \
          Italic, Underline, StrikeOut, ScaleX, ScaleY, Spacing, Angle, BorderStyle, Outline, Shadow, \
          Alignment, MarginL, MarginR, MarginV, Encoding\n",
+        layout.frame.0, layout.frame.1
     );
     out.push_str(&style_line(DEFAULT_STYLE, PALETTE[0]));
     for (i, (_, style, _)) in styles.iter().enumerate() {
@@ -144,10 +170,15 @@ pub fn build(words: &[Word], layout: &Layout, opts: &Options) -> (String, usize)
             .as_deref()
             .and_then(|sp| styles.iter().find(|(s, _, _)| s == sp))
             .map_or((DEFAULT_STYLE, ""), |(_, style, name)| (style.as_str(), name.as_str()));
-        let plain = || c.lines.iter().map(|l| escape(l)).collect::<Vec<_>>().join("\\N");
+        let markup = Markup { italic: Some(("{\\i1}", "{\\i0}")), lang: None, voice: None, escape: &escape };
+        let plain = || {
+            let lines = if style::marked(c) { style::lines(c, &markup) } else { None };
+            lines.unwrap_or_else(|| c.lines.iter().map(|l| escape(l)).collect()).join("\\N")
+        };
         let text = if opts.karaoke { karaoke(c).unwrap_or_else(plain) } else { plain() };
+        let (tag, ml, mr, mv) = placement(c, layout);
         out.push_str(&format!(
-            "Dialogue: 0,{},{},{style},{name},0,0,0,,{text}\n",
+            "Dialogue: 0,{},{},{style},{name},{ml},{mr},{mv},,{tag}{text}\n",
             timestamp(c.start),
             timestamp(c.end)
         ));

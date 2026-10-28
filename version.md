@@ -1,3 +1,13 @@
+# NEXT
+## Added
+- Subtitles from a CAPT file follow what the file says: they cut at its cut points (a ` / ` moved by hand moves the cut), end sentences where `sentence:` says, show `style:italic` in italic (SRT, WebVTT, ASS, TTML), mark words in another language (WebVTT, TTML), and put a subtitle where `pos:` says (top, middle, a point or a rectangle).
+- New outputs: `-t sdh` (`clip.sdh.srt`, SRT for the deaf and hard of hearing: `[phone ringing]`, `[whispering]`, English or Russian labels with `--labels`), `-t ttml` (TTML / IMSC: speakers, places, italic, languages), `-t lrc` (a time before every word), `-t sbv` (YouTube), `-t text` (a plain transcript), `-t adr` (a DaVinci Resolve Fairlight ADR cue list, `--fps`, `--timeline-start`).
+- `--vertical` (or `--frame 1080x1920`) for Reels, Shorts and TikTok: short two-line subtitles, and in `.ass`, `.vtt` and `.ttml` the text kept clear of the phone app's caption and buttons. The frame goes into `clip.capt`, so `render` remembers it.
+
+## Changed
+- `--max-line`, `--max-lines` and `--max-duration` keep their defaults (50, 2, 8) for a horizontal video; a vertical one gets 22, 2 and 4 unless they are given.
+- Library: `captions::Word` has `marks` and `Default` (build words with `..Word::default()`); `captions::Layout` has `frame`; `job::Options::ass` is now `job::Options::outputs` (`job::Outputs`: `ass`, `adr`, `labels`), and `job::write_outputs` takes `&job::Outputs` instead of `&ass::Options`; `job::Format` has `Sdh`, `Ttml`, `Lrc`, `Sbv`, `Text` and `Adr` (a `match` on it needs the arms). captions 0.3.0.
+
 # 0.8.0
 ## Added
 - `-t capt` writes `clip.capt`: the whole transcript as small text (about 1/15 of the Soniox JSON) with every piece of a word and its time, words, sentences, cut points, speakers, languages and confidence. It is readable and editable by hand; the format is in [docs/capt.md](docs/capt.md).

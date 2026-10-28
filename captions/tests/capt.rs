@@ -86,6 +86,7 @@ fn from_words_makes_a_block_per_sentence_with_cut_points() {
         language: Some("en".into()),
         confidence: if text == "fine." { 0.5 } else { 1.0 },
         glued: false,
+        marks: Default::default(),
     };
     let words =
         [w("Well,", 0, 300), w("this", 400, 600), w("is", 600, 700), w("fine.", 700, 1000), w("Yes.", 2000, 2300)];
@@ -242,6 +243,7 @@ fn a_space_inside_a_word_is_escaped() {
         language: None,
         confidence: 1.0,
         glued: false,
+        marks: Default::default(),
     };
     let doc = Doc::from_words(&[w], None);
     let file = doc.write();
@@ -291,6 +293,7 @@ fn words_from_another_recogniser_may_overlap_or_be_empty() {
         language: Some(lang.into()),
         confidence: 1.0,
         glued: false,
+        marks: Default::default(),
     };
     let words = [
         w("Мы", 0, 300, "ru"),
@@ -318,6 +321,7 @@ fn a_huge_time_from_a_recogniser_does_not_panic() {
         language: None,
         confidence: 0.5,
         glued: false,
+        marks: Default::default(),
     };
     let _ = Doc::from_words(&[w], None).write();
 }
@@ -361,6 +365,7 @@ fn word(text: &str, start: u64, end: u64, speaker: &str, lang: &str) -> captions
         language: Some(lang.into()),
         confidence: 1.0,
         glued: false,
+        marks: Default::default(),
     }
 }
 

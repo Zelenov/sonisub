@@ -453,24 +453,24 @@ fn render(args: &RenderArgs) -> Result<()> {
         eprintln!("· {name} — skipped, {} (--force to redo)", exists_label(&args.formats));
         return Ok(());
     }
-    let mut layout = args.seg.layout(true);
-    let mut ass = args.seg.ass();
+    let mut layout = args.seg.layout(true, doc.as_ref().and_then(|d| d.frame));
+    let mut outputs = args.seg.outputs();
     let given = !layout.speaker_names.is_empty();
     // Saved words become a CAPT file without an id: the input's name only seeds the Premiere ids.
-    let mut doc =
-        doc.or_else(|| targets.iter().any(|(f, _)| *f == job::Format::Capt).then(|| Doc::from_words(&words, None)));
+    let mut doc = doc.or_else(|| targets.iter().any(|(f, _)| f.needs_capt()).then(|| Doc::from_words(&words, None)));
     if let Some(doc) = &mut doc {
         if given {
             // --speaker-names win over a CAPT file's names, and go into the CAPT written.
-            job::name_speakers(doc, &layout, &ass);
+            job::name_speakers(doc, &layout, &outputs.ass);
         } else {
             layout.speaker_names = job::speaker_names(doc);
         }
-        ass.names = doc.speakers.iter().filter_map(|s| Some((s.id.clone(), s.name.clone()?))).collect();
+        outputs.ass.names = doc.speakers.iter().filter_map(|s| Some((s.id.clone(), s.name.clone()?))).collect();
     }
     let seed = doc.as_ref().and_then(|d| d.id.clone()).unwrap_or_else(|| name.clone());
     let language = if is_capt { doc.as_ref().and_then(|d| d.lang.clone()) } else { None };
-    let (files, cues) = job::write_outputs(&targets, &words, doc.as_ref(), &layout, &ass, language.as_deref(), &seed)?;
+    let (files, cues) =
+        job::write_outputs(&targets, &words, doc.as_ref(), &layout, &outputs, language.as_deref(), &seed)?;
     let what = if cues > 0 { format!("{cues} cues") } else { "transcript".into() };
     let paths: Vec<String> = files.iter().map(|f| f.display().to_string()).collect();
     eprintln!("✓ {name} — {what} -> {}", paths.join(", "));

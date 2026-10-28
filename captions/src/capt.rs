@@ -34,6 +34,10 @@ pub struct Doc {
     pub media: Option<String>,
     /// The source's length, milliseconds.
     pub duration: Option<u64>,
+    /// The video's frame, width and height in pixels (`frame:1080,1920` for a vertical video):
+    /// outputs that place text (ASS, TTML, WebVTT) keep it clear of the edges and a phone app's
+    /// buttons.
+    pub frame: Option<(u32, u32)>,
     /// Every speaker the writer knows, in order of appearance.
     pub speakers: Vec<Speaker>,
     /// Header options this version does not know, kept as written.
@@ -54,7 +58,8 @@ pub struct Speaker {
 }
 
 /// Where on screen.
-#[derive(Debug, Clone, Copy, PartialEq)]
+#[derive(Debug, Clone, Copy, PartialEq, serde::Serialize, serde::Deserialize)]
+#[serde(rename_all = "lowercase")]
 pub enum Pos {
     /// Bottom centre, the default.
     Bottom,
@@ -211,6 +216,7 @@ impl From<&Spoken> for crate::Word {
             language: s.language.clone(),
             confidence,
             glued: false,
+            marks: Default::default(),
         }
     }
 }
@@ -625,6 +631,13 @@ impl Doc {
                 "title" => self.title = Some(joined),
                 "lang" => self.lang = Some(joined),
                 "media" => self.media = Some(joined),
+                "frame" => match value.iter().map(|v| v.parse::<u32>()).collect::<Result<Vec<_>, _>>().as_deref() {
+                    Ok([w, h]) if *w > 0 && *h > 0 => self.frame = Some((*w, *h)),
+                    _ => errors.push(Error {
+                        line: line_no,
+                        message: format!("frame is width,height in pixels, not “{joined}”"),
+                    }),
+                },
                 "duration" => match parse_time(&joined) {
                     Some(ms) => self.duration = Some(ms),
                     None => errors
@@ -807,7 +820,11 @@ impl Doc {
         line(options([("id", one(&self.id))]));
         line(options([("title", one(&self.title))]));
         line(options([("lang", one(&self.lang))]));
-        line(options([("media", one(&self.media)), ("duration", self.duration.map(|d| vec![time(d)]))]));
+        line(options([
+            ("media", one(&self.media)),
+            ("duration", self.duration.map(|d| vec![time(d)])),
+            ("frame", self.frame.map(|(w, h)| vec![w.to_string(), h.to_string()])),
+        ]));
         for (k, v) in &self.other {
             line(options([(k.as_str(), Some(v.clone()))]));
         }
@@ -1020,10 +1037,56 @@ impl Doc {
                     language,
                     confidence: confs.iter().sum::<f64>() / confs.len().max(1) as f64,
                     glued: false,
+                    marks: Default::default(),
                 });
+            }
+            // What the file says about each word, for the layout and the writers.
+            let words: Vec<&Word> = b.words().collect();
+            let first = out.len() - words.len();
+            let ends: Vec<usize> = b
+                .phrases
+                .iter()
+                .scan(0, |n, p| {
+                    *n += p.len();
+                    Some(*n - 1)
+                })
+                .collect();
+            for (k, w) in words.iter().enumerate() {
+                let m = &mut out[first + k].marks;
+                // A cut point follows the last word of a phrase; a block ends at one too.
+                m.cut = Some(ends.contains(&k));
+                m.sentence = b
+                    .spans
+                    .iter()
+                    .filter(|s| s.to == w.end && s.from <= w.start())
+                    .find_map(|s| s.options.iter().find(|(key, _)| key == "sentence"))
+                    .and_then(|(_, v)| match v.first().map(String::as_str) {
+                        Some("end") => Some(true),
+                        Some("continues") => Some(false),
+                        _ => None,
+                    });
+                m.italic = b.span_option(w.start(), "style").is_some_and(|v| v.iter().any(|s| s == "italic"));
+                m.pos = b
+                    .span_option(w.start(), "pos")
+                    .and_then(|v| parse_pos(v).ok())
+                    .or(b.pos)
+                    .filter(|p| *p != Pos::Bottom);
+                m.voice =
+                    b.span_option(w.start(), "voice").and_then(|v| v.first().cloned()).or_else(|| b.voice.clone());
+                m.lang = b.span_option(w.start(), "lang").and_then(|v| v.first().cloned());
             }
         }
         out
+    }
+
+    /// The sound blocks, in order: start, end, speaker (`None` for a sound of no one) and code.
+    pub fn sounds(&self) -> Vec<(u64, u64, Option<&str>, &str)> {
+        self.blocks.iter().filter_map(|b| Some((b.start, b.end, b.speaker.as_deref(), b.sound.as_deref()?))).collect()
+    }
+
+    /// The frame, width and height in pixels: the header's `frame`, else 1920×1080.
+    pub fn frame(&self) -> (u32, u32) {
+        self.frame.unwrap_or((1920, 1080))
     }
 }
 

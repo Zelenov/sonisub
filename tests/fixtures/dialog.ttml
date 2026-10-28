@@ -1,0 +1,30 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<tt xmlns="http://www.w3.org/ns/ttml" xmlns:tts="http://www.w3.org/ns/ttml#styling" xmlns:ttm="http://www.w3.org/ns/ttml#metadata" xmlns:ttp="http://www.w3.org/ns/ttml#parameter" ttp:timeBase="media" tts:extent="1920px 1080px" xml:lang="en">
+  <head>
+    <metadata>
+      <ttm:agent xml:id="speaker_1" type="person"><ttm:name type="full">Speaker 1</ttm:name></ttm:agent>
+      <ttm:agent xml:id="speaker_2" type="person"><ttm:name type="full">Speaker 2</ttm:name></ttm:agent>
+      <ttm:agent xml:id="speaker_3" type="person"><ttm:name type="full">Speaker 3</ttm:name></ttm:agent>
+      <ttm:agent xml:id="speaker_4" type="person"><ttm:name type="full">Speaker 4</ttm:name></ttm:agent>
+    </metadata>
+    <layout>
+      <region xml:id="bottom" tts:origin="10% 75%" tts:extent="80% 20%" tts:displayAlign="after" tts:textAlign="center"/>
+      <region xml:id="top" tts:origin="10% 5%" tts:extent="80% 20%" tts:displayAlign="before" tts:textAlign="center"/>
+      <region xml:id="middle" tts:origin="10% 40%" tts:extent="80% 20%" tts:displayAlign="center" tts:textAlign="center"/>
+    </layout>
+  </head>
+  <body>
+    <div>
+      <p begin="00:00:00.870" end="00:00:03.330" region="bottom" ttm:agent="speaker_1">Speaker 1: Hi, today we're testing the subtitle generator.</p>
+      <p begin="00:00:03.870" end="00:00:04.370" region="bottom" ttm:agent="speaker_2">Speaker 2: Great.</p>
+      <p begin="00:00:04.590" end="00:00:07.470" region="bottom" ttm:agent="speaker_2">I've prepared a very long sentence with plenty of commas</p>
+      <p begin="00:00:07.890" end="00:00:10.470" region="bottom" ttm:agent="speaker_2">so we can check how the tool splits it into parts,</p>
+      <p begin="00:00:10.770" end="00:00:14.850" region="bottom" ttm:agent="speaker_2">without breaking a phrase in the middle, and without exceeding the line length.</p>
+      <p begin="00:00:15.450" end="00:00:18.450" region="bottom" ttm:agent="speaker_1">Speaker 1: What happens if I pause... and then continue?</p>
+      <p begin="00:00:20.370" end="00:00:22.110" region="bottom" ttm:agent="speaker_3">Speaker 3: А теперь короткая фраза по-русски.</p>
+      <p begin="00:00:22.890" end="00:00:24.330" region="bottom" ttm:agent="speaker_4">Speaker 4: Y una frase corta en español.</p>
+      <p begin="00:00:25.110" end="00:00:25.610" region="bottom" ttm:agent="speaker_2">Speaker 2: Yes.</p>
+      <p begin="00:00:26.550" end="00:00:28.290" region="bottom" ttm:agent="speaker_1">Speaker 1: Okay, that's the end of the test.</p>
+    </div>
+  </body>
+</tt>

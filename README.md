@@ -135,6 +135,11 @@ orange, violet, red, then repeating), black outline, bottom centre. Every line n
 you restyle or rename a person in one place. Without diarization all lines use the `Default` style. `--karaoke` adds word-by-word
 highlight (`\k`).
 
+More outputs: `-t sdh` (SRT for the deaf and hard of hearing: sounds and voices as labels, `--labels en|ru`),
+`ttml` (TTML / IMSC), `lrc` (a time before every word), `sbv` (YouTube), `text` (a plain transcript) and
+`adr` (a DaVinci Resolve Fairlight ADR cue list, `--fps`, `--timeline-start`). For Reels, Shorts and TikTok
+add `--vertical`: short two-line subtitles, kept clear of the app's buttons in `.ass`, `.vtt` and `.ttml`.
+
 `sonisub render` makes the same files without Soniox: from a CAPT file (`-t capt` writes `clip.capt`, the whole
 transcript as small text you can read and edit, see [docs/capt.md](docs/capt.md)), or from words saved as JSON
 (`[{"text": "Hello,", "start": 120, "end": 480, "speaker": "1"}, ...]`, times in milliseconds). It takes `-t`, `-o`,

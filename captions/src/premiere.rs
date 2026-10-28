@@ -218,6 +218,7 @@ pub fn to_srt(source: &str, layout: &Layout) -> Option<(String, usize)> {
                     language: language.clone(),
                     confidence: w["confidence"].as_f64().unwrap_or(1.0),
                     glued: false,
+                    marks: Default::default(),
                 }),
             }
         }

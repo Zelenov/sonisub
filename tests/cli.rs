@@ -178,3 +178,31 @@ fn speaker_names_go_into_capt_and_come_back_out_of_it() {
     let ass = std::fs::read_to_string(dir.path().join("dialog.ass")).unwrap();
     assert!(ass.contains("Style: Anna,") && ass.contains(",Boris,"), "{ass}");
 }
+
+#[test]
+fn every_new_format_from_a_saved_transcript_and_a_vertical_capt() {
+    let dir = tempfile::tempdir().unwrap();
+    let t = dir.path().join("dialog.soniox.json");
+    std::fs::copy(common::fixture("dialog.soniox.json"), &t).unwrap();
+    let all = "capt,sdh,ttml,lrc,sbv,text,adr,ass";
+    let out = sonisub(&[t.as_os_str(), "-t".as_ref(), all.as_ref(), "--vertical".as_ref()]).output().unwrap();
+    assert!(out.status.success(), "{}", plain(&out));
+    for ext in ["capt", "sdh.srt", "ttml", "lrc", "sbv", "txt", "adr.csv", "ass"] {
+        assert!(dir.path().join(format!("dialog.{ext}")).is_file(), "dialog.{ext}");
+    }
+    let capt = std::fs::read_to_string(dir.path().join("dialog.capt")).unwrap();
+    assert!(capt.contains("\nframe:1080,1920\n"), "the frame goes into the CAPT file:\n{capt}");
+    let ass = std::fs::read_to_string(dir.path().join("dialog.ass")).unwrap();
+    assert!(ass.contains("PlayResX: 1080\nPlayResY: 1920\n"), "{ass}");
+    let adr = std::fs::read(dir.path().join("dialog.adr.csv")).unwrap();
+    assert!(adr.starts_with("\u{feff}\"1\",\"01:00:00:21\",".as_bytes()), "{}", String::from_utf8_lossy(&adr));
+
+    // render takes the frame from the CAPT file: a vertical ASS again, without --vertical.
+    let capt_path = dir.path().join("dialog.capt");
+    let out = sonisub(&["render".as_ref(), capt_path.as_os_str(), "-t".as_ref(), "ass".as_ref(), "-f".as_ref()])
+        .output()
+        .unwrap();
+    assert!(out.status.success(), "{}", plain(&out));
+    let ass = std::fs::read_to_string(dir.path().join("dialog.ass")).unwrap();
+    assert!(ass.contains("PlayResX: 1080\nPlayResY: 1920\n"), "{ass}");
+}

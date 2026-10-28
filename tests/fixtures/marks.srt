@@ -1,0 +1,20 @@
+1
+00:00:01,000 --> 00:00:03,000
+Anna: So I read <i>War and Peace</i> twice.
+
+2
+00:00:05,500 --> 00:00:08,600
+Boris: Короче, этот deployment упал и мы сделали rollback.
+
+3
+00:00:10,000 --> 00:00:11,800
+{\an8}Anna: Listen to me, please Dr.
+
+4
+00:00:11,900 --> 00:00:12,400
+{\an8}Who.
+
+5
+00:00:15,000 --> 00:00:16,200
+{\an7}Boris: This sits in a box.
+

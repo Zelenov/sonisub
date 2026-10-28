@@ -14,6 +14,7 @@ fn word(text: &str, start: u64, end: u64, speaker: Option<&str>) -> Word {
         language: None,
         confidence: 1.0,
         glued: false,
+        marks: Default::default(),
     }
 }
 

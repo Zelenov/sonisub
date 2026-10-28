@@ -29,6 +29,18 @@ pub enum Format {
     Premiere,
     /// CAPT, the whole transcript as small text, every other format can be made from: `clip.capt`.
     Capt,
+    /// Subtitles for the deaf and hard of hearing: the SRT cues with sounds and voices as labels: `clip.sdh.srt`.
+    Sdh,
+    /// TTML / IMSC: speakers, places, italic and languages, sounds as labels: `clip.ttml`.
+    Ttml,
+    /// Enhanced LRC, a time before every word, for karaoke and music apps: `clip.lrc`.
+    Lrc,
+    /// YouTube's SBV: `clip.sbv`.
+    Sbv,
+    /// A plain text transcript, a paragraph per speaker turn: `clip.txt`.
+    Text,
+    /// A DaVinci Resolve Fairlight ADR cue list: `clip.adr.csv`.
+    Adr,
 }
 
 impl Format {
@@ -40,8 +52,31 @@ impl Format {
             Format::Ass => output.with_extension("ass"),
             Format::Premiere => output.with_extension("premiere.json"),
             Format::Capt => output.with_extension("capt"),
+            Format::Sdh => output.with_extension("sdh.srt"),
+            Format::Ttml => output.with_extension("ttml"),
+            Format::Lrc => output.with_extension("lrc"),
+            Format::Sbv => output.with_extension("sbv"),
+            Format::Text => output.with_extension("txt"),
+            Format::Adr => output.with_extension("adr.csv"),
         }
     }
+
+    /// Whether the format is made from a CAPT file (it needs sounds, or every piece of a word).
+    pub fn needs_capt(self) -> bool {
+        matches!(self, Format::Capt | Format::Sdh | Format::Ttml | Format::Text | Format::Adr)
+    }
+}
+
+/// How the formats are written, beyond the cue layout.
+#[derive(Debug, Clone, Default)]
+pub struct Outputs {
+    /// Speaker names and word highlight for [`Format::Ass`].
+    pub ass: ass::Options,
+    /// Frame rate, timeline start and cue limits for [`Format::Adr`].
+    pub adr: captions::adr::Options,
+    /// The language of sound and voice labels (`en`, `ru`) for SDH, TTML, the transcript and ADR;
+    /// `None`: Russian for a Russian transcript, else English.
+    pub labels: Option<String>,
 }
 
 /// What to do with a file.
@@ -68,8 +103,8 @@ pub struct Options {
     /// Overwrite existing outputs and ignore a saved `.soniox.json` (transcribe again).
     pub force: bool,
     pub layout: srt::Layout,
-    /// Speaker names and word highlight for [`Format::Ass`].
-    pub ass: ass::Options,
+    /// How the formats are written beyond the layout: ASS, ADR, label language.
+    pub outputs: Outputs,
     /// Interval between transcription status checks.
     pub poll: Duration,
     /// Printed before progress lines, e.g. "[2/5]".
@@ -102,7 +137,7 @@ impl Default for Options {
             formats: vec![Format::Srt],
             force: false,
             layout: srt::Layout::default(),
-            ass: ass::Options::default(),
+            outputs: Outputs::default(),
             poll: Duration::from_secs(3),
             prefix: String::new(),
             reference: "sonisub".into(),
@@ -223,15 +258,18 @@ pub fn process(input: &Path, output: &Path, opts: &Options, client: Option<&Clie
     let words = soniox::words(&transcript);
     let seed = transcript["id"].as_str().unwrap_or_default();
     // CAPT keeps every token, so it is made only when asked for.
-    let doc = targets.iter().any(|(f, _)| *f == Format::Capt).then(|| {
+    let doc = targets.iter().any(|(f, _)| f.needs_capt()).then(|| {
         let mut doc = soniox::capt(&transcript);
         if !is_transcript(input) {
             doc.media = input.file_name().map(|n| n.to_string_lossy().into_owned());
         }
-        name_speakers(&mut doc, &layout, &opts.ass);
+        name_speakers(&mut doc, &layout, &opts.outputs.ass);
+        if layout.frame != srt::Layout::default().frame {
+            doc.frame = Some(layout.frame);
+        }
         doc
     });
-    let (files, cues) = write_outputs(&targets, &words, doc.as_ref(), &layout, &opts.ass, hint, seed)?;
+    let (files, cues) = write_outputs(&targets, &words, doc.as_ref(), &layout, &opts.outputs, hint, seed)?;
     rep.mark(Stage::Writing, 1.0);
     Ok(Outcome::Written { files, cues, json, cached, uploaded_s })
 }
@@ -264,31 +302,48 @@ pub fn name_speakers(doc: &mut captions::capt::Doc, layout: &srt::Layout, ass: &
     }
 }
 
-/// Writes `words` in every format of `targets`, and `doc` (the same speech with its pieces) as
-/// [`Format::Capt`]; the files written and the number of cues (0 with only a Premiere transcript
-/// or CAPT). `default_language` and `seed` are for [`Format::Premiere`] ([`captions::premiere::build`]).
+/// Writes `words` in every format of `targets`, and from `doc` (the same speech with its pieces,
+/// sounds and marks) the formats that need it ([`Format::needs_capt`]); the files written and the
+/// number of cues (0 with only a Premiere transcript, CAPT or a transcript). `default_language` and
+/// `seed` are for [`Format::Premiere`] ([`captions::premiere::build`]).
 pub fn write_outputs(
     targets: &[(Format, PathBuf)],
     words: &[captions::Word],
     doc: Option<&captions::capt::Doc>,
     layout: &srt::Layout,
-    ass: &ass::Options,
+    outputs: &Outputs,
     default_language: Option<&str>,
     seed: &str,
 ) -> Result<(Vec<PathBuf>, usize)> {
     let mut cues = 0;
     let mut files = Vec::new();
+    let capt = || doc.ok_or_else(|| anyhow!("no CAPT document to write"));
+    let labels = || {
+        outputs
+            .labels
+            .clone()
+            .unwrap_or_else(|| captions::labels::for_language(doc.and_then(|d| d.lang.as_deref())).into())
+    };
     for (format, path) in targets {
         let (text, n) = match format {
             Format::Srt => captions::srt::build(words, layout),
             Format::Vtt => vtt::build(words, layout),
-            Format::Ass => ass::build(words, layout, ass),
+            Format::Ass => ass::build(words, layout, &outputs.ass),
+            Format::Lrc => captions::lrc::build(words, layout),
+            Format::Sbv => captions::sbv::build(words, layout),
+            Format::Sdh => captions::sdh::build(capt()?, layout, &labels()),
+            Format::Ttml => captions::ttml::build(capt()?, layout, &labels()),
+            Format::Text => (captions::transcript::build(capt()?, layout, &labels()), 0),
+            Format::Adr => {
+                let adr = captions::adr::Options { labels: labels(), ..outputs.adr.clone() };
+                captions::adr::build(capt()?, layout, &adr)
+            }
             Format::Premiere => {
                 let t = captions::premiere::build(words, layout, default_language, seed)
                     .ok_or_else(|| anyhow!("no words to write"))?;
                 (serde_json::to_string_pretty(&t)?, 0)
             }
-            Format::Capt => (doc.ok_or_else(|| anyhow!("no CAPT document to write"))?.write(), 0),
+            Format::Capt => (capt()?.write(), 0),
         };
         cues = cues.max(n);
         std::fs::write(path, text).with_context(|| format!("cannot write {}", path.display()))?;
@@ -424,10 +479,25 @@ pub fn default_output(input: &Path, out_dir: Option<&Path>) -> PathBuf {
 /// The .srt base for an `-o` path given with any output extension: `clip.premiere.json` -> `clip.srt`.
 pub fn output_base(path: &Path) -> PathBuf {
     let name = path.file_name().map_or_else(String::new, |n| n.to_string_lossy().into_owned());
-    let stem = [".premiere.json", ".soniox.json", ".words.json", ".srt", ".vtt", ".ass", ".capt", ".json"]
-        .iter()
-        .find_map(|s| strip_suffix(&name, s))
-        .unwrap_or(&name);
+    let stem = [
+        ".premiere.json",
+        ".soniox.json",
+        ".words.json",
+        ".sdh.srt",
+        ".adr.csv",
+        ".srt",
+        ".vtt",
+        ".ass",
+        ".capt",
+        ".ttml",
+        ".lrc",
+        ".sbv",
+        ".txt",
+        ".json",
+    ]
+    .iter()
+    .find_map(|s| strip_suffix(&name, s))
+    .unwrap_or(&name);
     path.with_file_name(format!("{stem}.srt"))
 }
 

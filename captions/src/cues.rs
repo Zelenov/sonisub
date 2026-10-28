@@ -30,6 +30,9 @@ pub struct Layout {
     /// Break a cue's text into up to `max_lines` lines of `max_line` chars. Off: one line per cue,
     /// up to `max_line × max_lines` chars.
     pub wrap_lines: bool,
+    /// The video's frame, width and height in pixels. Writers that place text (ASS, WebVTT, TTML)
+    /// use it; a vertical frame keeps text clear of a phone app's buttons ([`Layout::vertical`]).
+    pub frame: (u32, u32),
 }
 
 impl Default for Layout {
@@ -44,6 +47,7 @@ impl Default for Layout {
             speaker_labels: false,
             speaker_names: Vec::new(),
             wrap_lines: false,
+            frame: (1920, 1080),
         }
     }
 }
@@ -52,6 +56,17 @@ impl Layout {
     /// No length or duration limit: every cue is one sentence of one speaker.
     pub fn unlimited() -> Self {
         Self { max_line: 0, max_duration: 0.0, ..Self::default() }
+    }
+
+    /// For a vertical video (Reels, Shorts, TikTok, 1080×1920): short lines broken in two, short
+    /// cues, so the text stays narrow and quick to read on a phone.
+    pub fn vertical() -> Self {
+        Self { max_line: 22, max_lines: 2, max_duration: 4.0, wrap_lines: true, frame: (1080, 1920), ..Self::default() }
+    }
+
+    /// Whether the frame is taller than it is wide.
+    pub fn is_vertical(&self) -> bool {
+        self.frame.1 > self.frame.0
     }
 }
 
@@ -76,6 +91,7 @@ fn split_dashes(w: Word) -> Vec<Word> {
     let total = chars.len().max(1) as u64;
     let span = w.end.saturating_sub(w.start);
     let mut done = 0u64;
+    let n = parts.len();
     parts
         .into_iter()
         .enumerate()
@@ -83,7 +99,13 @@ fn split_dashes(w: Word) -> Vec<Word> {
             let start = w.start + span * done / total;
             done += text.chars().count() as u64;
             let end = w.start + span * done / total;
-            Word { text, start, end, glued: i > 0 || w.glued, ..w.clone() }
+            // Only the last part keeps what follows the word: its cut point and sentence end.
+            let mut marks = w.marks.clone();
+            if i + 1 < n {
+                marks.cut = None;
+                marks.sentence = None;
+            }
+            Word { text, start, end, glued: i > 0 || w.glued, marks, ..w.clone() }
         })
         .collect()
 }
@@ -123,15 +145,27 @@ fn ends_clause(w: &str) -> bool {
 }
 
 /// How clean a cut between two words is: 0 at punctuation, 1 at a pause, 2 anywhere else.
+/// A CAPT file's cut points decide where a cut is clean: a cut point is as clean as its punctuation
+/// or pause (at least a pause), and no cut point means "only if nothing else fits".
 pub(crate) fn cut_level(prev: &Word, next: &Word) -> usize {
     const PAUSE_MS: u64 = 400;
-    if ends_clause(&prev.text) || next.text.starts_with(['—', '–', '(', '«', '“', '"']) {
+    let natural = if ends_clause(&prev.text) || next.text.starts_with(['—', '–', '(', '«', '“', '"']) {
         0
     } else if next.start.saturating_sub(prev.end) >= PAUSE_MS {
         1
     } else {
         2
+    };
+    match prev.marks.cut {
+        Some(true) => natural.min(1),
+        Some(false) => 2,
+        None => natural,
     }
+}
+
+/// A sentence ends after `w`: its punctuation, unless a CAPT file says otherwise.
+fn ends(w: &Word) -> bool {
+    w.marks.sentence.unwrap_or_else(|| ends_sentence(&w.text))
 }
 
 const CUE_COST: f64 = 100.0;
@@ -176,7 +210,7 @@ pub(crate) fn sentences(words: Vec<Word>, s: &Layout) -> Vec<Vec<Word>> {
         if let Some(prev) = cur.last() {
             let hard = (s.by_speaker && w.speaker != prev.speaker)
                 || (gap_ms > 0 && w.start.saturating_sub(prev.end) > gap_ms)
-                || ends_sentence(&prev.text);
+                || ends(prev);
             if hard {
                 blocks.push(std::mem::take(&mut cur));
             }
@@ -191,9 +225,9 @@ pub(crate) fn sentences(words: Vec<Word>, s: &Layout) -> Vec<Vec<Word>> {
     for mut b in blocks {
         if let Some(prev) = out.last_mut() {
             let last = prev.last().expect("blocks are non-empty");
-            let tail = b.iter().take(2).position(|w| ends_sentence(&w.text)).map(|i| i + 1);
+            let tail = b.iter().take(2).position(ends).map(|i| i + 1);
             if let Some(k) = tail
-                && !ends_sentence(&last.text)
+                && !ends(last)
                 && last.speaker == b[0].speaker
             {
                 prev.extend(b.drain(..k));
@@ -404,18 +438,30 @@ pub fn cues(words: &[Word], s: &Layout) -> Vec<Cue> {
             _ => String::new(),
         };
         prev_speaker = Some(speaker.clone());
-        for (k, r) in split(&sentence, &prefix, s).into_iter().enumerate() {
-            let ws = &sentence[r];
-            let p = if k == 0 { prefix.as_str() } else { "" };
-            let text = format!("{p}{}", join(ws));
-            cues.push(Cue {
-                start: ws[0].start,
-                end: ws.last().expect("non-empty").end,
-                lines: lay_out(&text, s).unwrap_or_else(|| vec![text.clone()]),
-                prefix: p.to_string(),
-                speaker: if s.by_speaker { speaker.clone() } else { None },
-                words: ws.to_vec(),
-            });
+        // A subtitle sits in one place: a sentence whose words change place is cut there first.
+        let mut runs: Vec<&[Word]> = Vec::new();
+        let mut from = 0;
+        for i in 1..=sentence.len() {
+            if i == sentence.len() || sentence[i].marks.pos != sentence[i - 1].marks.pos {
+                runs.push(&sentence[from..i]);
+                from = i;
+            }
+        }
+        for (ri, run) in runs.into_iter().enumerate() {
+            let pre = if ri == 0 { prefix.as_str() } else { "" };
+            for (k, r) in split(run, pre, s).into_iter().enumerate() {
+                let ws = &run[r];
+                let p = if k == 0 { pre } else { "" };
+                let text = format!("{p}{}", join(ws));
+                cues.push(Cue {
+                    start: ws[0].start,
+                    end: ws.last().expect("non-empty").end,
+                    lines: lay_out(&text, s).unwrap_or_else(|| vec![text.clone()]),
+                    prefix: p.to_string(),
+                    speaker: if s.by_speaker { speaker.clone() } else { None },
+                    words: ws.to_vec(),
+                });
+            }
         }
     }
 

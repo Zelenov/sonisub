@@ -7,7 +7,7 @@ No network, no ffmpeg, no speech provider: give it words, it lays them out. It i
 `sonisub` command line writes.
 
 ```toml
-captions = "0.2"
+captions = "0.3"
 ```
 
 ```rust
@@ -37,6 +37,11 @@ let (ass, _) = ass::build(&words, &layout, &ass::Options { karaoke: true, ..Defa
   of a word with its time, words, cut points, sentences, speakers, languages and confidence as small text.
   `capt::Doc::parse` reads a file (every problem with its line), `write` writes one, `from_spoken` makes one from a
   recogniser's words with their pieces, `from_words` from plain `Word`s, and `to_words` gives the `Word`s back for the
-  writers above.
+  writers above; a CAPT file's cut points, sentence ends, places and italic reach every writer through
+  `Word::marks`.
+- From a CAPT file with its sounds and voices: `sdh` (SRT for the deaf and hard of hearing), `ttml` (TTML / IMSC),
+  `transcript` (plain text), `adr` (a DaVinci Resolve Fairlight ADR cue list); `lrc` (Enhanced LRC) and `sbv`
+  (YouTube) from words. `labels` writes sounds and voices in English or Russian.
+- `Layout::vertical()` and `Layout::frame`: short lines for a vertical video, and text kept clear of a phone app.
 
 MIT licensed.
