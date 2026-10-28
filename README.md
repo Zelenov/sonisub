@@ -1,8 +1,12 @@
 # sonisub
 
+<img src="https://raw.githubusercontent.com/Zelenov/sonisub/main/docs/icon/sonisub-256.png" align="left" width="128" height="128" alt="sonisub icon">
+
 Generate `.srt` subtitles (and Premiere Pro transcripts) for video and audio files with
 [Soniox](https://soniox.com) speech-to-text.
 One self-contained binary: no Python, no ffmpeg required.
+
+<br clear="left">
 
 ```
 sonisub clip.MP4
