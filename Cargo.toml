@@ -1,6 +1,6 @@
 [package]
 name = "sonisub"
-version = "0.6.0"
+version = "0.6.1"
 edition = "2024"
 description = "Generate .srt subtitles from video/audio files with Soniox speech-to-text"
 repository = "https://github.com/Zelenov/sonisub"
@@ -8,8 +8,8 @@ license = "MIT"
 readme = "README.md"
 keywords = ["subtitles", "srt", "speech-to-text", "soniox", "transcription"]
 categories = ["multimedia::audio", "command-line-utilities"]
-# The crate as published: sources, README, license. Tests and their videos stay in the repository.
-include = ["src/**", "Cargo.toml", "Cargo.lock", "README.md", "LICENSE", "version.md"]
+# The crate as published: sources, README, license, and the build script with the icon it embeds. Tests and their videos stay in the repository.
+include = ["src/**", "Cargo.toml", "Cargo.lock", "README.md", "LICENSE", "version.md", "build.rs", "docs/icon/sonisub.ico"]
 
 [features]
 default = ["cli"]
@@ -21,6 +21,10 @@ cli = ["dep:clap", "dep:ctrlc"]
 name = "sonisub"
 path = "src/main.rs"
 required-features = ["cli"]
+
+# The icon of sonisub.exe (build.rs); only when building on Windows.
+[target.'cfg(windows)'.build-dependencies]
+winresource = "0.1"
 
 [dependencies]
 anyhow = "1.0.104"

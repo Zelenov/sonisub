@@ -1,3 +1,7 @@
+# 0.6.1
+## Added
+- `sonisub.exe` has an icon: Explorer, the taskbar and the file properties show it instead of the generic one. The README shows it too. Only the Windows command line build changes; the library and other systems build as before.
+
 # 0.6.0
 ## Added
 - The batch bar now moves while a file is worked on, not only when one finishes: extracting, uploading and transcribing count toward it by audio length. It shows `eta ~4 min`, computed from the audio left and the smoothed speed of the run (hidden until a file is done or 30 s have passed), and the cost so far. A single file gets the same bar.
