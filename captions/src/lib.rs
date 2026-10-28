@@ -8,6 +8,7 @@
 //! - [`capt`] reads and writes CAPT, the transcript format between a recogniser and these writers.
 //! - From a CAPT file, with its sounds and voices: [`sdh`] (SRT, WebVTT and ASS for the deaf and
 //!   hard of hearing), labels from [`labels`].
+//! - [`ytt`] writes YouTube's YTT (srv3), a time for every word ([`sdh::ytt`] with sounds).
 
 use serde::{Deserialize, Serialize};
 
@@ -20,6 +21,7 @@ pub mod sdh;
 pub mod srt;
 mod style;
 pub mod vtt;
+pub mod ytt;
 
 pub use cues::{Cue, Layout};
 

@@ -168,6 +168,7 @@ file it writes.
 | SRT | `<i>` | | `{\anN}`, the nearest of nine | with `--sdh` | with `--sdh` |
 | WebVTT | `<i>` | `<lang xx>` | cue settings; a rectangle's width and top | with `--sdh` | with `--sdh` |
 | ASS | `{\i1}` | | alignment and margins; a rectangle's width and top | with `--sdh` | with `--sdh`, in the speaker's style |
+| YTT (`.ytt`, srv3) | pen `i="1"` | | a window position; a rectangle's top and centre | with `--sdh` | with `--sdh` |
 | Premiere | | | | | |
 
 With `--sdh` a voice is a label where it starts (`[whispering] please`), and every sound is a subtitle of its
