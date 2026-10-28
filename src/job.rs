@@ -29,6 +29,9 @@ pub enum Format {
     Premiere,
     /// CAPT, the whole transcript as small text, every other format can be made from: `clip.capt`.
     Capt,
+    /// A plain text transcript, a paragraph per speaker turn, sounds and voices as labels: `clip.txt`.
+    #[cfg_attr(feature = "cli", value(alias = "text"))]
+    Transcript,
 }
 
 impl Format {
@@ -40,6 +43,7 @@ impl Format {
             Format::Ass => output.with_extension("ass"),
             Format::Premiere => output.with_extension("premiere.json"),
             Format::Capt => output.with_extension("capt"),
+            Format::Transcript => output.with_extension("txt"),
         }
     }
 }
@@ -315,6 +319,7 @@ pub fn write_outputs(
             Format::Srt => captions::srt::build(cue_words, layout),
             Format::Vtt => vtt::build(cue_words, layout),
             Format::Ass => ass::build(cue_words, layout, &outputs.ass),
+            Format::Transcript => (captions::transcript::build(doc, layout, &labels), 0),
             Format::Premiere => {
                 let t = captions::premiere::build(words, layout, default_language, seed)
                     .ok_or_else(|| anyhow!("no words to write"))?;
@@ -458,7 +463,7 @@ pub fn default_output(input: &Path, out_dir: Option<&Path>) -> PathBuf {
 /// The .srt base for an `-o` path given with any output extension: `clip.premiere.json` -> `clip.srt`.
 pub fn output_base(path: &Path) -> PathBuf {
     let name = path.file_name().map_or_else(String::new, |n| n.to_string_lossy().into_owned());
-    let stem = [".premiere.json", ".soniox.json", ".words.json", ".srt", ".vtt", ".ass", ".capt", ".json"]
+    let stem = [".premiere.json", ".soniox.json", ".words.json", ".srt", ".vtt", ".ass", ".capt", ".txt", ".json"]
         .iter()
         .find_map(|s| strip_suffix(&name, s))
         .unwrap_or(&name);

@@ -85,7 +85,7 @@ pub struct RunArgs {
 
     /// What to write, comma separated: srt, vtt (WebVTT), ass (a style per speaker), premiere (Premiere Pro
     /// transcript, clip.premiere.json), capt (the whole transcript as small text, clip.capt; `sonisub render`
-    /// makes the other formats from it). Only missing files are written, so adding a format later reuses the saved
+    /// makes the other formats from it), transcript (plain text, a paragraph per speaker turn, clip.txt). Only missing files are written, so adding a format later reuses the saved
     /// transcript for free.
     #[arg(short = 't', long = "format", value_enum, value_delimiter = ',', default_value = "srt")]
     pub formats: Vec<Format>,
@@ -219,10 +219,20 @@ pub struct SegArgs {
     #[arg(long, help_heading = "Outputs")]
     pub sdh: bool,
 
-    /// The language of sound and voice labels (--sdh): en ([laughs]) or ru ((смеётся)).
+    /// The language of sound and voice labels (--sdh, -t transcript): en ([laughs]) or ru ((смеётся)).
     /// Default: ru for a Russian transcript, else en.
-    #[arg(long, value_parser = captions::labels::LANGUAGES, requires = "sdh", help_heading = "Outputs")]
+    #[arg(long, value_parser = captions::labels::LANGUAGES, help_heading = "Outputs")]
     pub labels: Option<String>,
+}
+
+impl SegArgs {
+    /// `--labels` with nothing that writes a label is a mistake: say so instead of ignoring it.
+    pub fn check_labels(&self, formats: &[Format]) -> anyhow::Result<()> {
+        if self.labels.is_some() && !self.sdh && !formats.contains(&Format::Transcript) {
+            anyhow::bail!("--labels needs --sdh or -t transcript: nothing else writes a label");
+        }
+        Ok(())
+    }
 }
 
 fn parse_frame(s: &str) -> Result<(u32, u32), String> {
@@ -274,7 +284,7 @@ pub struct RenderArgs {
     /// (start and end in milliseconds; speaker and language optional).
     pub input: PathBuf,
 
-    /// What to write, comma separated: srt, vtt, ass, premiere, capt.
+    /// What to write, comma separated: srt, vtt, ass, premiere, capt, transcript.
     #[arg(short = 't', long = "format", value_enum, value_delimiter = ',', default_value = "srt")]
     pub formats: Vec<Format>,
 

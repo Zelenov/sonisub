@@ -282,3 +282,39 @@ fn labels_without_sdh_are_refused() {
     assert!(!out.status.success());
     assert!(plain(&out).contains("--sdh"), "{}", plain(&out));
 }
+
+#[test]
+fn render_writes_transcript() {
+    let dir = tempfile::tempdir().unwrap();
+    let capt = dir.path().join("marks.capt");
+    std::fs::copy(common::fixture("marks.capt"), &capt).unwrap();
+    let out = sonisub(&["render".as_ref(), capt.as_os_str(), "-t".as_ref(), "transcript".as_ref()]).output().unwrap();
+    assert!(out.status.success(), "{}", plain(&out));
+    let written = std::fs::read_to_string(dir.path().join("marks.txt")).unwrap();
+    assert_eq!(common::normalize(&written), common::golden("marks.txt"));
+}
+
+#[test]
+fn a_transcript_takes_labels_and_a_file_of_sounds_only() {
+    let dir = tempfile::tempdir().unwrap();
+    let capt = dir.path().join("intro.capt");
+    std::fs::write(
+        &capt,
+        "CAPT 1
+
+00:00:00.000 --> 00:00:04.000 sound:laughter
+",
+    )
+    .unwrap();
+    let args = ["render".as_ref(), capt.as_os_str(), "-t".as_ref(), "transcript".as_ref()];
+    let out = sonisub(&[&args[..], &["--labels".as_ref(), "ru".as_ref()]].concat()).output().unwrap();
+    assert!(out.status.success(), "{}", plain(&out));
+    let txt = std::fs::read_to_string(dir.path().join("intro.txt")).unwrap();
+    assert_eq!(
+        txt,
+        "[00:00:00]
+(смеётся)
+
+"
+    );
+}

@@ -8,6 +8,7 @@
 //! - [`capt`] reads and writes CAPT, the transcript format between a recogniser and these writers.
 //! - From a CAPT file, with its sounds and voices: [`sdh`] (SRT, WebVTT and ASS for the deaf and
 //!   hard of hearing), labels from [`labels`].
+//! - [`transcript`] writes a plain text transcript from a CAPT file, a paragraph per turn.
 
 use serde::{Deserialize, Serialize};
 
@@ -19,6 +20,7 @@ pub mod premiere;
 pub mod sdh;
 pub mod srt;
 mod style;
+pub mod transcript;
 pub mod vtt;
 
 pub use cues::{Cue, Layout};
