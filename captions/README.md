@@ -7,7 +7,7 @@ No network, no ffmpeg, no speech provider: give it words, it lays them out. It i
 `sonisub` command line writes.
 
 ```toml
-captions = "0.1"
+captions = "0.2"
 ```
 
 ```rust

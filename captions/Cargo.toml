@@ -1,6 +1,6 @@
 [package]
 name = "captions"
-version = "0.1.0"
+version = "0.2.0"
 edition = "2024"
 description = "Words with timing → cues → SRT, WebVTT, ASS, Premiere Pro transcript; the CAPT transcript format"
 repository = "https://github.com/Zelenov/sonisub"
