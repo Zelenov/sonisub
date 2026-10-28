@@ -435,10 +435,10 @@ fn render(args: &RenderArgs) -> Result<()> {
     let is_capt = input.extension().is_some_and(|e| e.eq_ignore_ascii_case("capt")) || text.starts_with("CAPT ");
     let (words, doc) = if is_capt {
         let doc = Doc::parse(text).map_err(|errors| {
-            let list: Vec<String> = errors.0.iter().map(|e| format!("  {e}")).collect();
+            let list: Vec<String> = errors.to_string().lines().map(|l| format!("  {l}")).collect();
             anyhow!("{} is not a valid CAPT file:\n{}", input.display(), list.join("\n"))
         })?;
-        (doc.words(), Some(doc))
+        (doc.to_words(), Some(doc))
     } else {
         let words: Vec<sonisub::captions::Word> = serde_json::from_str(text)
             .with_context(|| format!("{} is neither a CAPT file nor a JSON list of words", input.display()))?;

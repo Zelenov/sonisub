@@ -67,8 +67,7 @@ sonisub . -t premiere                     # only the Premiere transcript; saved 
 sonisub clip.MP4 -t srt,vtt,ass           # also clip.vtt (WebVTT) and clip.ass (a style per speaker)
 sonisub clip.MP4 -t ass --karaoke         # each word lights up as it is spoken
 sonisub clip.MP4 -t srt,capt              # also clip.capt, the whole transcript as small text
-sonisub render clip.capt -t vtt,premiere  # other formats from a CAPT file, no Soniox
-sonisub render clip.words.json -t srt,ass # subtitles from saved words, no Soniox
+sonisub render clip.capt -t vtt,premiere  # other formats from a CAPT file or saved words, no Soniox
 sonisub clip.MP4 --no-json                # don't keep clip.soniox.json
 sonisub clip.MP4 -u                       # no length limit: one cue per sentence
 sonisub clip.MP4 -s                       # "Speaker 1: ..." when the speaker changes

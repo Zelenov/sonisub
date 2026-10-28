@@ -9,7 +9,7 @@
 //!   [`Doc::from_spoken`] reads back the same: `Doc::parse(&doc.write()) == Ok(doc)`.
 //! - [`Doc::from_spoken`] makes one from a recogniser's words with their pieces;
 //!   [`Doc::from_words`] from plain [`crate::Word`]s (one piece per word).
-//! - [`Doc::words`] gives the words back for the writers ([`crate::srt`], [`crate::premiere`], …).
+//! - [`Doc::to_words`] gives the words back for the writers ([`crate::srt`], [`crate::premiere`], …).
 //!
 //! Times are kept to 10 ms (the marks are hundredths) and confidence to two decimals.
 
@@ -112,7 +112,7 @@ pub struct Block {
     pub spans: Vec<Span>,
 }
 
-/// A word of a block's text.
+/// A word of a block's text with its pieces; [`Doc::to_words`] turns a file's into [`crate::Word`]s.
 #[derive(Debug, Clone, PartialEq)]
 pub struct Word {
     /// The pieces in order; at least one.
@@ -561,6 +561,7 @@ impl Doc {
                 doc.read_header(line, i, &mut errors);
             }
         }
+        let mut last_at: Option<usize> = None;
         while i < lines.len() {
             if lines[i].trim().is_empty() {
                 i += 1;
@@ -569,11 +570,27 @@ impl Doc {
             let at = i + 1;
             let mut block_lines = vec![lines[i]];
             while i + 1 < lines.len() && !lines[i + 1].trim().is_empty() {
+                if is_block_line(lines[i + 1]) {
+                    // The next block starts here; it is read as one, and the missing blank line named.
+                    errors.push(Error { line: i + 2, message: "put a blank line before this block line".into() });
+                    break;
+                }
                 i += 1;
                 block_lines.push(lines[i]);
             }
             i += 1;
             if let Some(b) = parse_block(&block_lines, at, &mut errors) {
+                if let (Some(prev), Some(prev_at)) = (doc.blocks.last(), last_at)
+                    && b.start < prev.start
+                {
+                    errors.push(Error {
+                        line: at,
+                        message: format!(
+                            "this block starts before the block on line {prev_at}: blocks are in order of start"
+                        ),
+                    });
+                }
+                last_at = Some(at);
                 doc.blocks.push(b);
             }
         }
@@ -667,6 +684,16 @@ fn parse_block(lines: &[&str], at: usize, errors: &mut Vec<Error>) -> Option<Blo
             Ok((phrases, marked)) => {
                 b.phrases = phrases;
                 b.untimed = !marked;
+                if marked && let Some(w) = b.words().find(|w| w.end > end || w.pieces.iter().any(|p| p.start > end)) {
+                    errors.push(Error {
+                        line: at + 1,
+                        message: format!(
+                            "the mark {{{}}} is after the block's end",
+                            (w.end.max(w.start()) - start) / 10
+                        ),
+                    });
+                    text_ok = false;
+                }
                 if b.untimed {
                     spread_times(&mut b);
                 }
@@ -682,12 +709,10 @@ fn parse_block(lines: &[&str], at: usize, errors: &mut Vec<Error>) -> Option<Blo
             (all_digits(a) && all_digits(z)).then_some((a, z, opts))
         });
         let Some((a, z, opts)) = parsed else {
-            let message = if is_block_line(line) {
-                "a blank line ends a block before the next block line"
-            } else {
-                "after the text a block has only spans, “{from..to} key:value”"
-            };
-            errors.push(Error { line: line_no, message: message.into() });
+            errors.push(Error {
+                line: line_no,
+                message: "after the text a block has only spans, “{from..to} key:value”".into(),
+            });
             continue;
         };
         let from = a.parse().ok().and_then(|a| offset(start, a));
@@ -716,7 +741,7 @@ fn time(ms: u64) -> String {
 }
 
 fn part(p: &str) -> String {
-    if !p.is_empty() && !p.contains([' ', ',', '"']) {
+    if !p.is_empty() && !p.chars().any(|c| c == ',' || c == '"' || c.is_whitespace() || c.is_control()) {
         return p.to_string();
     }
     format!("\"{}\"", p.replace('\\', "\\\\").replace('"', "\\\""))
@@ -755,6 +780,8 @@ fn escape(text: &str, whole_word: bool) -> String {
     if whole_word && text == "/" {
         return "\\/".into();
     }
+    // The text is one line: any other space or control character becomes a space.
+    let text: String = text.chars().map(|c| if c.is_whitespace() || c.is_control() { ' ' } else { c }).collect();
     text.replace('\\', "\\\\").replace('{', "\\{").replace('}', "\\}").replace(' ', "\\ ")
 }
 
@@ -811,7 +838,7 @@ impl Block {
         if self.sound.is_some() || self.phrases.is_empty() {
             return out;
         }
-        let cs = |ms: u64| (ms.saturating_sub(self.start) + 5) / 10;
+        let cs = |ms: u64| ms.saturating_sub(self.start).saturating_add(5) / 10;
         let word = |w: &Word| {
             let whole = w.pieces.len() == 1;
             if self.untimed {
@@ -862,9 +889,12 @@ fn majority<'a>(langs: impl Iterator<Item = &'a str>) -> Option<String> {
     counts.iter().rev().max_by_key(|(_, n)| *n).map(|(l, _)| l.to_string())
 }
 
+/// The latest time a writer keeps: far below what a mark can hold, so `+ 10` never overflows.
+const LATEST: u64 = u64::MAX / 100 * 10;
+
 /// Times on the 10 ms grid the marks are written on.
 fn grid(ms: u64) -> u64 {
-    ms.saturating_add(5) / 10 * 10
+    (ms.min(LATEST) + 5) / 10 * 10
 }
 
 fn span(from: u64, to: u64, key: &str, value: String) -> Span {
@@ -904,7 +934,9 @@ impl Doc {
         }
         let seed = doc.id.clone().unwrap_or_default();
         let mut at = 0;
-        for sentence in cues::sentences(plain.clone(), &Layout::default()) {
+        // The format's own block rule, fixed here: not the subtitle layout's defaults.
+        let blocks = Layout { gap: 2.0, by_speaker: true, ..Layout::default() };
+        for sentence in cues::sentences(plain.clone(), &blocks) {
             let range = at..at + sentence.len();
             at = range.end;
             let mut b = block(&plain[range.clone()], &spoken[range], lang.as_ref());
@@ -937,7 +969,7 @@ impl Doc {
 
     /// The speech as [`crate::Word`]s, for the writers: a word's language is its span's, else its
     /// block's, else the file's; its confidence the mean of its pieces'. Sound blocks are left out.
-    pub fn words(&self) -> Vec<crate::Word> {
+    pub fn to_words(&self) -> Vec<crate::Word> {
         let mut out = Vec::new();
         for b in self.blocks.iter().filter(|b| b.sound.is_none()) {
             for w in b.words() {

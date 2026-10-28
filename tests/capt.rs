@@ -35,7 +35,7 @@ fn a_written_file_reads_back_as_the_same_doc() {
 fn the_words_come_back_as_soniox_gave_them() {
     for name in NAMES {
         let t = common::transcript_of(name);
-        let from_capt = Doc::parse(&common::golden(&format!("{name}.capt"))).unwrap().words();
+        let from_capt = Doc::parse(&common::golden(&format!("{name}.capt"))).unwrap().to_words();
         let from_soniox = soniox::words(&t);
         assert_eq!(from_capt.len(), from_soniox.len(), "{name}");
         for (a, b) in from_capt.iter().zip(&from_soniox) {
@@ -61,7 +61,7 @@ fn subtitles_from_capt_are_the_subtitles_from_soniox() {
     let speakers = Layout { speaker_labels: true, ..Layout::default() };
     let wrapped = Layout { wrap_lines: true, ..Layout::default() };
     for name in NAMES {
-        let words = Doc::parse(&common::golden(&format!("{name}.capt"))).unwrap().words();
+        let words = Doc::parse(&common::golden(&format!("{name}.capt"))).unwrap().to_words();
         assert_eq!(srt::build(&words, &Layout::default()).0, common::golden(&format!("{name}.srt")), "{name}.srt");
         assert_eq!(
             srt::build(&words, &Layout::unlimited()).0,
@@ -71,7 +71,7 @@ fn subtitles_from_capt_are_the_subtitles_from_soniox() {
         assert_eq!(srt::build(&words, &speakers).0, common::golden(&format!("{name}.speakers.srt")), "{name}");
         assert_eq!(srt::build(&words, &wrapped).0, common::golden(&format!("{name}.wrap.srt")), "{name}");
     }
-    let words = Doc::parse(&common::golden("dialog.capt")).unwrap().words();
+    let words = Doc::parse(&common::golden("dialog.capt")).unwrap().to_words();
     let layout = Layout::default();
     assert_eq!(vtt::build(&words, &layout).0, common::golden("dialog.vtt"));
     assert_eq!(ass::build(&words, &layout, &ass::Options::default()).0, common::golden("dialog.ass"));
@@ -93,7 +93,7 @@ fn without_confidence(mut t: Value) -> Value {
 fn the_premiere_transcript_from_capt_has_the_same_speakers_words_and_times() {
     for name in NAMES {
         let d = Doc::parse(&common::golden(&format!("{name}.capt"))).unwrap();
-        let t = premiere::build(&d.words(), &Layout::default(), Some("en"), d.id.as_deref().unwrap()).unwrap();
+        let t = premiere::build(&d.to_words(), &Layout::default(), Some("en"), d.id.as_deref().unwrap()).unwrap();
         let golden = common::golden_json(&format!("{name}.premiere.json"));
         assert_eq!(without_confidence(t), without_confidence(golden), "{name}");
     }

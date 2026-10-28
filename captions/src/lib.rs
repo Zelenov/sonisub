@@ -5,6 +5,7 @@
 //!
 //! - [`cues`] cuts words into subtitle cues by a [`Layout`].
 //! - [`srt`], [`vtt`] and [`ass`] write those cues; [`premiere`] writes a Premiere Pro transcript.
+//! - [`capt`] reads and writes CAPT, the transcript format between a recogniser and these writers.
 
 use serde::{Deserialize, Serialize};
 

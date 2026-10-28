@@ -94,7 +94,8 @@ tie by 10 ms), and a word with a span on its last piece ends at least 10 ms afte
   over the block by length.
 - A backslash makes the next character plain text. Writers escape exactly `\{`, `\}`, `\\`, `\ `
   for a space inside a word (`New\ York`), and `\/` for a slash that is a whole word (`and \/ or`;
-  `24/7` needs nothing).
+  `24/7` needs nothing). A line break, tab or other control character inside a word is written as a
+  space. Every mark lies within the block's start and end.
 
 ## Sentences
 
@@ -145,17 +146,17 @@ is the time no block covers.
 
 Every problem, each with its line: a first line other than `CAPT 1`; a quote never closed; a time
 not `HH:MM:SS.mmm`; a `pos` that is not one of its forms or a rectangle outside the frame; a mark
-that is not a number, or earlier than the mark before it; two pieces that start at the same mark; a
-text line with marks on some words only; a `{` never closed or a `}` that closes nothing; a sound
-block with text; a line after the text that is not a span (a block line there means a blank line is
-missing); a span that does not start where a piece starts, ends at no later mark, or puts a
+that is not a number, earlier than the mark before it, or after the block's end; two pieces that
+start at the same mark; a text line with marks on some words only; a block that starts before the
+block above it; a block line with no blank line before it; a `{` never closed or a `}` that closes nothing; a sound
+block with text; a line after the text that is not a span; a span that does not start where a piece starts, ends at no later mark, or puts a
 whole-word option on part of a word. Problems are listed in order of line.
 
 ## What sonisub reads today
 
 `sonisub render clip.capt` reads the words, their times, speakers, speaker names, languages and
-confidence. Speaker names go to ASS styles for any id, and to `-s` labels and Premiere for
-numbered speakers (`speaker:1`); `--speaker-names` replaces them, also in a CAPT file it writes. It lays out subtitles by the text's punctuation and pauses, as it does for a Soniox
+confidence. Speaker names go to ASS styles for any id, and to `-s` labels and Premiere only for
+numbered speakers (`speaker:1`). `--speaker-names` replaces them, also in a CAPT file it writes. It lays out subtitles by the text's punctuation and pauses, as it does for a Soniox
 transcript, so it does not yet follow a ` / ` moved by hand, `sentence:`, `pos`, `voice`, `style`,
 sound blocks or `alt`: that is the next step of
 [#19](https://github.com/Zelenov/sonisub/issues/19). A file you edit keeps all of them.

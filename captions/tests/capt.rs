@@ -66,7 +66,7 @@ fn every_part_reads_and_writes_back() {
 #[test]
 fn words_take_the_span_language_and_the_mean_confidence() {
     let doc = Doc::parse(FILE).unwrap();
-    let words = doc.words();
+    let words = doc.to_words();
     let get = |t: &str| words.iter().find(|w| w.text == t).unwrap();
     assert_eq!(get("Короче,").confidence, 0.68);
     assert_eq!(get("Короче,").language.as_deref(), Some("ru"));
@@ -246,7 +246,7 @@ fn a_space_inside_a_word_is_escaped() {
     let doc = Doc::from_words(&[w], None);
     let file = doc.write();
     assert!(file.contains(r"{0}New\ York{50}"), "{file}");
-    assert_eq!(Doc::parse(&file).unwrap().words()[0].text, "New York");
+    assert_eq!(Doc::parse(&file).unwrap().to_words()[0].text, "New York");
 }
 
 #[test]
@@ -303,9 +303,9 @@ fn words_from_another_recogniser_may_overlap_or_be_empty() {
     let doc = Doc::from_words(&words, None);
     let read = Doc::parse(&doc.write()).unwrap_or_else(|e| panic!("{e}\n{}", doc.write()));
     assert_eq!(read, doc);
-    let texts: Vec<String> = read.words().into_iter().map(|w| w.text).collect();
+    let texts: Vec<String> = read.to_words().into_iter().map(|w| w.text).collect();
     assert_eq!(texts, ["Мы", "used", "the", "API.", "Да."], "the empty word is dropped");
-    assert!(read.words()[0].end <= read.words()[1].start, "a word ends before the next one starts");
+    assert!(read.to_words()[0].end <= read.to_words()[1].start, "a word ends before the next one starts");
 }
 
 #[test]
@@ -337,5 +337,34 @@ fn marks_that_go_back_or_cover_only_part_of_a_line_are_errors() {
 #[test]
 fn a_missing_blank_line_between_blocks_is_named() {
     let file = "CAPT 1\n\n00:00:01.000 --> 00:00:02.000\n{0}a{10}\n00:00:03.000 --> 00:00:04.000\n{0}b{10}\n";
-    assert_eq!(errors(file)[0], "line 5: a blank line ends a block before the next block line");
+    assert_eq!(errors(file), ["line 5: put a blank line before this block line"]);
+}
+
+#[test]
+fn blocks_out_of_order_and_marks_past_the_end_are_errors() {
+    let file = "CAPT 1\n\n00:00:03.000 --> 00:00:04.000\n{0}Hi{20}\n\n00:00:01.000 --> 00:00:02.000\n{0}Yo{150}\n";
+    assert_eq!(
+        errors(file),
+        [
+            "line 6: this block starts before the block on line 3: blocks are in order of start",
+            "line 7: the mark {150} is after the block's end",
+        ]
+    );
+}
+
+#[test]
+fn a_line_break_or_tab_in_a_word_or_value_does_not_break_the_file() {
+    let w = |text: &str| captions::Word {
+        text: text.into(),
+        start: 0,
+        end: 500,
+        speaker: Some("x\ty".into()),
+        language: Some("en".into()),
+        confidence: 1.0,
+        glued: false,
+    };
+    let doc = Doc::from_words(&[w("a\nb.")], None);
+    let read = Doc::parse(&doc.write()).unwrap_or_else(|e| panic!("{e}\n{}", doc.write()));
+    assert_eq!(read.to_words()[0].text, "a b.");
+    assert_eq!(read.blocks[0].speaker.as_deref(), Some("x\ty"));
 }
