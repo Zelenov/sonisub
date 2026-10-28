@@ -36,7 +36,7 @@ pub enum Command {
         #[command(flatten)]
         api: ApiArgs,
     },
-    /// Write subtitles from saved words (a JSON list of words with timing), without transcribing again.
+    /// Write subtitles from a CAPT file or saved words (a JSON list of words with timing), without transcribing again.
     Render(RenderArgs),
     /// List (and with --yes delete) all files and transcriptions stored in the Soniox account.
     Purge {

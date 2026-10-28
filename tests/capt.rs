@@ -107,3 +107,15 @@ fn the_example_of_the_spec_reads_and_writes_back() {
     assert_eq!(doc.write(), example);
     assert_eq!(doc.blocks.len(), 3);
 }
+
+#[test]
+fn every_token_unsure_still_writes_a_readable_file() {
+    for name in NAMES {
+        let mut t = common::transcript_of(name);
+        for tok in t["tokens"].as_array_mut().unwrap() {
+            tok["confidence"] = 0.5.into();
+        }
+        let doc = soniox::capt(&t);
+        assert_eq!(Doc::parse(&doc.write()), Ok(doc), "{name}");
+    }
+}

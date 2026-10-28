@@ -431,25 +431,7 @@ pub fn missing_key() -> anyhow::Error {
 /// subtitles). Audio events and translated tokens are left out. A word's language is its first
 /// token's; its confidence the mean of its tokens'.
 pub fn words(transcript: &Value) -> Vec<Word> {
-    spoken(transcript).iter().map(word).collect()
-}
-
-/// A word with pieces as a plain [`Word`]: the pieces joined, the first one's start, the mean confidence.
-fn word(s: &Spoken) -> Word {
-    let mut confidence = 0.0;
-    for (n, p) in s.pieces.iter().enumerate() {
-        // The running mean, as words were always joined: the same floats as before.
-        confidence = if n == 0 { p.confidence } else { (confidence * n as f64 + p.confidence) / (n + 1) as f64 };
-    }
-    Word {
-        text: s.pieces.iter().map(|p| p.text.as_str()).collect(),
-        start: s.pieces.first().map_or(s.end, |p| p.start),
-        end: s.end,
-        speaker: s.speaker.clone(),
-        language: s.language.clone(),
-        confidence,
-        glued: false,
-    }
+    spoken(transcript).iter().map(Word::from).collect()
 }
 
 /// A Soniox transcript's tokens as words with their pieces, joined as [`words`] joins them: each

@@ -154,3 +154,27 @@ fn render_names_every_problem_of_a_capt_file() {
     assert!(err.contains("is not a valid CAPT file"), "{err}");
     assert!(err.contains("line 4: a mark holds a time in hundredths, not “x”"), "{err}");
 }
+
+#[test]
+fn speaker_names_go_into_capt_and_come_back_out_of_it() {
+    let dir = tempfile::tempdir().unwrap();
+    let t = dir.path().join("dialog.soniox.json");
+    std::fs::copy(common::fixture("dialog.soniox.json"), &t).unwrap();
+    let out =
+        sonisub(&[t.as_os_str(), "-t".as_ref(), "capt".as_ref(), "--speaker-names".as_ref(), "Anna,Boris".as_ref()])
+            .output()
+            .unwrap();
+    assert!(out.status.success(), "{}", plain(&out));
+    let capt = dir.path().join("dialog.capt");
+    let text = std::fs::read_to_string(&capt).unwrap();
+    assert!(text.contains("speaker:1 name:Anna\nspeaker:2 name:Boris\nspeaker:3\n"), "{text}");
+
+    let out = sonisub(&["render".as_ref(), capt.as_os_str(), "-t".as_ref(), "srt,ass".as_ref(), "-s".as_ref()])
+        .output()
+        .unwrap();
+    assert!(out.status.success(), "{}", plain(&out));
+    let srt = std::fs::read_to_string(dir.path().join("dialog.srt")).unwrap();
+    assert!(srt.contains("Anna: Hi, today"), "{srt}");
+    let ass = std::fs::read_to_string(dir.path().join("dialog.ass")).unwrap();
+    assert!(ass.contains("Style: Anna,") && ass.contains(",Boris,"), "{ass}");
+}

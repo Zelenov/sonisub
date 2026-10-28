@@ -46,3 +46,12 @@ fn certain() -> f64 {
 fn is_false(b: &bool) -> bool {
     !*b
 }
+
+/// FNV-1a of `seed` (started from `salt`) with the splitmix64 finaliser: similar seeds
+/// ("…/speaker/1", "…/speaker/2") give unrelated values, and the same seed always the same one.
+pub(crate) fn hash64(seed: &str, salt: u64) -> u64 {
+    let h = seed.bytes().fold(0xcbf2_9ce4_8422_2325 ^ salt, |h, b| (h ^ b as u64).wrapping_mul(0x0100_0000_01b3));
+    let h = (h ^ (h >> 30)).wrapping_mul(0xbf58_476d_1ce4_e5b9);
+    let h = (h ^ (h >> 27)).wrapping_mul(0x94d0_49bb_1331_11eb);
+    h ^ (h >> 31)
+}

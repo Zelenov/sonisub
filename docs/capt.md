@@ -29,7 +29,9 @@ speaker:2
 A file is UTF-8 text with `\n` line ends (a reader also takes `\r\n` and a byte order mark).
 
 1. `CAPT 1` — the first line. The number changes only when old readers would misread a file.
-2. The header: lines of options, up to the first block line.
+2. The header: lines of options, up to the first block line (a line that starts with a time and
+   ` --> `). A line with a `speaker` key describes that speaker: its `name` and any other key
+   belong to the speaker. Every other header line holds file options; several may share a line.
 3. Blocks, each followed by a blank line or the end of the file. A block is:
    - a **block line**: `HH:MM:SS.mmm --> HH:MM:SS.mmm` (start and end in the media), then the
      block's options;
@@ -52,7 +54,8 @@ The same on every line: `key:value`, separated by single spaces.
   escaped. A bare part is taken as written.
 - A time of the file is `HH:MM:SS.mmm`, everywhere. A time inside a block is hundredths of a
   second after the block's start: marks and spans.
-- A share is a decimal from 0 to 1 (`conf:0.68`, `pos:0.5,0.08`).
+- A share is a decimal from 0 to 1 (`conf:0.68`, `pos:0.5,0.08`). Writers keep `conf` to two
+  decimals, so confidence read back from a file can differ from the recogniser's in the third.
 - Languages are ISO 639 codes (`en`, `ru`). Sounds and voices are lowercase codes from one
   vocabulary (below); a code is not a word to show, each output writes it in its own language.
 - An option equal to its default is left out: the blocks of an English file carry no `lang:en`.
@@ -80,23 +83,28 @@ speaker or a sound is another source, so `speaker` and `sound` are block options
 
 Exactly one line. Words are separated by a space; every word is
 `{start}piece{time}piece…{end}`, each number the moment at that place in the text, in hundredths
-after the block start. A piece is a token of the recogniser; the pause between words shows as
-`{24} {36}`. Piece starts rise strictly within a block.
+after the block start, so times are kept to 10 ms. A piece is a token of the recogniser; the pause
+between words shows as `{24} {36}`. Piece starts rise strictly within a block (a writer moves a
+tie by 10 ms), and a word with a span on its last piece ends at least 10 ms after that piece starts.
 
 - ` / ` (a slash with a space on both sides) is a **cut point**: outputs cut here first. A writer
-  puts one where a sentence can be cut cleanly: after `, ; : — …` and at a pause of 0.4 s or more.
+  puts one where a sentence can be cut cleanly: after `, ; : — …`, before a word that starts with
+  `— – ( « “ "`, and at a pause of 0.4 s or more.
 - A text line may have no marks (a translation, a hand-written line): its words get times spread
   over the block by length.
-- A backslash makes the next character plain text. Writers escape exactly `\{`, `\}`, `\\`, and
-  `\/` for a slash that is a whole word (`and \/ or`; `24/7` needs nothing).
+- A backslash makes the next character plain text. Writers escape exactly `\{`, `\}`, `\\`, `\ `
+  for a space inside a word (`New\ York`), and `\/` for a slash that is a whole word (`and \/ or`;
+  `24/7` needs nothing).
 
 ## Sentences
 
-A writer makes one block per sentence of one speaker, and may close a block early (a sentence
-running past about 30 s, so a stream does not wait; a person cutting it in an editor). Sentences
-come from the text: one ends after a word ending in `.` `?` `!` (not an abbreviation such as
-`Dr.`, not `...`), and a block that ends without one goes on in the next block of the same speaker.
-`sentence:end|continues` on a word overrides the punctuation.
+A writer makes one block per sentence: a block ends at a sentence end, at a change of speaker and
+at a silence over 2 s (a sentence's short tail after such a silence stays with it). A person may
+cut or join blocks in an editor. Sentences come from the text: one ends after a word ending in `.`
+`?` `!` (not an abbreviation such as `Dr.`, not `...`), and a block that ends without one goes on in
+the next block of the same speaker. `sentence:end|continues` on a word overrides the punctuation.
+
+A word without a language takes its block's, else the file's.
 
 ## Spans
 
@@ -140,3 +148,11 @@ not `HH:MM:SS.mmm`; a `pos` that is not one of its forms or a rectangle outside 
 that is not a number; a `{` never closed or a `}` that closes nothing; a sound block with text; a
 line after the text that is not a span; a span that does not start where a piece starts, ends at no
 later mark, or puts a whole-word option on part of a word.
+
+## What sonisub reads today
+
+`sonisub render clip.capt` reads the words, their times, speakers, speaker names, languages and
+confidence. It lays out subtitles by the text's punctuation and pauses, as it does for a Soniox
+transcript, so it does not yet follow a ` / ` moved by hand, `sentence:`, `pos`, `voice`, `style`,
+sound blocks or `alt`: that is the next step of
+[#19](https://github.com/Zelenov/sonisub/issues/19). A file you edit keeps all of them.

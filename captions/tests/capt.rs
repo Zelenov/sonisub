@@ -10,7 +10,7 @@ lang:en
 media:"moon interview.mp4" duration:00:12:31.040
 studio:north
 speaker:1 name:Anna
-speaker:2 name:"Ann \"Lee\""
+speaker:2 name:"Ann \"Lee\"" colour:red
 
 00:00:29.000 --> 00:00:31.500 id:h2k9wq sound:music
 
@@ -94,8 +94,8 @@ fn from_words_makes_a_block_per_sentence_with_cut_points() {
     assert_eq!(
         file.split("\n\n").skip(1).collect::<Vec<_>>(),
         [
-            "00:00:00.000 --> 00:00:01.000 id:k4t6yk speaker:1\n{0}Well,{30} / {40}this{60} {60}is{70} {70}fine.{100}\n{70..100} conf:0.50",
-            "00:00:02.000 --> 00:00:02.300 id:2ccfxp speaker:1\n{0}Yes.{30}\n"
+            "00:00:00.000 --> 00:00:01.000 id:f31x18 speaker:1\n{0}Well,{30} / {40}this{60} {60}is{70} {70}fine.{100}\n{70..100} conf:0.50",
+            "00:00:02.000 --> 00:00:02.300 id:gemtxg speaker:1\n{0}Yes.{30}\n"
         ]
     );
     assert_eq!(Doc::parse(&file).unwrap(), doc);
@@ -158,4 +158,101 @@ fn values_that_need_quotes_get_them() {
     let file = doc.write();
     assert_eq!(file, "CAPT 1\ntitle:\"a, b\"\nlang:en\nnote:\"\",x\\y\n");
     assert_eq!(Doc::parse(&file).unwrap(), doc);
+}
+
+fn spoken(pieces: &[(&str, u64, f64)], end: u64, lang: &str) -> captions::capt::Spoken {
+    captions::capt::Spoken {
+        pieces: pieces
+            .iter()
+            .map(|(t, s, c)| captions::capt::SpokenPiece { text: t.to_string(), start: *s, confidence: *c })
+            .collect(),
+        end,
+        speaker: Some("1".into()),
+        language: Some(lang.into()),
+    }
+}
+
+#[test]
+fn words_in_another_language_share_a_span_and_a_tie_moves_by_10_ms() {
+    let words = [
+        spoken(&[("Короче,", 0, 1.0)], 400, "ru"),
+        spoken(&[("этот", 520, 1.0)], 700, "ru"),
+        spoken(&[("deploy", 760, 1.0), ("ment", 980, 1.0)], 1200, "en"),
+        spoken(&[("pipe", 1260, 1.0), ("line", 1260, 1.0)], 1600, "en"),
+        spoken(&[("упал.", 1700, 1.0)], 2000, "ru"),
+    ];
+    let doc = Doc::from_spoken(&words, Some("seed".into()));
+    let file = doc.write();
+    let block = file.split("\n\n").nth(1).unwrap();
+    assert_eq!(
+        block.lines().skip(1).collect::<Vec<_>>(),
+        [
+            "{0}Короче,{40} / {52}этот{70} {76}deploy{98}ment{120} {126}pipe{127}line{160} {170}упал.{200}",
+            "{76..160} lang:en"
+        ]
+    );
+    assert!(file.contains("\nlang:ru\n"), "the file's language is the most common one:\n{file}");
+    assert_eq!(Doc::parse(&file).unwrap(), doc);
+}
+
+#[test]
+fn a_piece_with_no_length_still_reads_back() {
+    let cases = [
+        vec![spoken(&[("a", 1000, 0.5)], 1004, "en"), spoken(&[("b.", 1100, 1.0)], 1200, "en")],
+        vec![spoken(&[("a", 1000, 1.0), ("b", 1004, 0.5)], 1008, "en")],
+        vec![
+            spoken(&[("Да", 1000, 1.0)], 1300, "ru"),
+            spoken(&[("ok", 1400, 1.0)], 1400, "en"),
+            spoken(&[("да.", 1500, 1.0)], 1800, "ru"),
+        ],
+    ];
+    for words in cases {
+        let doc = Doc::from_spoken(&words, None);
+        assert_eq!(Doc::parse(&doc.write()), Ok(doc.clone()), "{}", doc.write());
+    }
+}
+
+#[test]
+fn huge_numbers_are_errors_not_panics() {
+    for (file, says) in [
+        ("CAPT 1\n\n00:00:01.000 --> 00:00:02.000\n{99999999999999999999}a{1}\n", "is too large"),
+        ("CAPT 1\n\n00:00:01.000 --> 00:00:02.000\n{1844674407370955162}a{1}\n", "is too large"),
+        ("CAPT 1\n\n00:00:01.000 --> 00:00:02.000\n{0}a{10}\n{1844674407370955162..0} conf:0.5\n", "is too large"),
+        ("CAPT 1\nduration:99999999999999999:00:00.000\n", "duration is HH:MM:SS.mmm"),
+    ] {
+        let e = errors(file);
+        assert!(e.iter().any(|m| m.contains(says)), "{file:?}: {e:?}");
+    }
+}
+
+#[test]
+fn an_arrow_in_a_header_value_is_not_a_block() {
+    let mut doc = Doc { title: Some("a --> b".into()), ..Doc::default() };
+    doc.speakers.push(captions::capt::Speaker { id: "1".into(), name: Some("x --> y".into()), other: Vec::new() });
+    assert_eq!(Doc::parse(&doc.write()), Ok(doc));
+}
+
+#[test]
+fn a_space_inside_a_word_is_escaped() {
+    let w = captions::Word {
+        text: "New York".into(),
+        start: 0,
+        end: 500,
+        speaker: None,
+        language: None,
+        confidence: 1.0,
+        glued: false,
+    };
+    let doc = Doc::from_words(&[w], None);
+    let file = doc.write();
+    assert!(file.contains(r"{0}New\ York{50}"), "{file}");
+    assert_eq!(Doc::parse(&file).unwrap().words()[0].text, "New York");
+}
+
+#[test]
+fn a_speaker_line_keeps_its_other_options_and_may_start_with_any_key() {
+    let doc = Doc::parse("CAPT 1\nname:Bob speaker:3 colour:red\n").unwrap();
+    assert_eq!(doc.speakers[0].id, "3");
+    assert_eq!(doc.speakers[0].name.as_deref(), Some("Bob"));
+    assert_eq!(doc.write(), "CAPT 1\nspeaker:3 name:Bob colour:red\n");
 }

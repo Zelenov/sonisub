@@ -136,14 +136,10 @@ orange, violet, red, then repeating), black outline, bottom centre. Every line n
 you restyle or rename a person in one place. Without diarization all lines use the `Default` style. `--karaoke` adds word-by-word
 highlight (`\k`).
 
-`sonisub render words.json` makes the same files from words saved as JSON
-(`[{"text": "Hello,", "start": 120, "end": 480, "speaker": "1", "language": "en"}, ...]`, times in milliseconds),
-for example words a program stored after transcribing. It takes `-t`, `-o`, `-f` and the layout options.
-
-`-t capt` writes `clip.capt`, the whole transcript in a small text format: every piece of a word with its time,
-words, sentences, the points where subtitles may be cut, speakers, languages and confidence
-([docs/capt.md](docs/capt.md)). You can read and edit it by hand; `sonisub render clip.capt` makes the other
-formats from it, the same subtitles as from the Soniox transcript.
+`sonisub render` makes the same files without Soniox: from a CAPT file (`-t capt` writes `clip.capt`, the whole
+transcript as small text you can read and edit, see [docs/capt.md](docs/capt.md)), or from words saved as JSON
+(`[{"text": "Hello,", "start": 120, "end": 480, "speaker": "1"}, ...]`, times in milliseconds). It takes `-t`, `-o`,
+`-f` and the layout options.
 
 ## How subtitles are cut
 

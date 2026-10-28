@@ -222,23 +222,37 @@ pub fn process(input: &Path, output: &Path, opts: &Options, client: Option<&Clie
     let hint = opts.languages.first().map(String::as_str);
     let words = soniox::words(&transcript);
     let seed = transcript["id"].as_str().unwrap_or_default();
-    let mut doc = soniox::capt(&transcript);
-    if !is_transcript(input) {
-        doc.media = input.file_name().map(|n| n.to_string_lossy().into_owned());
-    }
-    let (files, cues) = write_outputs(&targets, &words, &doc, &layout, &opts.ass, hint, seed)?;
+    // CAPT keeps every token, so it is made only when asked for.
+    let doc = targets.iter().any(|(f, _)| *f == Format::Capt).then(|| {
+        let mut doc = soniox::capt(&transcript);
+        if !is_transcript(input) {
+            doc.media = input.file_name().map(|n| n.to_string_lossy().into_owned());
+        }
+        name_speakers(&mut doc, &layout, &opts.ass);
+        doc
+    });
+    let (files, cues) = write_outputs(&targets, &words, doc.as_ref(), &layout, &opts.ass, hint, seed)?;
     rep.mark(Stage::Writing, 1.0);
     Ok(Outcome::Written { files, cues, json, cached, uploaded_s })
+}
+
+/// The names the user gave (`--speaker-names`, ASS names) into a CAPT file's header.
+pub fn name_speakers(doc: &mut captions::capt::Doc, layout: &srt::Layout, ass: &ass::Options) {
+    for s in &mut doc.speakers {
+        let by_number = s.id.parse::<usize>().ok().and_then(|n| layout.speaker_names.get(n.checked_sub(1)?));
+        if let Some(name) = ass.names.get(&s.id).or(by_number).filter(|n| !n.trim().is_empty()) {
+            s.name = Some(name.clone());
+        }
+    }
 }
 
 /// Writes `words` in every format of `targets`, and `doc` (the same speech with its pieces) as
 /// [`Format::Capt`]; the files written and the number of cues (0 with only a Premiere transcript
 /// or CAPT). `default_language` and `seed` are for [`Format::Premiere`] ([`captions::premiere::build`]).
-#[allow(clippy::too_many_arguments)]
 pub fn write_outputs(
     targets: &[(Format, PathBuf)],
     words: &[captions::Word],
-    doc: &captions::capt::Doc,
+    doc: Option<&captions::capt::Doc>,
     layout: &srt::Layout,
     ass: &ass::Options,
     default_language: Option<&str>,
@@ -256,7 +270,7 @@ pub fn write_outputs(
                     .ok_or_else(|| anyhow!("no words to write"))?;
                 (serde_json::to_string_pretty(&t)?, 0)
             }
-            Format::Capt => (doc.write(), 0),
+            Format::Capt => (doc.ok_or_else(|| anyhow!("no CAPT document to write"))?.write(), 0),
         };
         cues = cues.max(n);
         std::fs::write(path, text).with_context(|| format!("cannot write {}", path.display()))?;

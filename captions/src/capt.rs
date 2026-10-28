@@ -5,18 +5,21 @@
 //! (`sound:phone`, no text). Span lines `{from..to} key:value` give options to part of a block's
 //! text. The format is specified in `docs/capt.md` of the sonisub repository.
 //!
-//! - [`Doc::parse`] reads a file, [`Doc::write`] writes one; for a file this crate wrote,
-//!   `Doc::parse(&doc.write()) == Ok(doc)`.
+//! - [`Doc::parse`] reads a file, [`Doc::write`] writes one; a `Doc` made by `parse` or
+//!   [`Doc::from_spoken`] reads back the same: `Doc::parse(&doc.write()) == Ok(doc)`.
 //! - [`Doc::from_spoken`] makes one from a recogniser's words with their pieces;
 //!   [`Doc::from_words`] from plain [`crate::Word`]s (one piece per word).
 //! - [`Doc::words`] gives the words back for the writers ([`crate::srt`], [`crate::premiere`], …).
+//!
+//! Times are kept to 10 ms (the marks are hundredths) and confidence to two decimals.
 
 use std::fmt;
 
 use crate::cues::{self, Layout};
 
-/// Options as written, in order: a key and the parts of its value (`alt:con,0.20` -> `("alt", ["con", "0.20"])`).
-pub type Options = Vec<(String, Vec<String>)>;
+/// Options as written, in order: a key and the parts of its value
+/// (`alt:con,0.20` -> `("alt", ["con", "0.20"])`).
+pub type KeyValues = Vec<(String, Vec<String>)>;
 
 /// A CAPT file.
 #[derive(Debug, Clone, PartialEq, Default)]
@@ -27,93 +30,109 @@ pub struct Doc {
     pub title: Option<String>,
     /// The main language; a block's words are in it unless the block or a span says otherwise.
     pub lang: Option<String>,
-    /// The source file and its length, milliseconds.
+    /// The source file's name.
     pub media: Option<String>,
+    /// The source's length, milliseconds.
     pub duration: Option<u64>,
     /// Every speaker the writer knows, in order of appearance.
     pub speakers: Vec<Speaker>,
     /// Header options this version does not know, kept as written.
-    pub other: Options,
+    pub other: KeyValues,
+    /// The blocks, in order of start.
     pub blocks: Vec<Block>,
 }
 
+/// A header line `speaker:1 name:Anna`.
 #[derive(Debug, Clone, PartialEq)]
 pub struct Speaker {
-    /// What blocks name it by (`speaker:1`).
+    /// What blocks name the speaker by (`speaker:1`).
     pub id: String,
+    /// The name to show; without one the speaker is "Speaker N".
     pub name: Option<String>,
+    /// The line's other options, kept as written.
+    pub other: KeyValues,
 }
 
 /// Where on screen.
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub enum Pos {
+    /// Bottom centre, the default.
     Bottom,
+    /// Top centre.
     Top,
+    /// The centre of the frame.
     Middle,
     /// The text is centred on a point; parts of the frame from its top left corner.
-    Point {
-        x: f64,
-        y: f64,
-    },
-    /// The text wraps inside a rectangle and starts at its top.
-    Rect {
-        x: f64,
-        y: f64,
-        w: f64,
-        h: f64,
-    },
+    Point { x: f64, y: f64 },
+    /// The text wraps inside a rectangle (top left corner, width, height) and starts at its top.
+    Rect { x: f64, y: f64, w: f64, h: f64 },
 }
 
 /// One source of sound over a stretch of time.
 #[derive(Debug, Clone, PartialEq, Default)]
 pub struct Block {
-    /// Milliseconds from the start of the media.
+    /// Start, milliseconds from the start of the media.
     pub start: u64,
+    /// End, milliseconds from the start of the media.
     pub end: u64,
+    /// Six characters of Crockford base32, unique in the file.
     pub id: Option<String>,
+    /// Who speaks or makes the sound.
     pub speaker: Option<String>,
     /// A sound, not speech (`phone`, `laughter`): such a block has no text.
     pub sound: Option<String>,
+    /// The language of the words; the file's when `None`.
     pub lang: Option<String>,
+    /// Where on screen; bottom when `None`.
     pub pos: Option<Pos>,
+    /// How the words are said (`whisper`).
     pub voice: Option<String>,
     /// Block options this version does not know, kept as written.
-    pub other: Options,
+    pub other: KeyValues,
     /// The text: phrases (the words between cut points), each a list of words.
     pub phrases: Vec<Vec<Word>>,
     /// Whether the text line has marks; a hand-written line may have none, and its words get times
     /// spread over the block by length.
     pub marked: bool,
+    /// Options for parts of the text.
     pub spans: Vec<Span>,
 }
 
 /// A word of a block's text.
 #[derive(Debug, Clone, PartialEq)]
 pub struct Word {
+    /// The pieces in order; at least one.
     pub pieces: Vec<Piece>,
-    /// Milliseconds from the start of the media.
+    /// End, milliseconds from the start of the media.
     pub end: u64,
 }
 
 /// A piece of a word with the moment it starts (a token of the recogniser).
 #[derive(Debug, Clone, PartialEq)]
 pub struct Piece {
+    /// The piece as written, without the escapes of the file.
     pub text: String,
+    /// Start, milliseconds from the start of the media.
     pub start: u64,
 }
 
 /// Options for the text from one moment up to another: `from` included, `to` excluded.
 #[derive(Debug, Clone, PartialEq)]
 pub struct Span {
+    /// A moment a piece starts, milliseconds from the start of the media.
     pub from: u64,
+    /// A later moment a piece starts or a word ends.
     pub to: u64,
-    pub options: Options,
+    /// The options, as written.
+    pub options: KeyValues,
 }
 
-/// What is wrong at a line of a file (1-based).
+/// What is wrong at a line of a file.
 #[derive(Debug, Clone, PartialEq)]
 pub struct Error {
+    /// The line, from 1.
     pub line: usize,
+    /// What is wrong, and what to write instead.
     pub message: String,
 }
 
@@ -125,21 +144,46 @@ impl fmt::Display for Error {
 
 impl std::error::Error for Error {}
 
-/// A word as a recogniser hears it, for [`Doc::from_spoken`].
+/// A word as a recogniser hears it, for [`Doc::from_spoken`]: [`crate::Word`] with its pieces.
 #[derive(Debug, Clone, PartialEq)]
 pub struct Spoken {
+    /// The pieces in order; at least one.
     pub pieces: Vec<SpokenPiece>,
+    /// End, milliseconds from the start of the audio.
     pub end: u64,
+    /// Speaker label ("1"); `None` without diarization.
     pub speaker: Option<String>,
+    /// Language code ("en").
     pub language: Option<String>,
 }
 
+/// A piece of a [`Spoken`] word: a token of the recogniser.
 #[derive(Debug, Clone, PartialEq)]
 pub struct SpokenPiece {
     pub text: String,
+    /// Start, milliseconds from the start of the audio.
     pub start: u64,
-    /// 0 to 1.
+    /// How sure the recogniser is, 0 to 1.
     pub confidence: f64,
+}
+
+impl From<&Spoken> for crate::Word {
+    /// The pieces joined; the first one's start; the running mean of their confidence.
+    fn from(s: &Spoken) -> Self {
+        let mut confidence = 0.0;
+        for (n, p) in s.pieces.iter().enumerate() {
+            confidence = if n == 0 { p.confidence } else { (confidence * n as f64 + p.confidence) / (n + 1) as f64 };
+        }
+        crate::Word {
+            text: s.pieces.iter().map(|p| p.text.as_str()).collect(),
+            start: s.pieces.first().map_or(s.end, |p| p.start),
+            end: s.end,
+            speaker: s.speaker.clone(),
+            language: s.language.clone(),
+            confidence,
+            glued: false,
+        }
+    }
 }
 
 impl Word {
@@ -148,6 +192,7 @@ impl Word {
         self.pieces.iter().map(|p| p.text.as_str()).collect()
     }
 
+    /// The start of its first piece.
     pub fn start(&self) -> u64 {
         self.pieces.first().map_or(self.end, |p| p.start)
     }
@@ -174,7 +219,7 @@ impl Block {
 const WORD_SPAN_OPTIONS: [&str; 5] = ["lang", "pos", "voice", "style", "sentence"];
 const POS_NAMES: [(&str, Pos); 3] = [("bottom", Pos::Bottom), ("top", Pos::Top), ("middle", Pos::Middle)];
 
-/// `HH:MM:SS.mmm` -> milliseconds.
+/// `HH:MM:SS.mmm` -> milliseconds; `None` if it is not one, or too large.
 fn parse_time(s: &str) -> Option<u64> {
     let (hms, ms) = s.split_once('.')?;
     let mut parts = hms.split(':');
@@ -191,14 +236,28 @@ fn parse_time(s: &str) -> Option<u64> {
         return None;
     }
     let (h, m, sec, ms): (u64, u64, u64, u64) = (h.parse().ok()?, m.parse().ok()?, sec.parse().ok()?, ms.parse().ok()?);
-    (m < 60 && sec < 60).then_some(((h * 60 + m) * 60 + sec) * 1000 + ms)
+    if m >= 60 || sec >= 60 {
+        return None;
+    }
+    h.checked_mul(3_600_000)?.checked_add((m * 60 + sec) * 1000 + ms)
+}
+
+/// `base` + `cs` hundredths, in milliseconds; `None` if too large.
+fn offset(base: u64, cs: u64) -> Option<u64> {
+    base.checked_add(cs.checked_mul(10)?)
+}
+
+/// A block line starts with a time and ` --> `.
+fn is_block_line(line: &str) -> bool {
+    let mut it = line.split(' ');
+    it.next().and_then(parse_time).is_some() && it.next() == Some("-->")
 }
 
 /// `key:value key:"a b",c` -> options. A part is bare (no space, comma or quote) or quoted, with
 /// `\"` and `\\` inside quotes.
-fn parse_options(s: &str) -> Result<Options, String> {
+fn parse_options(s: &str) -> Result<KeyValues, String> {
     let chars: Vec<char> = s.chars().collect();
-    let mut out: Options = Vec::new();
+    let mut out: KeyValues = Vec::new();
     let mut i = 0;
     while i < chars.len() {
         if chars[i] == ' ' {
@@ -341,18 +400,22 @@ fn scan(line: &str) -> Result<Vec<Token>, String> {
     Ok(out)
 }
 
-/// Tokens -> phrases of words; pieces without a mark before them get `u64::MAX` (spread later).
-fn words_of(tokens: Vec<Token>, base: u64) -> (Vec<Vec<Word>>, bool) {
+/// A piece or word end without a mark before it; [`spread_times`] gives it one.
+const UNTIMED: u64 = u64::MAX;
+
+fn end_word(word: &mut Option<Word>, phrases: &mut [Vec<Word>], last: &mut Option<u64>) {
+    if let Some(w) = word.take().filter(|w| !w.pieces.is_empty()) {
+        phrases.last_mut().expect("never empty").push(w);
+    }
+    *last = None;
+}
+
+/// Tokens -> phrases of words, and whether the line has marks.
+fn words_of(tokens: Vec<Token>, base: u64) -> Result<(Vec<Vec<Word>>, bool), String> {
     let mut phrases: Vec<Vec<Word>> = vec![Vec::new()];
     let mut word: Option<Word> = None;
     let mut last: Option<u64> = None;
     let mut marked = false;
-    fn end_word(word: &mut Option<Word>, phrases: &mut [Vec<Word>], last: &mut Option<u64>) {
-        if let Some(w) = word.take().filter(|w| !w.pieces.is_empty()) {
-            phrases.last_mut().expect("never empty").push(w);
-        }
-        *last = None;
-    }
     for t in tokens {
         match t {
             Token::Space => end_word(&mut word, &mut phrases, &mut last),
@@ -362,20 +425,20 @@ fn words_of(tokens: Vec<Token>, base: u64) -> (Vec<Vec<Word>>, bool) {
             }
             Token::Mark(cs) => {
                 marked = true;
-                let at = base + cs * 10;
-                last = Some(at);
-                word.get_or_insert_with(|| Word { pieces: Vec::new(), end: u64::MAX }).end = at;
+                let t = offset(base, cs).ok_or_else(|| format!("the mark {{{cs}}} is too large"))?;
+                last = Some(t);
+                word.get_or_insert_with(|| Word { pieces: Vec::new(), end: UNTIMED }).end = t;
             }
             Token::Text(text) => {
-                let w = word.get_or_insert_with(|| Word { pieces: Vec::new(), end: u64::MAX });
-                w.pieces.push(Piece { text, start: last.unwrap_or(u64::MAX) });
-                w.end = u64::MAX;
+                let w = word.get_or_insert_with(|| Word { pieces: Vec::new(), end: UNTIMED });
+                w.pieces.push(Piece { text, start: last.unwrap_or(UNTIMED) });
+                w.end = UNTIMED;
             }
         }
     }
     end_word(&mut word, &mut phrases, &mut last);
     phrases.retain(|p| !p.is_empty());
-    (phrases, marked)
+    Ok((phrases, marked))
 }
 
 /// Words with no time get times spread over the block by length; a marked word keeps its own.
@@ -386,16 +449,17 @@ fn spread_times(b: &mut Block) {
     }
     let (start, len) = (b.start, b.end.saturating_sub(b.start));
     let n = b.words().count();
+    let share = |chars: usize| start + (len as u128 * chars as u128 / total as u128) as u64;
     let mut at = 0usize;
     for (k, w) in b.phrases.iter_mut().flatten().enumerate() {
-        let s = start + (len as u128 * at as u128 / total as u128) as u64;
+        let s = share(at);
         at += w.text().chars().count() + 1;
-        let e = if k + 1 == n { b.end } else { start + (len as u128 * (at - 1) as u128 / total as u128) as u64 };
-        if w.end == u64::MAX {
+        let e = if k + 1 == n { b.end } else { share(at - 1) };
+        if w.end == UNTIMED {
             w.end = e;
         }
         for (i, p) in w.pieces.iter_mut().enumerate() {
-            if p.start == u64::MAX {
+            if p.start == UNTIMED {
                 p.start = if i == 0 { s } else { w.end };
             }
         }
@@ -405,8 +469,8 @@ fn spread_times(b: &mut Block) {
 fn check_spans(b: &Block, lines: &[(usize, Span)], errors: &mut Vec<Error>) {
     let pieces: Vec<u64> = b.words().flat_map(|w| w.pieces.iter().map(|p| p.start)).collect();
     let words: Vec<(u64, u64)> = b.words().map(|w| (w.start(), w.end)).collect();
+    let rel = |ms: u64| (ms - b.start) / 10;
     for (line, s) in lines {
-        let rel = |ms: u64| (ms - b.start) / 10;
         let name = format!("{{{}..{}}}", rel(s.from), rel(s.to));
         let mut err = |message: String| errors.push(Error { line: *line, message: format!("{name}: {message}") });
         if !pieces.contains(&s.from) {
@@ -442,38 +506,11 @@ impl Doc {
             errors.push(Error { line: 1, message: "a CAPT file starts with the line “CAPT 1”".into() });
         }
         let mut i = 1;
-        while i < lines.len() && !lines[i].contains(" --> ") {
+        while i < lines.len() && !is_block_line(lines[i]) {
             let line = lines[i].trim();
             i += 1;
-            if line.is_empty() {
-                continue;
-            }
-            match parse_options(line) {
-                Err(message) => errors.push(Error { line: i, message }),
-                Ok(opts) if opts.first().is_some_and(|(k, _)| k == "speaker") => {
-                    let id = opts[0].1.join(",");
-                    let name = opts.iter().find(|(k, _)| k == "name").map(|(_, v)| v.join(","));
-                    doc.speakers.push(Speaker { id, name });
-                }
-                Ok(opts) => {
-                    for (key, value) in opts {
-                        let joined = value.join(",");
-                        match key.as_str() {
-                            "id" => doc.id = Some(joined),
-                            "title" => doc.title = Some(joined),
-                            "lang" => doc.lang = Some(joined),
-                            "media" => doc.media = Some(joined),
-                            "duration" => match parse_time(&joined) {
-                                Some(ms) => doc.duration = Some(ms),
-                                None => errors.push(Error {
-                                    line: i,
-                                    message: format!("duration is HH:MM:SS.mmm, not “{joined}”"),
-                                }),
-                            },
-                            _ => doc.other.push((key, value)),
-                        }
-                    }
-                }
+            if !line.is_empty() {
+                doc.read_header(line, i, &mut errors);
             }
         }
         while i < lines.len() {
@@ -488,89 +525,128 @@ impl Doc {
                 block_lines.push(lines[i]);
             }
             i += 1;
-            if let Some(b) = Self::parse_block(&block_lines, at, &mut errors) {
+            if let Some(b) = parse_block(&block_lines, at, &mut errors) {
                 doc.blocks.push(b);
             }
         }
         if errors.is_empty() { Ok(doc) } else { Err(errors) }
     }
 
-    fn parse_block(lines: &[&str], at: usize, errors: &mut Vec<Error>) -> Option<Block> {
-        let head = lines[0];
-        let mut it = head.splitn(4, ' ');
-        let (start, arrow, end, rest) = (it.next(), it.next(), it.next(), it.next().unwrap_or(""));
-        let (Some(start), Some("-->"), Some(end)) = (start.and_then(parse_time), arrow, end.and_then(parse_time))
-        else {
-            errors
-                .push(Error {
-                    line: at, message: "a block line is “HH:MM:SS.mmm --> HH:MM:SS.mmm key:value…”".into()
-                });
-            return None;
+    /// One header line: a speaker when it has `speaker:`, else file options.
+    fn read_header(&mut self, line: &str, line_no: usize, errors: &mut Vec<Error>) {
+        let opts = match parse_options(line) {
+            Ok(o) => o,
+            Err(message) => return errors.push(Error { line: line_no, message }),
         };
-        let mut b = Block { start, end, ..Block::default() };
-        if end < start {
-            errors.push(Error { line: at, message: "the block ends before it starts".into() });
+        if opts.iter().any(|(k, _)| k == "speaker") {
+            let mut s = Speaker { id: String::new(), name: None, other: Vec::new() };
+            for (key, value) in opts {
+                match key.as_str() {
+                    "speaker" => s.id = value.join(","),
+                    "name" => s.name = Some(value.join(",")),
+                    _ => s.other.push((key, value)),
+                }
+            }
+            return self.speakers.push(s);
         }
-        match parse_options(rest) {
-            Err(message) => errors.push(Error { line: at, message }),
-            Ok(opts) => {
-                for (key, value) in opts {
-                    let joined = value.join(",");
-                    match key.as_str() {
-                        "id" => b.id = Some(joined),
-                        "speaker" => b.speaker = Some(joined),
-                        "sound" => b.sound = Some(joined),
-                        "lang" => b.lang = Some(joined),
-                        "voice" => b.voice = Some(joined),
-                        "pos" => match parse_pos(&value) {
-                            Ok(p) => b.pos = Some(p),
-                            Err(message) => errors.push(Error { line: at, message }),
-                        },
-                        _ => b.other.push((key, value)),
-                    }
+        for (key, value) in opts {
+            let joined = value.join(",");
+            match key.as_str() {
+                "id" => self.id = Some(joined),
+                "title" => self.title = Some(joined),
+                "lang" => self.lang = Some(joined),
+                "media" => self.media = Some(joined),
+                "duration" => match parse_time(&joined) {
+                    Some(ms) => self.duration = Some(ms),
+                    None => errors
+                        .push(Error {
+                            line: line_no, message: format!("duration is HH:MM:SS.mmm, not “{joined}”")
+                        }),
+                },
+                _ => self.other.push((key, value)),
+            }
+        }
+    }
+}
+
+fn parse_block(lines: &[&str], at: usize, errors: &mut Vec<Error>) -> Option<Block> {
+    let mut it = lines[0].splitn(4, ' ');
+    let (start, arrow, end, rest) = (it.next(), it.next(), it.next(), it.next().unwrap_or(""));
+    let (Some(start), Some("-->"), Some(end)) = (start.and_then(parse_time), arrow, end.and_then(parse_time)) else {
+        errors.push(Error {
+            line: at, message: "a block line is “HH:MM:SS.mmm --> HH:MM:SS.mmm key:value…”".into()
+        });
+        return None;
+    };
+    let mut b = Block { start, end, ..Block::default() };
+    if end < start {
+        errors.push(Error { line: at, message: "the block ends before it starts".into() });
+    }
+    match parse_options(rest) {
+        Err(message) => errors.push(Error { line: at, message }),
+        Ok(opts) => {
+            for (key, value) in opts {
+                let joined = value.join(",");
+                match key.as_str() {
+                    "id" => b.id = Some(joined),
+                    "speaker" => b.speaker = Some(joined),
+                    "sound" => b.sound = Some(joined),
+                    "lang" => b.lang = Some(joined),
+                    "voice" => b.voice = Some(joined),
+                    "pos" => match parse_pos(&value) {
+                        Ok(p) => b.pos = Some(p),
+                        Err(message) => errors.push(Error { line: at, message }),
+                    },
+                    _ => b.other.push((key, value)),
                 }
             }
         }
-        if b.sound.is_some() {
-            if lines.len() > 1 {
-                errors.push(Error { line: at + 1, message: "a sound block has no text: the sound is its code".into() });
-            }
-            return Some(b);
+    }
+    if b.sound.is_some() {
+        if lines.len() > 1 {
+            errors.push(Error { line: at + 1, message: "a sound block has no text: the sound is its code".into() });
         }
-        match lines.get(1).map(|l| scan(l)) {
-            None => {}
-            Some(Err(message)) => errors.push(Error { line: at + 1, message }),
-            Some(Ok(tokens)) => {
-                let (phrases, marked) = words_of(tokens, start);
+        return Some(b);
+    }
+    if let Some(line) = lines.get(1) {
+        match scan(line).and_then(|t| words_of(t, start)) {
+            Err(message) => errors.push(Error { line: at + 1, message }),
+            Ok((phrases, marked)) => {
                 b.phrases = phrases;
                 b.marked = marked;
                 spread_times(&mut b);
             }
         }
-        let mut spans = Vec::new();
-        for (k, line) in lines.iter().enumerate().skip(2) {
-            let line_no = at + k;
-            let parsed = line.strip_prefix('{').and_then(|r| r.split_once('}')).and_then(|(range, opts)| {
-                let (a, z) = range.split_once("..")?;
-                let all_digits = |s: &str| !s.is_empty() && s.bytes().all(|c| c.is_ascii_digit());
-                (all_digits(a) && all_digits(z)).then(|| (a.parse::<u64>().ok(), z.parse::<u64>().ok(), opts))
-            });
-            let Some((Some(a), Some(z), opts)) = parsed else {
-                errors.push(Error {
-                    line: line_no,
-                    message: "after the text a block has only spans, “{from..to} key:value”".into(),
-                });
-                continue;
-            };
-            match parse_options(opts.trim()) {
-                Err(message) => errors.push(Error { line: line_no, message }),
-                Ok(options) => spans.push((line_no, Span { from: start + a * 10, to: start + z * 10, options })),
-            }
-        }
-        check_spans(&b, &spans, errors);
-        b.spans = spans.into_iter().map(|(_, s)| s).collect();
-        Some(b)
     }
+    let mut spans = Vec::new();
+    for (k, line) in lines.iter().enumerate().skip(2) {
+        let line_no = at + k;
+        let parsed = line.strip_prefix('{').and_then(|r| r.split_once('}')).and_then(|(range, opts)| {
+            let (a, z) = range.split_once("..")?;
+            let all_digits = |s: &str| !s.is_empty() && s.bytes().all(|c| c.is_ascii_digit());
+            (all_digits(a) && all_digits(z)).then_some((a, z, opts))
+        });
+        let Some((a, z, opts)) = parsed else {
+            errors.push(Error {
+                line: line_no,
+                message: "after the text a block has only spans, “{from..to} key:value”".into(),
+            });
+            continue;
+        };
+        let from = a.parse().ok().and_then(|a| offset(start, a));
+        let to = z.parse().ok().and_then(|z| offset(start, z));
+        let (Some(from), Some(to)) = (from, to) else {
+            errors.push(Error { line: line_no, message: format!("the span {{{a}..{z}}} is too large") });
+            continue;
+        };
+        match parse_options(opts.trim()) {
+            Err(message) => errors.push(Error { line: line_no, message }),
+            Ok(options) => spans.push((line_no, Span { from, to, options })),
+        }
+    }
+    check_spans(&b, &spans, errors);
+    b.spans = spans.into_iter().map(|(_, s)| s).collect();
+    Some(b)
 }
 
 // ---------- writing ----------
@@ -586,71 +662,63 @@ fn part(p: &str) -> String {
     format!("\"{}\"", p.replace('\\', "\\\\").replace('"', "\\\""))
 }
 
-fn option(key: &str, parts: &[String]) -> String {
-    format!("{key}:{}", parts.iter().map(|p| part(p)).collect::<Vec<_>>().join(","))
+/// Options as one line; `None` values are left out.
+fn options<'a>(opts: impl IntoIterator<Item = (&'a str, Option<Vec<String>>)>) -> String {
+    opts.into_iter()
+        .filter_map(|(k, v)| Some(format!("{k}:{}", v?.iter().map(|p| part(p)).collect::<Vec<_>>().join(","))))
+        .collect::<Vec<_>>()
+        .join(" ")
 }
 
-fn options(opts: &Options) -> String {
-    opts.iter().map(|(k, v)| option(k, v)).collect::<Vec<_>>().join(" ")
+fn kept(other: &KeyValues) -> impl Iterator<Item = (&str, Option<Vec<String>>)> {
+    other.iter().map(|(k, v)| (k.as_str(), Some(v.clone())))
 }
 
-fn number(v: f64) -> String {
-    let s = format!("{v}");
-    if s.contains('e') { format!("{v:.6}") } else { s }
+fn one(v: &Option<String>) -> Option<Vec<String>> {
+    v.as_ref().map(|v| vec![v.clone()])
 }
 
-fn pos_value(p: Pos) -> String {
+fn pos_parts(p: Pos) -> Vec<String> {
+    let numbers = |n: &[f64]| n.iter().map(|v| v.to_string()).collect();
     match p {
-        Pos::Bottom => "bottom".into(),
-        Pos::Top => "top".into(),
-        Pos::Middle => "middle".into(),
-        Pos::Point { x, y } => format!("{},{}", number(x), number(y)),
-        Pos::Rect { x, y, w, h } => format!("{},{},{},{}", number(x), number(y), number(w), number(h)),
+        Pos::Bottom => vec!["bottom".into()],
+        Pos::Top => vec!["top".into()],
+        Pos::Middle => vec!["middle".into()],
+        Pos::Point { x, y } => numbers(&[x, y]),
+        Pos::Rect { x, y, w, h } => numbers(&[x, y, w, h]),
     }
 }
 
-/// A piece of text with the four characters that would mean something else escaped.
+/// A piece of text with what would mean something else escaped: braces, backslashes, a space
+/// inside a word, and a slash that is a whole word.
 fn escape(text: &str, whole_word: bool) -> String {
     if whole_word && text == "/" {
         return "\\/".into();
     }
-    text.replace('\\', "\\\\").replace('{', "\\{").replace('}', "\\}")
+    text.replace('\\', "\\\\").replace('{', "\\{").replace('}', "\\}").replace(' ', "\\ ")
 }
 
 impl Doc {
-    /// The file as text; a file `Doc::parse` reads back as this same `Doc`.
+    /// The file as text. A `Doc` made by [`Doc::parse`] or [`Doc::from_spoken`] reads back the same.
     pub fn write(&self) -> String {
         let mut out = String::from("CAPT 1\n");
-        let mut head = |key: &str, value: Option<String>| {
-            if let Some(v) = value {
-                out.push_str(&option(key, &[v]));
+        let mut line = |text: String| {
+            if !text.is_empty() {
+                out.push_str(&text);
                 out.push('\n');
             }
         };
-        head("id", self.id.clone());
-        head("title", self.title.clone());
-        head("lang", self.lang.clone());
-        match (&self.media, self.duration) {
-            (Some(m), Some(d)) => out.push_str(&format!(
-                "{} {}\n",
-                option("media", std::slice::from_ref(m)),
-                option("duration", &[time(d)])
-            )),
-            (Some(m), None) => out.push_str(&format!("{}\n", option("media", std::slice::from_ref(m)))),
-            (None, Some(d)) => out.push_str(&format!("{}\n", option("duration", &[time(d)]))),
-            (None, None) => {}
-        }
+        line(options([("id", one(&self.id))]));
+        line(options([("title", one(&self.title))]));
+        line(options([("lang", one(&self.lang))]));
+        line(options([("media", one(&self.media)), ("duration", self.duration.map(|d| vec![time(d)]))]));
         for (k, v) in &self.other {
-            out.push_str(&option(k, v));
-            out.push('\n');
+            line(options([(k.as_str(), Some(v.clone()))]));
         }
         for s in &self.speakers {
-            out.push_str(&option("speaker", std::slice::from_ref(&s.id)));
-            if let Some(n) = &s.name {
-                out.push(' ');
-                out.push_str(&option("name", std::slice::from_ref(n)));
-            }
-            out.push('\n');
+            line(options(
+                [("speaker", Some(vec![s.id.clone()])), ("name", one(&s.name))].into_iter().chain(kept(&s.other)),
+            ));
         }
         for b in &self.blocks {
             out.push('\n');
@@ -662,54 +730,48 @@ impl Doc {
 
 impl Block {
     fn write(&self) -> String {
-        let pos = self.pos.map(|p| pos_value(p).split(',').map(str::to_string).collect::<Vec<_>>());
-        let one = |v: &Option<String>| v.as_ref().map(|v| vec![v.clone()]);
-        let known = [
-            ("id", one(&self.id)),
-            ("speaker", one(&self.speaker)),
-            ("sound", one(&self.sound)),
-            ("lang", one(&self.lang)),
-            ("pos", pos),
-            ("voice", one(&self.voice)),
-        ];
-        let mut opts: Options = known.into_iter().filter_map(|(k, v)| Some((k.to_string(), v?))).collect();
-        opts.extend(self.other.iter().cloned());
+        let opts = options(
+            [
+                ("id", one(&self.id)),
+                ("speaker", one(&self.speaker)),
+                ("sound", one(&self.sound)),
+                ("lang", one(&self.lang)),
+                ("pos", self.pos.map(pos_parts)),
+                ("voice", one(&self.voice)),
+            ]
+            .into_iter()
+            .chain(kept(&self.other)),
+        );
         let mut out = format!("{} --> {}", time(self.start), time(self.end));
         if !opts.is_empty() {
             out.push(' ');
-            out.push_str(&options(&opts));
+            out.push_str(&opts);
         }
         out.push('\n');
         if self.sound.is_some() || self.phrases.is_empty() {
             return out;
         }
         let cs = |ms: u64| (ms.saturating_sub(self.start) + 5) / 10;
-        let phrases: Vec<String> = self
-            .phrases
-            .iter()
-            .map(|p| {
-                p.iter()
-                    .map(|w| {
-                        let whole = w.pieces.len() == 1;
-                        if !self.marked {
-                            return w.pieces.iter().map(|x| escape(&x.text, whole)).collect::<String>();
-                        }
-                        let mut s: String =
-                            w.pieces.iter().map(|x| format!("{{{}}}{}", cs(x.start), escape(&x.text, whole))).collect();
-                        s.push_str(&format!("{{{}}}", cs(w.end)));
-                        s
-                    })
-                    .collect::<Vec<_>>()
-                    .join(" ")
-            })
-            .collect();
+        let word = |w: &Word| {
+            let whole = w.pieces.len() == 1;
+            if !self.marked {
+                return w.pieces.iter().map(|x| escape(&x.text, whole)).collect::<String>();
+            }
+            let mut s: String =
+                w.pieces.iter().map(|x| format!("{{{}}}{}", cs(x.start), escape(&x.text, whole))).collect();
+            s.push_str(&format!("{{{}}}", cs(w.end)));
+            s
+        };
+        let phrases: Vec<String> =
+            self.phrases.iter().map(|p| p.iter().map(word).collect::<Vec<_>>().join(" ")).collect();
         out.push_str(&phrases.join(" / "));
         out.push('\n');
         for s in &self.spans {
             out.push_str(&format!("{{{}..{}}}", cs(s.from), cs(s.to)));
-            if !s.options.is_empty() {
+            let opts = options(kept(&s.options));
+            if !opts.is_empty() {
                 out.push(' ');
-                out.push_str(&options(&s.options));
+                out.push_str(&opts);
             }
             out.push('\n');
         }
@@ -722,10 +784,9 @@ impl Block {
 /// Crockford base32, without `i l o u`.
 const BASE32: &[u8; 32] = b"0123456789abcdefghjkmnpqrstvwxyz";
 
-/// Six characters of an FNV-1a hash: the same transcript always gives the same ids.
+/// Six characters of a hash of `seed`: the same transcript always gives the same ids.
 fn block_id(seed: &str) -> String {
-    let h = seed.bytes().fold(0xcbf2_9ce4_8422_2325_u64, |h, b| (h ^ b as u64).wrapping_mul(0x0100_0000_01b3));
-    let h = (h ^ (h >> 31)).wrapping_mul(0x94d0_49bb_1331_11eb);
+    let h = crate::hash64(seed, 0);
     (0..6).map(|i| BASE32[(h >> (i * 5) & 31) as usize] as char).collect()
 }
 
@@ -746,22 +807,24 @@ fn grid(ms: u64) -> u64 {
     (ms + 5) / 10 * 10
 }
 
+fn span(from: u64, to: u64, key: &str, value: String) -> Span {
+    Span { from, to, options: vec![(key.into(), vec![value])] }
+}
+
 impl Doc {
-    /// A file from a recogniser's words: one block per sentence (as [`cues`] finds sentences), a cut
-    /// point wherever [`cues`] cuts cleanly (punctuation or a pause), the confidence of every piece
-    /// below 1 and the language of every word that differs from its block's as spans. `id` is the
-    /// file's id (the transcription id): block ids and Premiere ids are made from it.
+    /// A file from a recogniser's words: one block per sentence of one speaker (as [`cues`] finds
+    /// sentences: a sentence end, a speaker change, a silence over 2 s), a cut point wherever
+    /// [`cues`] cuts cleanly (punctuation or a pause of 0.4 s), the confidence of every piece below
+    /// 1 and the language of every word that differs from its block's as spans. Times move to the
+    /// 10 ms grid; a piece starts at least 10 ms after the one before it and a word ends at least
+    /// 10 ms after its last piece starts. `id` is the file's id (the transcription id): block ids
+    /// and Premiere ids are made from it.
     pub fn from_spoken(spoken: &[Spoken], id: Option<String>) -> Doc {
         let plain: Vec<crate::Word> = spoken
             .iter()
-            .map(|s| crate::Word {
-                text: s.pieces.iter().map(|p| p.text.as_str()).collect(),
-                start: grid(s.pieces.first().map_or(s.end, |p| p.start)),
-                end: grid(s.end),
-                speaker: s.speaker.clone(),
-                language: s.language.clone(),
-                confidence: s.pieces.iter().map(|p| p.confidence).sum::<f64>() / s.pieces.len().max(1) as f64,
-                glued: false,
+            .map(|s| {
+                let w = crate::Word::from(s);
+                crate::Word { start: grid(w.start), end: grid(w.end), ..w }
             })
             .collect();
         let lang = majority(plain.iter().filter_map(|w| w.language.as_deref()));
@@ -770,79 +833,23 @@ impl Doc {
             if let Some(sp) = &w.speaker
                 && !doc.speakers.iter().any(|s| &s.id == sp)
             {
-                doc.speakers.push(Speaker { id: sp.clone(), name: None });
+                doc.speakers.push(Speaker { id: sp.clone(), name: None, other: Vec::new() });
             }
         }
         let seed = doc.id.clone().unwrap_or_default();
-        let mut used: Vec<String> = Vec::new();
         let mut at = 0;
         for sentence in cues::sentences(plain.clone(), &Layout::default()) {
             let range = at..at + sentence.len();
             at = range.end;
-            let ws = &plain[range.clone()];
-            let block_lang = majority(ws.iter().filter_map(|w| w.language.as_deref()));
+            let mut b = block(&plain[range.clone()], &spoken[range], lang.as_ref());
             let mut salt = 0;
-            let bid = loop {
-                let id = block_id(&format!("{seed}/block/{}/{salt}", ws[0].start));
-                if !used.contains(&id) {
+            b.id = Some(loop {
+                let id = block_id(&format!("{seed}/block/{}/{salt}", b.start));
+                if !doc.blocks.iter().any(|o| o.id.as_ref() == Some(&id)) {
                     break id;
                 }
                 salt += 1;
-            };
-            used.push(bid.clone());
-            let mut b = Block {
-                start: ws[0].start,
-                end: ws.last().expect("a sentence has words").end,
-                id: Some(bid),
-                speaker: ws[0].speaker.clone(),
-                lang: block_lang.clone().filter(|l| Some(l) != lang.as_ref()),
-                marked: true,
-                ..Block::default()
-            };
-            let mut phrase: Vec<Word> = Vec::new();
-            let mut prev_start = None::<u64>;
-            for (k, (w, s)) in ws.iter().zip(&spoken[range]).enumerate() {
-                if k > 0 && cues::cut_level(&ws[k - 1], w) <= 1 {
-                    b.phrases.push(std::mem::take(&mut phrase));
-                }
-                let mut pieces: Vec<Piece> = Vec::new();
-                for (i, p) in s.pieces.iter().enumerate() {
-                    // Piece starts rise strictly within a block: a tie moves by 10 ms.
-                    let mut t = if i == 0 { w.start } else { grid(p.start) };
-                    if let Some(prev) = prev_start
-                        && t <= prev
-                    {
-                        t = prev + 10;
-                    }
-                    prev_start = Some(t);
-                    pieces.push(Piece { text: p.text.clone(), start: t });
-                }
-                let end = w.end.max(prev_start.unwrap_or(w.end));
-                for (i, p) in s.pieces.iter().enumerate() {
-                    let conf = (p.confidence * 100.0).round() / 100.0;
-                    if conf < 1.0 {
-                        let to = pieces.get(i + 1).map_or(end, |n| n.start);
-                        b.spans.push(Span {
-                            from: pieces[i].start,
-                            to,
-                            options: vec![("conf".into(), vec![format!("{conf:.2}")])],
-                        });
-                    }
-                }
-                if let (Some(l), Some(bl)) = (&w.language, &block_lang)
-                    && l != bl
-                {
-                    b.spans.push(Span {
-                        from: pieces[0].start,
-                        to: end,
-                        options: vec![("lang".into(), vec![l.clone()])],
-                    });
-                }
-                phrase.push(Word { pieces, end });
-            }
-            b.phrases.push(phrase);
-            b.end = b.end.max(b.words().last().map_or(b.end, |w| w.end));
-            merge_lang_spans(&mut b);
+            });
             doc.blocks.push(b);
         }
         doc
@@ -893,26 +900,62 @@ impl Doc {
     }
 }
 
-/// Neighbouring words in the same other language get one span.
-fn merge_lang_spans(b: &mut Block) {
-    let words: Vec<(u64, u64)> = b.words().map(|w| (w.start(), w.end)).collect();
-    let mut merged: Vec<Span> = Vec::new();
-    for s in std::mem::take(&mut b.spans) {
-        let is_lang = s.options.first().is_some_and(|(k, _)| k == "lang");
-        if is_lang
-            && let Some(prev) = merged.iter_mut().rev().find(|p| p.options.first().is_some_and(|(k, _)| k == "lang"))
-            && prev.options == s.options
-            && words
-                .iter()
-                .position(|w| w.1 == prev.to)
-                .is_some_and(|i| words.get(i + 1).is_some_and(|n| n.0 == s.from))
-        {
-            prev.to = s.to;
-            continue;
+/// One sentence's block: words on the grid (`plain`) with their pieces (`spoken`).
+fn block(plain: &[crate::Word], spoken: &[Spoken], file_lang: Option<&String>) -> Block {
+    let block_lang = majority(plain.iter().filter_map(|w| w.language.as_deref()));
+    let mut b = Block {
+        start: plain[0].start,
+        end: plain.last().expect("a sentence has words").end,
+        speaker: plain[0].speaker.clone(),
+        lang: block_lang.clone().filter(|l| Some(l) != file_lang),
+        marked: true,
+        ..Block::default()
+    };
+    let mut conf_spans = Vec::new();
+    let mut lang_spans: Vec<Span> = Vec::new();
+    let mut phrase: Vec<Word> = Vec::new();
+    let mut prev_start: Option<u64> = None;
+    let mut prev_end: Option<u64> = None;
+    for (k, (w, s)) in plain.iter().zip(spoken).enumerate() {
+        if k > 0 && cues::cut_level(&plain[k - 1], w) <= 1 {
+            b.phrases.push(std::mem::take(&mut phrase));
         }
-        merged.push(s);
+        let mut pieces: Vec<Piece> = Vec::new();
+        for (i, p) in s.pieces.iter().enumerate() {
+            let t = if i == 0 { w.start } else { grid(p.start) };
+            let t = prev_start.map_or(t, |prev| t.max(prev + 10));
+            prev_start = Some(t);
+            pieces.push(Piece { text: p.text.clone(), start: t });
+        }
+        // A span is a stretch of time, so a word with a span on its last piece ends at least 10 ms
+        // after that piece starts; any other word keeps its own end (Soniox gives some no length).
+        let last = prev_start.unwrap_or(w.start);
+        let other_lang = w.language.is_some() && block_lang.is_some() && w.language != block_lang;
+        let unsure = s.pieces.last().is_some_and(|p| (p.confidence * 100.0).round() < 100.0);
+        let end = if other_lang || unsure { w.end.max(last + 10) } else { w.end.max(last) };
+        for (i, p) in s.pieces.iter().enumerate() {
+            let conf = (p.confidence * 100.0).round() / 100.0;
+            if conf < 1.0 {
+                let to = pieces.get(i + 1).map_or(end, |n| n.start);
+                conf_spans.push(span(pieces[i].start, to, "conf", format!("{conf:.2}")));
+            }
+        }
+        if let (Some(l), Some(bl)) = (&w.language, &block_lang)
+            && l != bl
+        {
+            // Neighbouring words in the same other language share one span.
+            match lang_spans.last_mut() {
+                Some(prev) if prev_end == Some(prev.to) && prev.options[0].1[0] == *l => {
+                    prev.to = end;
+                }
+                _ => lang_spans.push(span(pieces[0].start, end, "lang", l.clone())),
+            }
+        }
+        prev_end = Some(end);
+        phrase.push(Word { pieces, end });
     }
-    // conf spans first, in order of time, then lang spans: the order a reader expects.
-    merged.sort_by_key(|s| (s.options.first().is_some_and(|(k, _)| k != "conf"), s.from));
-    b.spans = merged;
+    b.phrases.push(phrase);
+    b.end = b.end.max(b.words().last().map_or(b.end, |w| w.end));
+    b.spans = conf_spans.into_iter().chain(lang_spans).collect();
+    b
 }
