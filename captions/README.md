@@ -7,7 +7,7 @@ No network, no ffmpeg, no speech provider: give it words, it lays them out. It i
 `sonisub` command line writes.
 
 ```toml
-captions = "0.1"
+captions = "0.2"
 ```
 
 ```rust
@@ -33,5 +33,10 @@ let (ass, _) = ass::build(&words, &layout, &ass::Options { karaoke: true, ..Defa
   each with its own text colour; every line names its speaker in `Name`. Words without a speaker use
   `Default`. `karaoke` lights up each word as it is spoken (`\k`).
 - `premiere::build`: a Premiere Pro transcript (Import Static Transcript); `premiere::to_srt` reads one back.
+- `capt`: the CAPT transcript format ([spec](https://github.com/Zelenov/sonisub/blob/main/docs/capt.md)), every piece
+  of a word with its time, words, cut points, sentences, speakers, languages and confidence as small text.
+  `capt::Doc::parse` reads a file (every problem with its line), `write` writes one, `from_spoken` makes one from a
+  recogniser's words with their pieces, `from_words` from plain `Word`s, and `to_words` gives the `Word`s back for the
+  writers above.
 
 MIT licensed.

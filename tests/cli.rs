@@ -106,13 +106,75 @@ fn render_writes_subtitles_from_saved_words() {
 #[test]
 fn render_rejects_what_is_not_words() {
     let dir = tempfile::tempdir().unwrap();
-    for (name, body, says) in
-        [("t.soniox.json", r#"{"tokens": []}"#, "is not a JSON list of words"), ("empty.json", "[]", "has no words")]
-    {
+    for (name, body, says) in [
+        ("t.soniox.json", r#"{"tokens": []}"#, "is neither a CAPT file nor a JSON list of words"),
+        ("empty.json", "[]", "has no words"),
+    ] {
         let input = dir.path().join(name);
         std::fs::write(&input, body).unwrap();
         let out = sonisub(&["render".as_ref(), input.as_os_str()]).output().unwrap();
         assert!(!out.status.success());
         assert!(plain(&out).contains(says), "{}", plain(&out));
     }
+}
+
+#[test]
+fn a_saved_transcript_writes_capt_and_render_makes_the_other_formats_from_it() {
+    let dir = tempfile::tempdir().unwrap();
+    let t = dir.path().join("dialog.soniox.json");
+    std::fs::copy(common::fixture("dialog.soniox.json"), &t).unwrap();
+    let out = sonisub(&[t.as_os_str(), "-t".as_ref(), "capt".as_ref()]).output().unwrap();
+    assert!(out.status.success(), "{}", plain(&out));
+    let capt = dir.path().join("dialog.capt");
+    assert_eq!(common::normalize(&std::fs::read_to_string(&capt).unwrap()), common::golden("dialog.capt"));
+
+    let out = sonisub(&["render".as_ref(), capt.as_os_str(), "-t".as_ref(), "srt,vtt,ass,premiere".as_ref()])
+        .output()
+        .unwrap();
+    let err = plain(&out);
+    assert!(out.status.success(), "{err}");
+    assert!(err.starts_with("✓ dialog.capt — 10 cues -> "), "{err}");
+    for file in ["dialog.srt", "dialog.vtt", "dialog.ass"] {
+        let written = std::fs::read_to_string(dir.path().join(file)).unwrap();
+        assert_eq!(common::normalize(&written), common::golden(file), "{file}");
+    }
+    let premiere: serde_json::Value =
+        serde_json::from_str(&std::fs::read_to_string(dir.path().join("dialog.premiere.json")).unwrap()).unwrap();
+    assert_eq!(premiere["speakers"], common::golden_json("dialog.premiere.json")["speakers"], "the same speaker ids");
+}
+
+#[test]
+fn render_names_every_problem_of_a_capt_file() {
+    let dir = tempfile::tempdir().unwrap();
+    let input = dir.path().join("bad.capt");
+    std::fs::write(&input, "CAPT 1\n\n00:00:01.000 --> 00:00:02.000\n{0}a{x}\n{0..9} lang:en\n").unwrap();
+    let out = sonisub(&["render".as_ref(), input.as_os_str()]).output().unwrap();
+    let err = plain(&out);
+    assert!(!out.status.success());
+    assert!(err.contains("is not a valid CAPT file"), "{err}");
+    assert!(err.contains("line 4: a mark holds a time in hundredths, not “x”"), "{err}");
+}
+
+#[test]
+fn speaker_names_go_into_capt_and_come_back_out_of_it() {
+    let dir = tempfile::tempdir().unwrap();
+    let t = dir.path().join("dialog.soniox.json");
+    std::fs::copy(common::fixture("dialog.soniox.json"), &t).unwrap();
+    let out =
+        sonisub(&[t.as_os_str(), "-t".as_ref(), "capt".as_ref(), "--speaker-names".as_ref(), "Anna,Boris".as_ref()])
+            .output()
+            .unwrap();
+    assert!(out.status.success(), "{}", plain(&out));
+    let capt = dir.path().join("dialog.capt");
+    let text = std::fs::read_to_string(&capt).unwrap();
+    assert!(text.contains("speaker:1 name:Anna\nspeaker:2 name:Boris\nspeaker:3\n"), "{text}");
+
+    let out = sonisub(&["render".as_ref(), capt.as_os_str(), "-t".as_ref(), "srt,ass".as_ref(), "-s".as_ref()])
+        .output()
+        .unwrap();
+    assert!(out.status.success(), "{}", plain(&out));
+    let srt = std::fs::read_to_string(dir.path().join("dialog.srt")).unwrap();
+    assert!(srt.contains("Anna: Hi, today"), "{srt}");
+    let ass = std::fs::read_to_string(dir.path().join("dialog.ass")).unwrap();
+    assert!(ass.contains("Style: Anna,") && ass.contains(",Boris,"), "{ass}");
 }

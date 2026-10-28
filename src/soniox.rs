@@ -11,6 +11,7 @@ use std::time::Duration;
 
 use anyhow::{Context, Result, anyhow};
 use captions::Word;
+use captions::capt::{Doc, Spoken, SpokenPiece};
 use indicatif::ProgressBar;
 use reqwest::blocking::{Client as Http, RequestBuilder, Response, multipart};
 use serde::Deserialize;
@@ -430,8 +431,13 @@ pub fn missing_key() -> anyhow::Error {
 /// subtitles). Audio events and translated tokens are left out. A word's language is its first
 /// token's; its confidence the mean of its tokens'.
 pub fn words(transcript: &Value) -> Vec<Word> {
-    let mut out: Vec<Word> = Vec::new();
-    let mut tokens: Vec<u32> = Vec::new();
+    spoken(transcript).iter().map(Word::from).collect()
+}
+
+/// A Soniox transcript's tokens as words with their pieces, joined as [`words`] joins them: each
+/// piece keeps its token's text, start and confidence.
+pub fn spoken(transcript: &Value) -> Vec<Spoken> {
+    let mut out: Vec<Spoken> = Vec::new();
     let mut space = false;
     for t in transcript["tokens"].as_array().into_iter().flatten() {
         if t["is_audio_event"].as_bool() == Some(true) || t["translation_status"].as_str() == Some("translation") {
@@ -447,27 +453,23 @@ pub fn words(transcript: &Value) -> Vec<Word> {
         let confidence = t["confidence"].as_f64().unwrap_or(1.0);
         let new_word = space || text.starts_with(char::is_whitespace);
         space = text.ends_with(char::is_whitespace);
-        match (out.last_mut(), tokens.last_mut()) {
-            (Some(w), Some(n)) if !new_word && w.speaker == speaker => {
-                w.text.push_str(text.trim_end());
+        let piece = SpokenPiece { text: text.trim().to_string(), start, confidence };
+        match out.last_mut() {
+            Some(w) if !new_word && w.speaker == speaker => {
+                w.pieces.push(piece);
                 w.end = end;
-                w.confidence = (w.confidence * *n as f64 + confidence) / (*n + 1) as f64;
-                *n += 1;
             }
             _ => {
                 let language = t["language"].as_str().map(str::to_string);
-                out.push(Word {
-                    text: text.trim().to_string(),
-                    start,
-                    end,
-                    speaker,
-                    language,
-                    confidence,
-                    glued: false,
-                });
-                tokens.push(1);
+                out.push(Spoken { pieces: vec![piece], end, speaker, language });
             }
         }
     }
     out
+}
+
+/// A Soniox transcript as a CAPT file. Its id is the transcription id, so Premiere ids made from the
+/// file are the ones made from the transcript.
+pub fn capt(transcript: &Value) -> Doc {
+    Doc::from_spoken(&spoken(transcript), transcript["id"].as_str().map(str::to_string))
 }

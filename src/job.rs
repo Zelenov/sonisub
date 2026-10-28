@@ -27,6 +27,8 @@ pub enum Format {
     Ass,
     /// Premiere Pro transcript (Text panel > Transcript > ... > Import Static Transcript): `clip.premiere.json`.
     Premiere,
+    /// CAPT, the whole transcript as small text, every other format can be made from: `clip.capt`.
+    Capt,
 }
 
 impl Format {
@@ -37,6 +39,7 @@ impl Format {
             Format::Vtt => output.with_extension("vtt"),
             Format::Ass => output.with_extension("ass"),
             Format::Premiere => output.with_extension("premiere.json"),
+            Format::Capt => output.with_extension("capt"),
         }
     }
 }
@@ -219,17 +222,55 @@ pub fn process(input: &Path, output: &Path, opts: &Options, client: Option<&Clie
     let hint = opts.languages.first().map(String::as_str);
     let words = soniox::words(&transcript);
     let seed = transcript["id"].as_str().unwrap_or_default();
-    let (files, cues) = write_outputs(&targets, &words, &layout, &opts.ass, hint, seed)?;
+    // CAPT keeps every token, so it is made only when asked for.
+    let doc = targets.iter().any(|(f, _)| *f == Format::Capt).then(|| {
+        let mut doc = soniox::capt(&transcript);
+        if !is_transcript(input) {
+            doc.media = input.file_name().map(|n| n.to_string_lossy().into_owned());
+        }
+        name_speakers(&mut doc, &layout, &opts.ass);
+        doc
+    });
+    let (files, cues) = write_outputs(&targets, &words, doc.as_ref(), &layout, &opts.ass, hint, seed)?;
     rep.mark(Stage::Writing, 1.0);
     Ok(Outcome::Written { files, cues, json, cached, uploaded_s })
 }
 
-/// Writes `words` in every format of `targets`; the files written and the number of cues (0 with
-/// only a Premiere transcript). `default_language` and `seed` are for [`Format::Premiere`]
-/// ([`captions::premiere::build`]).
+/// A CAPT file's names of numbered speakers in order (`speaker:2 name:Anna` is the second), as
+/// [`srt::Layout::speaker_names`] takes them. A speaker with another id is named by
+/// [`ass::Options::names`] only.
+pub fn speaker_names(doc: &captions::capt::Doc) -> Vec<String> {
+    let mut names: Vec<String> = Vec::new();
+    for s in &doc.speakers {
+        if let (Some(name), Ok(n)) = (&s.name, s.id.parse::<usize>())
+            && n > 0
+        {
+            if names.len() < n {
+                names.resize(n, String::new());
+            }
+            names[n - 1] = name.clone();
+        }
+    }
+    names
+}
+
+/// The names the user gave (`--speaker-names`, ASS names) into a CAPT file's header.
+pub fn name_speakers(doc: &mut captions::capt::Doc, layout: &srt::Layout, ass: &ass::Options) {
+    for s in &mut doc.speakers {
+        let by_number = s.id.parse::<usize>().ok().and_then(|n| layout.speaker_names.get(n.checked_sub(1)?));
+        if let Some(name) = ass.names.get(&s.id).or(by_number).filter(|n| !n.trim().is_empty()) {
+            s.name = Some(name.clone());
+        }
+    }
+}
+
+/// Writes `words` in every format of `targets`, and `doc` (the same speech with its pieces) as
+/// [`Format::Capt`]; the files written and the number of cues (0 with only a Premiere transcript
+/// or CAPT). `default_language` and `seed` are for [`Format::Premiere`] ([`captions::premiere::build`]).
 pub fn write_outputs(
     targets: &[(Format, PathBuf)],
     words: &[captions::Word],
+    doc: Option<&captions::capt::Doc>,
     layout: &srt::Layout,
     ass: &ass::Options,
     default_language: Option<&str>,
@@ -247,6 +288,7 @@ pub fn write_outputs(
                     .ok_or_else(|| anyhow!("no words to write"))?;
                 (serde_json::to_string_pretty(&t)?, 0)
             }
+            Format::Capt => (doc.ok_or_else(|| anyhow!("no CAPT document to write"))?.write(), 0),
         };
         cues = cues.max(n);
         std::fs::write(path, text).with_context(|| format!("cannot write {}", path.display()))?;
@@ -382,7 +424,7 @@ pub fn default_output(input: &Path, out_dir: Option<&Path>) -> PathBuf {
 /// The .srt base for an `-o` path given with any output extension: `clip.premiere.json` -> `clip.srt`.
 pub fn output_base(path: &Path) -> PathBuf {
     let name = path.file_name().map_or_else(String::new, |n| n.to_string_lossy().into_owned());
-    let stem = [".premiere.json", ".soniox.json", ".words.json", ".srt", ".vtt", ".ass", ".json"]
+    let stem = [".premiere.json", ".soniox.json", ".words.json", ".srt", ".vtt", ".ass", ".capt", ".json"]
         .iter()
         .find_map(|s| strip_suffix(&name, s))
         .unwrap_or(&name);

@@ -1,6 +1,6 @@
 [package]
 name = "sonisub"
-version = "0.7.0"
+version = "0.8.0"
 edition = "2024"
 description = "Generate .srt subtitles from video/audio files with Soniox speech-to-text"
 repository = "https://github.com/Zelenov/sonisub"
@@ -33,7 +33,7 @@ winresource = "0.1"
 
 [dependencies]
 anyhow = "1.0.104"
-captions = { version = "0.1.0", path = "captions" }
+captions = { version = "0.2.0", path = "captions" }
 clap = { version = "4.6.7", features = ["derive", "env"], optional = true }
 ctrlc = { version = "3.5.2", optional = true }
 flacenc = "0.5.1"

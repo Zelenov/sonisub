@@ -69,14 +69,7 @@ fn secs(ms: u64) -> f64 {
 
 /// UUID v4 layout derived from `seed`, so the same words always give the same file.
 fn uuid(seed: &str) -> String {
-    let hash = |salt: u64| {
-        let h = seed.bytes().fold(0xcbf2_9ce4_8422_2325 ^ salt, |h, b| (h ^ b as u64).wrapping_mul(0x0100_0000_01b3));
-        // splitmix64 finaliser: similar seeds ("…/speaker/1", "…/speaker/2") give unrelated ids.
-        let h = (h ^ (h >> 30)).wrapping_mul(0xbf58_476d_1ce4_e5b9);
-        let h = (h ^ (h >> 27)).wrapping_mul(0x94d0_49bb_1331_11eb);
-        h ^ (h >> 31)
-    };
-    let (a, b) = (hash(0), hash(0x9e37_79b9_7f4a_7c15));
+    let (a, b) = (crate::hash64(seed, 0), crate::hash64(seed, 0x9e37_79b9_7f4a_7c15));
     let a = (a & !0xf000) | 0x4000; // version 4
     let b = (b & !(0b11 << 62)) | (0b10 << 62); // RFC 4122 variant
     format!(

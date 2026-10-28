@@ -123,7 +123,7 @@ fn ends_clause(w: &str) -> bool {
 }
 
 /// How clean a cut between two words is: 0 at punctuation, 1 at a pause, 2 anywhere else.
-fn cut_level(prev: &Word, next: &Word) -> usize {
+pub(crate) fn cut_level(prev: &Word, next: &Word) -> usize {
     const PAUSE_MS: u64 = 400;
     if ends_clause(&prev.text) || next.text.starts_with(['—', '–', '(', '«', '“', '"']) {
         0
