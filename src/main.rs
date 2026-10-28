@@ -85,7 +85,7 @@ fn run(args: &RunArgs) -> Result<ExitCode> {
         items[0].output = job::output_base(o);
     }
 
-    let mut opts = args.job_options();
+    let mut opts = args.job_options()?;
     let scanning = spinner(format!("reading {} file(s)...", items.len()), folder_mode && !args.quiet);
     let plan = batch::plan(&items, &opts);
     scanning.finish_and_clear();
@@ -454,11 +454,14 @@ fn render(args: &RenderArgs) -> Result<()> {
         return Ok(());
     }
     let mut layout = args.seg.layout(true, doc.as_ref().and_then(|d| d.frame));
-    let mut outputs = args.seg.outputs();
+    let mut outputs = args.seg.outputs()?;
     let given = !layout.speaker_names.is_empty();
     // Saved words become a CAPT file without an id: the input's name only seeds the Premiere ids.
-    let mut doc = doc.or_else(|| targets.iter().any(|(f, _)| f.needs_capt()).then(|| Doc::from_words(&words, None)));
+    let mut doc =
+        doc.or_else(|| targets.iter().any(|(f, _)| f.needs_capt(outputs.sdh)).then(|| Doc::from_words(&words, None)));
     if let Some(doc) = &mut doc {
+        // --vertical or --frame go into the CAPT written, so the next render lays it out the same.
+        job::frame_into(doc, &outputs);
         if given {
             // --speaker-names win over a CAPT file's names, and go into the CAPT written.
             job::name_speakers(doc, &layout, &outputs.ass);

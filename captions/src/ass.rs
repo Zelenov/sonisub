@@ -3,14 +3,15 @@
 //! The same cues as SRT. Every speaker gets a style of their own (`Speaker 1`, or the speaker's name)
 //! with a text colour from a fixed palette, so a person is restyled or renamed in one place; every
 //! line names its speaker in `Name` and uses the speaker's style. Words without a speaker use
-//! `Default`. With [`Options::karaoke`] each word lights up as it is spoken (`\k`).
+//! `Default`. With [`Options::karaoke`] each word lights up as it is spoken (`\k`). Subtitles for
+//! the deaf and hard of hearing are [`crate::sdh::ass`].
 
 use std::collections::BTreeMap;
 
 use crate::Word;
 use crate::capt::Pos;
 use crate::cues::{Cue, Layout, cues, pieces, speaker_label};
-use crate::style::{self, Markup};
+use crate::style::{self, Markup, Sound};
 
 /// What ASS adds to the layout.
 #[derive(Debug, Clone, Default)]
@@ -72,13 +73,15 @@ fn escape(text: &str) -> String {
 }
 
 /// The cue's text with `\k` before every word: the time from its start to the next word's start,
-/// in centiseconds. `None` if the lines do not split back into the cue's words.
-fn karaoke(cue: &Cue) -> Option<String> {
+/// in centiseconds; a voice label before words said in a new voice, with `voice`. `None` if the
+/// lines do not split back into the cue's words.
+fn karaoke(cue: &Cue, voice: Option<&dyn Fn(&str) -> String>) -> Option<String> {
     let mut words = cue.words.iter().peekable();
     let base = cue.start / 10;
     let mut prefix_pieces = if cue.prefix.is_empty() { 0 } else { pieces(cue.prefix.trim_end()).len() };
     let mut out = String::new();
     let mut italic = false;
+    let mut said: Option<&str> = None;
     for (l, line) in cue.lines.iter().enumerate() {
         if l > 0 {
             out.push_str("\\N");
@@ -93,6 +96,13 @@ fn karaoke(cue: &Cue) -> Option<String> {
                 continue;
             }
             let w = words.next().filter(|w| w.text == piece)?;
+            if !w.glued && w.marks.voice.as_deref() != said {
+                said = w.marks.voice.as_deref();
+                if let (Some(f), Some(v)) = (voice, said) {
+                    out.push_str(&escape(&f(v)));
+                    out.push(' ');
+                }
+            }
             if w.marks.italic != italic {
                 italic = w.marks.italic;
                 out.push_str(if italic { "{\\i1}" } else { "{\\i0}" });
@@ -115,7 +125,7 @@ fn placement(cue: &Cue, layout: &Layout) -> (String, u32, u32, u32) {
     let share = |v: f64, of: f64| (v * of).round() as u32;
     match style::place(cue) {
         None | Some(Pos::Bottom) => (String::new(), 0, 0, share(style::bottom_clear(layout), h)),
-        Some(Pos::Top) => ("{\\an8}".into(), 0, 0, if layout.is_vertical() { share(0.12, h) } else { 0 }),
+        Some(Pos::Top) => ("{\\an8}".into(), 0, 0, share(style::top_clear(layout), h)),
         Some(Pos::Middle) => ("{\\an5}".into(), 0, 0, 0),
         Some(Pos::Point { x, y }) => (format!("{{\\an5\\pos({},{})}}", share(x, w), share(y, h)), 0, 0, 0),
         // The rectangle's width (left and right margins) and its top edge; ASS has no height.
@@ -125,11 +135,22 @@ fn placement(cue: &Cue, layout: &Layout) -> (String, u32, u32, u32) {
 
 /// ASS text for `words` laid out by `layout`, and the number of cues.
 pub fn build(words: &[Word], layout: &Layout, opts: &Options) -> (String, usize) {
-    let cues = cues(words, layout);
+    write(&cues(words, layout), &[], layout, opts, None)
+}
 
-    // A style per speaker, in order of appearance.
+/// ASS for cues and, for subtitles for the deaf and hard of hearing, sounds and voice labels.
+pub(crate) fn write(
+    cues: &[Cue],
+    sounds: &[Sound],
+    layout: &Layout,
+    opts: &Options,
+    voice: Option<&dyn Fn(&str) -> String>,
+) -> (String, usize) {
+    // A style per speaker, in order of appearance; a speaker heard only in sounds comes last.
     let mut styles: Vec<(String, String, String)> = Vec::new(); // speaker, style, name
-    for sp in cues.iter().filter_map(|c| c.speaker.as_deref()) {
+    let speakers =
+        cues.iter().filter_map(|c| c.speaker.as_deref()).chain(sounds.iter().filter_map(|s| s.speaker.as_deref()));
+    for sp in speakers {
         if styles.iter().any(|(s, _, _)| s == sp) {
             continue;
         }
@@ -141,6 +162,11 @@ pub fn build(words: &[Word], layout: &Layout, opts: &Options) -> (String, usize)
         }
         styles.push((sp.to_string(), style, name));
     }
+    let style_of = |speaker: Option<&str>| {
+        speaker
+            .and_then(|sp| styles.iter().find(|(s, _, _)| s == sp))
+            .map_or((DEFAULT_STYLE, ""), |(_, style, name)| (style.as_str(), name.as_str()))
+    };
 
     let mut out = format!(
         "[Script Info]\n\
@@ -164,24 +190,26 @@ pub fn build(words: &[Word], layout: &Layout, opts: &Options) -> (String, usize)
         "\n[Events]\n\
          Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text\n",
     );
-    for c in &cues {
-        let (style, name) = c
-            .speaker
-            .as_deref()
-            .and_then(|sp| styles.iter().find(|(s, _, _)| s == sp))
-            .map_or((DEFAULT_STYLE, ""), |(_, style, name)| (style.as_str(), name.as_str()));
-        let markup = Markup { italic: Some(("{\\i1}", "{\\i0}")), lang: None, voice: None, escape: &escape };
-        let plain = || {
-            let lines = if style::marked(c) { style::lines(c, &markup) } else { None };
-            lines.unwrap_or_else(|| c.lines.iter().map(|l| escape(l)).collect()).join("\\N")
-        };
-        let text = if opts.karaoke { karaoke(c).unwrap_or_else(plain) } else { plain() };
+    let markup = Markup { italic: Some(("{\\i1}", "{\\i0}")), lang: None, voice, escape: &escape };
+    let mut events: Vec<(u64, String)> = Vec::new();
+    for c in cues {
+        let (style, name) = style_of(c.speaker.as_deref());
+        let plain = || style::lines(c, &markup).join("\\N");
+        let text = if opts.karaoke { karaoke(c, voice).unwrap_or_else(plain) } else { plain() };
         let (tag, ml, mr, mv) = placement(c, layout);
-        out.push_str(&format!(
-            "Dialogue: 0,{},{},{style},{name},{ml},{mr},{mv},,{tag}{text}\n",
-            timestamp(c.start),
-            timestamp(c.end)
-        ));
+        let (start, end) = (timestamp(c.start), timestamp(c.end));
+        events.push((c.start, format!("Dialogue: 0,{start},{end},{style},{name},{ml},{mr},{mv},,{tag}{text}\n")));
     }
-    (out, cues.len())
+    // A sound goes where speech goes by default: the bottom, clear of a phone app.
+    let mv = (style::bottom_clear(layout) * layout.frame.1 as f64).round() as u32;
+    for s in sounds {
+        let (style, name) = style_of(s.speaker.as_deref());
+        let (start, end, text) = (timestamp(s.start), timestamp(s.end), escape(&s.text));
+        events.push((s.start, format!("Dialogue: 0,{start},{end},{style},{name},0,0,{mv},,{text}\n")));
+    }
+    events.sort_by_key(|(start, _)| *start);
+    for (_, line) in &events {
+        out.push_str(line);
+    }
+    (out, events.len())
 }

@@ -174,3 +174,30 @@ fn karaoke_keeps_line_breaks_dashes_and_the_speaker_label() {
     assert!(second.contains("\\N"), "{second}");
     assert!(second.contains("wrap—{\\k"), "the glued half of a dash word is timed on its own: {second}");
 }
+
+#[test]
+fn an_adr_row_names_a_voice_once_where_it_starts() {
+    let file = "CAPT 1\nspeaker:1 name:Anna\n\n\
+                00:00:01.000 --> 00:00:02.000 speaker:1 voice:whisper\n{0}Come{30} {40}here.{90}\n\n\
+                00:00:02.500 --> 00:00:03.500 speaker:1 voice:whisper\n{0}Quietly{40} {50}now.{90}\n";
+    let doc = captions::capt::Doc::parse(file).unwrap();
+    // Two subtitles, joined into one row.
+    assert_eq!(srt::build(&doc.to_words(), &Layout::default()).1, 2);
+    let (csv, rows) = captions::adr::build(&doc, &Layout::default(), &Default::default(), "en");
+    assert_eq!(rows, 1, "{csv}");
+    assert_eq!(csv.matches("[whispering]").count(), 1, "{csv}");
+}
+
+#[test]
+fn ttml_agent_ids_are_xml_names_and_differ() {
+    let file = "CAPT 1\nspeaker:\"Anna Lee\"\nspeaker:Anna_Lee\n\n\
+                00:00:01.000 --> 00:00:02.000 speaker:\"Anna Lee\"\n{0}Hi.{50}\n\n\
+                00:00:02.500 --> 00:00:03.500 speaker:Anna_Lee\n{0}Hello.{50}\n\n\
+                00:00:04.000 --> 00:00:05.000 speaker:3\n{0}Hey.{50}\n";
+    let doc = captions::capt::Doc::parse(file).unwrap();
+    let ttml = captions::ttml::build(&doc, &Layout::default(), None).0;
+    for id in ["speaker_Anna_Lee", "speaker_Anna_Lee_2", "speaker_3"] {
+        assert!(ttml.contains(&format!("xml:id=\"{id}\"")), "{id}\n{ttml}");
+    }
+    assert!(ttml.contains("ttm:agent=\"speaker_Anna_Lee_2\">Hello."), "{ttml}");
+}

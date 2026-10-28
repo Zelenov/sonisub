@@ -60,3 +60,16 @@ pub fn sound(code: &str, lang: &str) -> String {
 pub fn voice(code: &str, lang: &str) -> String {
     label(&VOICES, code, lang)
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn known_codes_have_labels_and_unknown_ones_are_shown_as_written() {
+        assert_eq!(sound("phone", "en"), "[phone ringing]");
+        assert_eq!(voice("whisper", "en"), "[whispering]");
+        assert_eq!(sound("didgeridoo", "en"), "[didgeridoo]");
+        assert_eq!(sound("didgeridoo", "ru"), "(didgeridoo)");
+    }
+}

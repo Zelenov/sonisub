@@ -1,0 +1,22 @@
+[Script Info]
+ScriptType: v4.00+
+WrapStyle: 0
+ScaledBorderAndShadow: yes
+PlayResX: 1920
+PlayResY: 1080
+
+[V4+ Styles]
+Format: Name, Fontname, Fontsize, PrimaryColour, SecondaryColour, OutlineColour, BackColour, Bold, Italic, Underline, StrikeOut, ScaleX, ScaleY, Spacing, Angle, BorderStyle, Outline, Shadow, Alignment, MarginL, MarginR, MarginV, Encoding
+Style: Default,Arial,64,&H00FFFFFF,&H007F7F7F,&H00000000,&H80000000,0,0,0,0,100,100,0,0,1,3,1,2,80,80,60,1
+Style: Anna,Arial,64,&H00FFFFFF,&H007F7F7F,&H00000000,&H80000000,0,0,0,0,100,100,0,0,1,3,1,2,80,80,60,1
+Style: Boris,Arial,64,&H004DE1FF,&H0026707F,&H00000000,&H80000000,0,0,0,0,100,100,0,0,1,3,1,2,80,80,60,1
+
+[Events]
+Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
+Dialogue: 0,0:00:01.00,0:00:03.00,Anna,Anna,0,0,0,,Anna: So I read {\i1}War and Peace{\i0} twice.
+Dialogue: 0,0:00:04.20,0:00:05.00,Anna,Anna,0,0,0,,Anna: [laughs]
+Dialogue: 0,0:00:05.50,0:00:08.60,Boris,Boris,0,0,0,,Boris: Короче, этот deployment упал и мы сделали rollback.
+Dialogue: 0,0:00:10.00,0:00:11.80,Anna,Anna,0,0,0,,{\an8}Anna: Listen to me, [whispering] please Dr.
+Dialogue: 0,0:00:11.90,0:00:12.40,Anna,Anna,0,0,0,,{\an8}Who.
+Dialogue: 0,0:00:15.00,0:00:16.20,Boris,Boris,96,1056,54,,{\an8}Boris: This sits in a box.
+Dialogue: 0,0:00:15.50,0:00:16.50,Default,,0,0,0,,[phone ringing]

@@ -5,48 +5,29 @@
 use crate::capt::Doc;
 use crate::cues::Layout;
 use crate::labels;
-use crate::sdh::speaker_name;
+use crate::style::speaker_name;
 
 fn timestamp(ms: u64) -> String {
     format!("{:02}:{:02}:{:02}", ms / 3_600_000, ms / 60_000 % 60, ms / 1000 % 60)
 }
 
+/// What is heard: a word or a sound.
+enum Heard<'a> {
+    Word(&'a crate::Word),
+    Sound(&'a str),
+}
+
+/// A paragraph being written: its speaker, start and text, and the voice of its last word.
+type Turn<'a> = (Option<&'a str>, u64, String, Option<&'a str>);
+
 /// The transcript of `doc`, speaker names as `layout` gives them, labels in `lang` (`en`, `ru`).
 pub fn build(doc: &Doc, layout: &Layout, lang: &str) -> String {
-    // Everything heard, in order of start: (start, speaker, text).
-    let mut heard: Vec<(u64, Option<&str>, String)> = Vec::new();
-    for b in &doc.blocks {
-        let text = match &b.sound {
-            Some(code) => labels::sound(code, lang),
-            None => {
-                let mut text = String::new();
-                let mut voice: Option<&str> = b.voice.as_deref();
-                if let Some(v) = voice {
-                    text.push_str(&labels::voice(v, lang));
-                    text.push(' ');
-                }
-                for (i, w) in b.words().enumerate() {
-                    let v = b
-                        .span_option(w.start(), "voice")
-                        .and_then(|v| v.first())
-                        .map(String::as_str)
-                        .or(b.voice.as_deref());
-                    if i > 0 {
-                        text.push(' ');
-                    }
-                    if v != voice {
-                        if let Some(v) = v {
-                            text.push_str(&labels::voice(v, lang));
-                            text.push(' ');
-                        }
-                        voice = v;
-                    }
-                    text.push_str(&w.text());
-                }
-                text
-            }
-        };
-        heard.push((b.start, b.speaker.as_deref(), text));
+    let words = doc.to_words();
+    // Everything heard, in order of start; a word before a sound that starts with it.
+    let mut heard: Vec<(u64, Option<&str>, Heard)> =
+        words.iter().map(|w| (w.start, w.speaker.as_deref(), Heard::Word(w))).collect();
+    for (start, _, speaker, code) in doc.sounds() {
+        heard.push((start, speaker, Heard::Sound(code)));
     }
     heard.sort_by_key(|(start, _, _)| *start);
 
@@ -54,23 +35,60 @@ pub fn build(doc: &Doc, layout: &Layout, lang: &str) -> String {
     if let Some(t) = &doc.title {
         out.push_str(&format!("{t}\n\n"));
     }
-    let mut turn: Option<(Option<&str>, u64, Vec<String>)> = None;
-    let flush = |turn: &mut Option<(Option<&str>, u64, Vec<String>)>, out: &mut String| {
-        if let Some((speaker, start, texts)) = turn.take() {
+    let mut turn: Option<Turn> = None;
+    // Sounds of no one heard during a turn: each a paragraph of its own once the sentence or the
+    // turn ends, so a phone ringing does not cut a sentence in two.
+    let mut waiting: Vec<(u64, &str)> = Vec::new();
+    let flush = |turn: &mut Option<Turn>, waiting: &mut Vec<(u64, &str)>, out: &mut String| {
+        if let Some((speaker, start, text, _)) = turn.take() {
             let who = speaker.map(|s| format!("{}  ", speaker_name(doc, layout, s))).unwrap_or_default();
-            out.push_str(&format!("{who}[{}]\n{}\n\n", timestamp(start), texts.join(" ")));
+            out.push_str(&format!("{who}[{}]\n{text}\n\n", timestamp(start)));
+        }
+        for (start, code) in waiting.drain(..) {
+            out.push_str(&format!("[{}]\n{}\n\n", timestamp(start), labels::sound(code, lang)));
         }
     };
-    for (start, speaker, text) in heard {
-        // A turn goes on while the same person is heard; a sound of no one is a turn of its own.
-        match &mut turn {
-            Some((s, _, texts)) if speaker.is_some() && *s == speaker => texts.push(text),
-            _ => {
-                flush(&mut turn, &mut out);
-                turn = Some((speaker, start, vec![text]));
+    for (start, speaker, h) in heard {
+        if let (Heard::Sound(code), None) = (&h, speaker) {
+            waiting.push((start, code));
+            if turn.is_none() {
+                flush(&mut turn, &mut waiting, &mut out);
+            }
+            continue;
+        }
+        // A turn goes on while the same person, or no one, speaks.
+        let goes_on = turn.as_ref().is_some_and(|(s, _, _, _)| *s == speaker);
+        if !goes_on {
+            flush(&mut turn, &mut waiting, &mut out);
+            turn = Some((speaker, start, String::new(), None));
+        }
+        let (_, _, text, voice) = turn.as_mut().expect("a turn is open");
+        match h {
+            Heard::Word(w) => {
+                if !text.is_empty() && !w.glued {
+                    text.push(' ');
+                }
+                let v = w.marks.voice.as_deref();
+                if !w.glued && v != *voice {
+                    if let Some(v) = v {
+                        text.push_str(&labels::voice(v, lang));
+                        text.push(' ');
+                    }
+                    *voice = v;
+                }
+                text.push_str(&w.text);
+                if !waiting.is_empty() && crate::cues::ends(w) {
+                    flush(&mut turn, &mut waiting, &mut out);
+                }
+            }
+            Heard::Sound(code) => {
+                if !text.is_empty() {
+                    text.push(' ');
+                }
+                text.push_str(&labels::sound(code, lang));
             }
         }
     }
-    flush(&mut turn, &mut out);
+    flush(&mut turn, &mut waiting, &mut out);
     out
 }

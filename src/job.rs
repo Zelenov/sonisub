@@ -29,16 +29,15 @@ pub enum Format {
     Premiere,
     /// CAPT, the whole transcript as small text, every other format can be made from: `clip.capt`.
     Capt,
-    /// Subtitles for the deaf and hard of hearing: the SRT cues with sounds and voices as labels: `clip.sdh.srt`.
-    Sdh,
-    /// TTML / IMSC: speakers, places, italic and languages, sounds as labels: `clip.ttml`.
+    /// TTML / IMSC: speakers, places, italic and languages: `clip.ttml`.
     Ttml,
     /// Enhanced LRC, a time before every word, for karaoke and music apps: `clip.lrc`.
     Lrc,
     /// YouTube's SBV: `clip.sbv`.
     Sbv,
-    /// A plain text transcript, a paragraph per speaker turn: `clip.txt`.
-    Text,
+    /// A plain text transcript, a paragraph per speaker turn, sounds and voices as labels: `clip.txt`.
+    #[cfg_attr(feature = "cli", value(alias = "text"))]
+    Transcript,
     /// A DaVinci Resolve Fairlight ADR cue list: `clip.adr.csv`.
     Adr,
 }
@@ -52,18 +51,22 @@ impl Format {
             Format::Ass => output.with_extension("ass"),
             Format::Premiere => output.with_extension("premiere.json"),
             Format::Capt => output.with_extension("capt"),
-            Format::Sdh => output.with_extension("sdh.srt"),
             Format::Ttml => output.with_extension("ttml"),
             Format::Lrc => output.with_extension("lrc"),
             Format::Sbv => output.with_extension("sbv"),
-            Format::Text => output.with_extension("txt"),
+            Format::Transcript => output.with_extension("txt"),
             Format::Adr => output.with_extension("adr.csv"),
         }
     }
 
-    /// Whether the format is made from a CAPT file (it needs sounds, or every piece of a word).
-    pub fn needs_capt(self) -> bool {
-        matches!(self, Format::Capt | Format::Sdh | Format::Ttml | Format::Text | Format::Adr)
+    /// Whether the format is made from a CAPT file (it needs sounds, or every piece of a word);
+    /// with `sdh` subtitles need its sounds too.
+    pub fn needs_capt(self, sdh: bool) -> bool {
+        match self {
+            Format::Capt | Format::Ttml | Format::Transcript | Format::Adr => true,
+            Format::Srt | Format::Vtt | Format::Ass => sdh,
+            Format::Premiere | Format::Lrc | Format::Sbv => false,
+        }
     }
 }
 
@@ -74,9 +77,21 @@ pub struct Outputs {
     pub ass: ass::Options,
     /// Frame rate, timeline start and cue limits for [`Format::Adr`].
     pub adr: captions::adr::Options,
-    /// The language of sound and voice labels (`en`, `ru`) for SDH, TTML, the transcript and ADR;
-    /// `None`: Russian for a Russian transcript, else English.
+    /// Subtitles for the deaf and hard of hearing: SRT, WebVTT, ASS and TTML get sounds as
+    /// subtitles and voices as labels (`[phone ringing]`, `[whispering]`).
+    pub sdh: bool,
+    /// The language of sound and voice labels (`en`, `ru`); `None`: Russian for a Russian
+    /// transcript, else English.
     pub labels: Option<String>,
+    /// The video's frame the user gave, written into a CAPT file ([`frame_into`]).
+    pub frame: Option<(u32, u32)>,
+}
+
+/// The frame the user gave into a CAPT file's header, so `render` lays it out the same.
+pub fn frame_into(doc: &mut captions::capt::Doc, outputs: &Outputs) {
+    if let Some(frame) = outputs.frame {
+        doc.frame = Some(frame);
+    }
 }
 
 /// What to do with a file.
@@ -258,15 +273,13 @@ pub fn process(input: &Path, output: &Path, opts: &Options, client: Option<&Clie
     let words = soniox::words(&transcript);
     let seed = transcript["id"].as_str().unwrap_or_default();
     // CAPT keeps every token, so it is made only when asked for.
-    let doc = targets.iter().any(|(f, _)| f.needs_capt()).then(|| {
+    let doc = targets.iter().any(|(f, _)| f.needs_capt(opts.outputs.sdh)).then(|| {
         let mut doc = soniox::capt(&transcript);
         if !is_transcript(input) {
             doc.media = input.file_name().map(|n| n.to_string_lossy().into_owned());
         }
         name_speakers(&mut doc, &layout, &opts.outputs.ass);
-        if layout.frame != srt::Layout::default().frame {
-            doc.frame = Some(layout.frame);
-        }
+        frame_into(&mut doc, &opts.outputs);
         doc
     });
     let (files, cues) = write_outputs(&targets, &words, doc.as_ref(), &layout, &opts.outputs, hint, seed)?;
@@ -304,7 +317,8 @@ pub fn name_speakers(doc: &mut captions::capt::Doc, layout: &srt::Layout, ass: &
 
 /// Writes `words` in every format of `targets`, and from `doc` (the same speech with its pieces,
 /// sounds and marks) the formats that need it ([`Format::needs_capt`]); the files written and the
-/// number of cues (0 with only a Premiere transcript, CAPT or a transcript). `default_language` and
+/// number of cues of the first subtitles written (0 with only a Premiere transcript, CAPT or a
+/// transcript). `default_language` and
 /// `seed` are for [`Format::Premiere`] ([`captions::premiere::build`]).
 pub fn write_outputs(
     targets: &[(Format, PathBuf)],
@@ -318,26 +332,24 @@ pub fn write_outputs(
     let mut cues = 0;
     let mut files = Vec::new();
     let capt = || doc.ok_or_else(|| anyhow!("no CAPT document to write"));
-    let labels = || {
-        outputs
-            .labels
-            .clone()
-            .unwrap_or_else(|| captions::labels::for_language(doc.and_then(|d| d.lang.as_deref())).into())
-    };
+    let labels = outputs
+        .labels
+        .clone()
+        .unwrap_or_else(|| captions::labels::for_language(doc.and_then(|d| d.lang.as_deref())).into());
+    let sdh = outputs.sdh.then_some(labels.as_str());
     for (format, path) in targets {
         let (text, n) = match format {
+            Format::Srt if outputs.sdh => captions::sdh::srt(capt()?, layout, &labels),
+            Format::Vtt if outputs.sdh => captions::sdh::vtt(capt()?, layout, &labels),
+            Format::Ass if outputs.sdh => captions::sdh::ass(capt()?, layout, &outputs.ass, &labels),
             Format::Srt => captions::srt::build(words, layout),
             Format::Vtt => vtt::build(words, layout),
             Format::Ass => ass::build(words, layout, &outputs.ass),
             Format::Lrc => captions::lrc::build(words, layout),
             Format::Sbv => captions::sbv::build(words, layout),
-            Format::Sdh => captions::sdh::build(capt()?, layout, &labels()),
-            Format::Ttml => captions::ttml::build(capt()?, layout, &labels()),
-            Format::Text => (captions::transcript::build(capt()?, layout, &labels()), 0),
-            Format::Adr => {
-                let adr = captions::adr::Options { labels: labels(), ..outputs.adr.clone() };
-                captions::adr::build(capt()?, layout, &adr)
-            }
+            Format::Ttml => captions::ttml::build(capt()?, layout, sdh),
+            Format::Transcript => (captions::transcript::build(capt()?, layout, &labels), 0),
+            Format::Adr => captions::adr::build(capt()?, layout, &outputs.adr, &labels),
             Format::Premiere => {
                 let t = captions::premiere::build(words, layout, default_language, seed)
                     .ok_or_else(|| anyhow!("no words to write"))?;
@@ -345,7 +357,9 @@ pub fn write_outputs(
             }
             Format::Capt => (capt()?.write(), 0),
         };
-        cues = cues.max(n);
+        if cues == 0 {
+            cues = n;
+        }
         std::fs::write(path, text).with_context(|| format!("cannot write {}", path.display()))?;
         files.push(path.clone());
     }
@@ -483,7 +497,6 @@ pub fn output_base(path: &Path) -> PathBuf {
         ".premiere.json",
         ".soniox.json",
         ".words.json",
-        ".sdh.srt",
         ".adr.csv",
         ".srt",
         ".vtt",

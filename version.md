@@ -1,12 +1,14 @@
 # NEXT
 ## Added
 - Subtitles from a CAPT file follow what the file says: they cut at its cut points (a ` / ` moved by hand moves the cut), end sentences where `sentence:` says, show `style:italic` in italic (SRT, WebVTT, ASS, TTML), mark words in another language (WebVTT, TTML), and put a subtitle where `pos:` says (top, middle, a point or a rectangle).
-- New outputs: `-t sdh` (`clip.sdh.srt`, SRT for the deaf and hard of hearing: `[phone ringing]`, `[whispering]`, English or Russian labels with `--labels`), `-t ttml` (TTML / IMSC: speakers, places, italic, languages), `-t lrc` (a time before every word), `-t sbv` (YouTube), `-t text` (a plain transcript), `-t adr` (a DaVinci Resolve Fairlight ADR cue list, `--fps`, `--timeline-start`).
-- `--vertical` (or `--frame 1080x1920`) for Reels, Shorts and TikTok: short two-line subtitles, and in `.ass`, `.vtt` and `.ttml` the text kept clear of the phone app's caption and buttons. The frame goes into `clip.capt`, so `render` remembers it.
+- New outputs: `-t ttml` (TTML / IMSC 1.1 Text: speakers, places, italic, languages), `-t lrc` (a time before every word), `-t sbv` (YouTube), `-t transcript` (plain text, `clip.txt`; `-t text` works too), `-t adr` (a DaVinci Resolve Fairlight ADR cue list; `--fps` 23.976, 24, 25, 29.97, 30, 50, 59.94 or 60, `--timeline-start`).
+- `--sdh`: `.srt`, `.vtt`, `.ass` and `.ttml` become subtitles for the deaf and hard of hearing, with a subtitle for every sound (`[phone ringing]`, `Anna: [laughs]` with `-s`) and a label before words said in a voice of their own (`[whispering]`); English or Russian labels with `--labels`.
+- `--vertical` (or `--frame 1080x1920`) for Reels, Shorts and TikTok: short two-line subtitles cut where they read well (not after "the" or "and", not too fast to read), and in `.ass`, `.vtt` and `.ttml` the text kept clear of the phone app's caption and buttons. The frame goes into `clip.capt`, also one `render` writes, so the next `render` remembers it.
 
 ## Changed
 - `--max-line`, `--max-lines` and `--max-duration` keep their defaults (50, 2, 8) for a horizontal video; a vertical one gets 22, 2 and 4 unless they are given.
-- Library: `captions::Word` has `marks` and `Default` (build words with `..Word::default()`); `captions::Layout` has `frame`; `job::Options::ass` is now `job::Options::outputs` (`job::Outputs`: `ass`, `adr`, `labels`), and `job::write_outputs` takes `&job::Outputs` instead of `&ass::Options`; `job::Format` has `Sdh`, `Ttml`, `Lrc`, `Sbv`, `Text` and `Adr` (a `match` on it needs the arms). captions 0.3.0.
+- The message after a file counts the cues of the first subtitles written, not the most of any format.
+- Library: `captions::Word` has `marks` and `Default` (build words with `..Word::default()`); `captions::Layout` has `frame` and `readable`, and `Layout::for_frame`; `job::Options::ass` is now `job::Options::outputs` (`job::Outputs`: `ass`, `adr`, `sdh`, `labels`, `frame`), and `job::write_outputs` takes `&job::Outputs` instead of `&ass::Options`; `job::Format` has `Ttml`, `Lrc`, `Sbv`, `Transcript` and `Adr` (a `match` on it needs the arms), and `Format::needs_capt` takes the `sdh` switch; `RunArgs::job_options` and `SegArgs::outputs` return a `Result`. captions 0.3.0.
 
 # 0.8.0
 ## Added

@@ -165,14 +165,17 @@ file it writes.
 
 | Output | Italic | Language | Place | Voice | Sounds |
 |---|---|---|---|---|---|
-| SRT | `<i>` | | `{\anN}`, the nearest of nine | | |
-| WebVTT | `<i>` | `<lang xx>` | cue settings; a rectangle's width and top | | |
-| ASS | `{\i1}` | | alignment and margins; a rectangle's width and top | | |
-| SDH (`.sdh.srt`) | `<i>` | | as SRT | `[whispering]` | a cue each, `[phone ringing]` |
-| TTML / IMSC | `<span>` | `<span xml:lang>` | a region; a rectangle exactly | `[whispering]` | a subtitle each |
-| Transcript (`.txt`) | | | | `[whispering]` | in the speaker's paragraph |
-| Fairlight ADR (`.adr.csv`) | | | | `[whispering]` | the speaker's own, in their cue |
+| SRT | `<i>` | | `{\anN}`, the nearest of nine | with `--sdh` | with `--sdh` |
+| WebVTT | `<i>` | `<lang xx>` | cue settings; a rectangle's width and top | with `--sdh` | with `--sdh` |
+| ASS | `{\i1}` | | alignment and margins; a rectangle's width and top | with `--sdh` | with `--sdh`, in the speaker's style |
+| TTML / IMSC | `<span>` | `<span xml:lang>` | a region; a rectangle exactly | with `--sdh` | with `--sdh` |
+| Transcript (`.txt`) | | | | `[whispering]` | the speaker's in their paragraph; one of no one after the sentence it falls in |
+| Fairlight ADR (`.adr.csv`) | | | | `[whispering]`, once a row | the speaker's own, in their cue |
 | Premiere, LRC, SBV | | | | | |
+
+With `--sdh` a voice is a label where it starts (`[whispering] please`), and every sound is a subtitle of its
+own at the bottom (`[phone ringing]`; `Anna: [laughs]` when speakers are labelled), in order of start. A sound
+that overlaps speech is shown with it: players draw both, the sound's subtitle stacked with the speech.
 
 `alt` is kept in the file but no output shows it yet.
 

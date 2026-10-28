@@ -37,7 +37,7 @@ pub enum Command {
         api: ApiArgs,
     },
     /// Write subtitles from a CAPT file or saved words (a JSON list of words with timing), without transcribing again.
-    Render(RenderArgs),
+    Render(Box<RenderArgs>),
     /// List (and with --yes delete) all files and transcriptions stored in the Soniox account.
     Purge {
         /// Actually delete. Without it only prints what would be deleted.
@@ -85,9 +85,8 @@ pub struct RunArgs {
 
     /// What to write, comma separated: srt, vtt (WebVTT), ass (a style per speaker), premiere (Premiere Pro
     /// transcript, clip.premiere.json), capt (the whole transcript as small text, clip.capt; `sonisub render`
-    /// makes the other formats from it), sdh (SRT with sounds and voices, clip.sdh.srt), ttml (TTML / IMSC),
-    /// lrc (a time before every word), sbv (YouTube), text (a plain transcript, clip.txt), adr (a Fairlight ADR
-    /// cue list, clip.adr.csv). Only missing files are written, so adding a format later reuses the saved
+    /// makes the other formats from it), ttml (TTML / IMSC), lrc (a time before every word), sbv (YouTube),
+    /// transcript (plain text, clip.txt), adr (a Fairlight ADR cue list, clip.adr.csv). Only missing files are written, so adding a format later reuses the saved
     /// transcript for free.
     #[arg(short = 't', long = "format", value_enum, value_delimiter = ',', default_value = "srt")]
     pub formats: Vec<Format>,
@@ -215,17 +214,22 @@ pub struct SegArgs {
     #[arg(long, value_parser = parse_frame)]
     pub frame: Option<(u32, u32)>,
 
-    /// The language of sound and voice labels in .sdh.srt, .ttml, .txt and .adr.csv: en ([laughs]) or ru
-    /// ((смеётся)). Default: ru for a Russian transcript, else en.
-    #[arg(long, value_parser = ["en", "ru"])]
+    /// Subtitles for the deaf and hard of hearing: .srt, .vtt, .ass and .ttml get a subtitle for every sound
+    /// ([phone ringing]) and a label before words said in a voice of their own ([whispering]).
+    #[arg(long)]
+    pub sdh: bool,
+
+    /// The language of sound and voice labels (--sdh, .txt, .adr.csv): en ([laughs]) or ru ((смеётся)).
+    /// Default: ru for a Russian transcript, else en.
+    #[arg(long, value_parser = captions::labels::LANGUAGES)]
     pub labels: Option<String>,
 
-    /// Frames per second of the Fairlight timeline (.adr.csv).
-    #[arg(long, default_value_t = 25)]
-    pub fps: u32,
+    /// Frame rate of the Fairlight timeline (.adr.csv): 23.976, 24, 25, 29.97, 30, 50, 59.94 or 60.
+    #[arg(long, default_value = "25", value_parser = captions::adr::Rate::parse)]
+    pub fps: captions::adr::Rate,
 
     /// Where the Fairlight timeline starts (.adr.csv), HH:MM:SS:FF.
-    #[arg(long, default_value = "01:00:00:00", value_parser = parse_timecode_start)]
+    #[arg(long, default_value = "01:00:00:00")]
     pub timeline_start: String,
 }
 
@@ -237,21 +241,16 @@ fn parse_frame(s: &str) -> Result<(u32, u32), String> {
     }
 }
 
-fn parse_timecode_start(s: &str) -> Result<String, String> {
-    let ok = s.split(':').count() == 4 && s.split(':').all(|p| p.len() == 2 && p.bytes().all(|b| b.is_ascii_digit()));
-    if ok { Ok(s.to_string()) } else { Err("expected HH:MM:SS:FF, like 01:00:00:00".into()) }
-}
-
 impl SegArgs {
+    /// The frame --vertical or --frame gives, if either does.
+    pub fn frame_given(&self) -> Option<(u32, u32)> {
+        if self.vertical { Some((1080, 1920)) } else { self.frame }
+    }
+
     /// The cue layout; `by_speaker`: a speaker change ends a cue. `file_frame` is a CAPT file's
     /// frame, used when neither --vertical nor --frame is given.
     pub fn layout(&self, by_speaker: bool, file_frame: Option<(u32, u32)>) -> srt::Layout {
-        let frame = if self.vertical { Some((1080, 1920)) } else { self.frame.or(file_frame) };
-        let base = match frame {
-            Some((w, h)) if h > w => srt::Layout { frame: (w, h), ..srt::Layout::vertical() },
-            Some(f) => srt::Layout { frame: f, ..srt::Layout::default() },
-            None => srt::Layout::default(),
-        };
+        let base = self.frame_given().or(file_frame).map_or_else(srt::Layout::default, srt::Layout::for_frame);
         srt::Layout {
             max_line: if self.unlimited { 0 } else { self.max_line.unwrap_or(base.max_line) },
             max_lines: self.max_lines.unwrap_or(base.max_lines),
@@ -262,20 +261,22 @@ impl SegArgs {
             speaker_labels: self.speakers || !self.speaker_names.is_empty(),
             speaker_names: self.speaker_names.clone(),
             wrap_lines: self.wrap || base.wrap_lines,
-            frame: base.frame,
+            ..base
         }
     }
 
-    /// How the formats are written beyond the layout.
-    pub fn outputs(&self) -> job::Outputs {
-        let tc: Vec<u64> = self.timeline_start.split(':').map(|p| p.parse().unwrap_or(0)).collect();
-        let fps = self.fps.max(1) as u64;
-        let start = ((tc[0] * 60 + tc[1]) * 60 + tc[2]) * 1000 + tc[3] * 1000 / fps;
-        job::Outputs {
+    /// How the formats are written beyond the layout; an error for a timeline start that is not a
+    /// timecode at --fps.
+    pub fn outputs(&self) -> anyhow::Result<job::Outputs> {
+        let start = captions::adr::parse_timecode(&self.timeline_start, self.fps)
+            .map_err(|e| anyhow::anyhow!("--timeline-start: {e}"))?;
+        Ok(job::Outputs {
             ass: ass::Options { karaoke: self.karaoke, ..Default::default() },
-            adr: captions::adr::Options { fps: self.fps, start, ..Default::default() },
+            adr: captions::adr::Options { rate: self.fps, start, ..Default::default() },
+            sdh: self.sdh,
             labels: self.labels.clone(),
-        }
+            frame: self.frame_given(),
+        })
     }
 }
 
@@ -286,7 +287,7 @@ pub struct RenderArgs {
     /// (start and end in milliseconds; speaker and language optional).
     pub input: PathBuf,
 
-    /// What to write, comma separated: srt, vtt, ass, premiere, capt, sdh, ttml, lrc, sbv, text, adr.
+    /// What to write, comma separated: srt, vtt, ass, premiere, capt, ttml, lrc, sbv, transcript, adr.
     #[arg(short = 't', long = "format", value_enum, value_delimiter = ',', default_value = "srt")]
     pub formats: Vec<Format>,
 
@@ -303,9 +304,9 @@ pub struct RenderArgs {
 }
 
 impl RunArgs {
-    /// Per-file options for [`job::process`].
-    pub fn job_options(&self) -> job::Options {
-        job::Options {
+    /// Per-file options for [`job::process`]; an error for options that do not make sense.
+    pub fn job_options(&self) -> anyhow::Result<job::Options> {
+        Ok(job::Options {
             model: self.model.clone(),
             languages: self.lang.clone(),
             strict_languages: self.strict_lang,
@@ -318,7 +319,7 @@ impl RunArgs {
             formats: self.formats.clone(),
             force: self.force,
             layout: self.seg.layout(!self.no_diarization, None),
-            outputs: self.seg.outputs(),
+            outputs: self.seg.outputs()?,
             poll: Duration::from_secs_f64(self.poll.max(0.2)),
             prefix: String::new(),
             reference: "sonisub".into(),
@@ -326,6 +327,20 @@ impl RunArgs {
             on_progress: None,
             // Ctrl+C sets the process-wide flag, which every token also obeys.
             cancel: Default::default(),
-        }
+        })
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::parse_frame;
+
+    #[test]
+    fn a_frame_is_width_x_height() {
+        assert_eq!(parse_frame("1080x1920"), Ok((1080, 1920)));
+        assert_eq!(parse_frame("1920X1080"), Ok((1920, 1080)));
+        assert!(parse_frame("1080").is_err());
+        assert!(parse_frame("0x1920").is_err());
+        assert!(parse_frame("wide x tall").is_err());
     }
 }

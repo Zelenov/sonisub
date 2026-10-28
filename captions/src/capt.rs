@@ -1083,11 +1083,6 @@ impl Doc {
     pub fn sounds(&self) -> Vec<(u64, u64, Option<&str>, &str)> {
         self.blocks.iter().filter_map(|b| Some((b.start, b.end, b.speaker.as_deref(), b.sound.as_deref()?))).collect()
     }
-
-    /// The frame, width and height in pixels: the header's `frame`, else 1920×1080.
-    pub fn frame(&self) -> (u32, u32) {
-        self.frame.unwrap_or((1920, 1080))
-    }
 }
 
 /// One sentence's block: words on the grid (`plain`) with their pieces (`spoken`).

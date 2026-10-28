@@ -43,11 +43,7 @@ Pipeline per file:
 
 ## Build from source
 
-```
-cargo install --path .
-```
-
-or copy `target/release/sonisub(.exe)` anywhere on `PATH`.
+`cargo install --path .`, or copy `target/release/sonisub(.exe)` anywhere on `PATH`.
 
 ## API key
 
@@ -67,6 +63,8 @@ sonisub . -t premiere                     # only the Premiere transcript; saved 
 sonisub clip.MP4 -t srt,vtt,ass           # also clip.vtt (WebVTT) and clip.ass (a style per speaker)
 sonisub clip.MP4 -t ass --karaoke         # each word lights up as it is spoken
 sonisub clip.MP4 -t srt,capt              # also clip.capt, the whole transcript as small text
+sonisub clip.MP4 -t srt,ass --vertical    # Reels, Shorts, TikTok: short lines, clear of the app's buttons
+sonisub clip.MP4 -t srt,ttml --sdh        # for the deaf and hard of hearing: [phone ringing], [whispering]
 sonisub render clip.capt -t vtt,premiere  # other formats from a CAPT file or saved words, no Soniox
 sonisub clip.MP4 --no-json                # don't keep clip.soniox.json
 sonisub clip.MP4 -u                       # no length limit: one cue per sentence
@@ -94,11 +92,9 @@ Before anything is uploaded, sonisub reads the headers and shows the plan:
      4  .srt exists, skipped (--force to redo)
 ```
 
-`-n` / `--dry-run` also lists every file and stops there. While running, one bar tracks the whole batch (a
-single file too) by audio length: files sent, minutes done, cost so far and `eta ~4 min`, with the current
-file's stages under it. The bar moves while a file is extracted, uploaded and transcribed, so it does not stand
-still on a long file; Soniox gives no percentage, so transcribing shows `~60% (est.)` and stays under 95% until
-it is done. The ETA is hidden until a file is done or 30 s have passed. Each finished file leaves one line:
+`-n` / `--dry-run` also lists every file and stops there. While running, one bar tracks the whole batch by
+audio length (files sent, minutes done, cost so far, `eta ~4 min`), with the current file's stages under it;
+Soniox gives no percentage, so transcribing shows `~60% (est.)` below 95% until done. Each finished file leaves one line:
 `✓` subtitled, `·` skipped, `∅` no speech, `–` no audio, `✗` error; several files end with a summary. After
 Ctrl+C the summary says what finished, what did not, and what was removed (the temp audio and the Soniox uploads).
 
@@ -135,10 +131,11 @@ orange, violet, red, then repeating), black outline, bottom centre. Every line n
 you restyle or rename a person in one place. Without diarization all lines use the `Default` style. `--karaoke` adds word-by-word
 highlight (`\k`).
 
-More outputs: `-t sdh` (SRT for the deaf and hard of hearing: sounds and voices as labels, `--labels en|ru`),
-`ttml` (TTML / IMSC), `lrc` (a time before every word), `sbv` (YouTube), `text` (a plain transcript) and
-`adr` (a DaVinci Resolve Fairlight ADR cue list, `--fps`, `--timeline-start`). For Reels, Shorts and TikTok
-add `--vertical`: short two-line subtitles, kept clear of the app's buttons in `.ass`, `.vtt` and `.ttml`.
+More outputs: `ttml` (TTML / IMSC), `lrc` (a time before every word), `sbv` (YouTube), `transcript` (plain
+text, `clip.txt`) and `adr` (a DaVinci Resolve Fairlight ADR cue list; `--fps 23.976|24|25|29.97|30|50|59.94|60`,
+`--timeline-start 01:00:00:00`). `--sdh` makes `.srt`, `.vtt`, `.ass` and `.ttml` subtitles for the deaf and hard
+of hearing: `[phone ringing]`, `[whispering]` (`--labels en|ru`). For Reels, Shorts and TikTok add `--vertical`:
+short two-line subtitles cut where they read well, kept clear of the app's buttons in `.ass`, `.vtt` and `.ttml`.
 
 `sonisub render` makes the same files without Soniox: from a CAPT file (`-t capt` writes `clip.capt`, the whole
 transcript as small text you can read and edit, see [docs/capt.md](docs/capt.md)), or from words saved as JSON
@@ -187,11 +184,11 @@ Exit codes: `0` ok, `1` some files failed, `2` fatal (key/balance/usage), `130` 
 
 | Module | Does |
 |---|---|
-| `src/job.rs` | **one file**: media → audio → Soniox → `.srt` / `.vtt` / `.ass` / `.premiere.json`, cleanup. `job::process(input, output, &Options, client)` |
+| `src/job.rs` | **one file**: media → audio → Soniox → every output, cleanup. `job::process(input, output, &Options, client)` |
 | `src/audio.rs` | audio track → 16 kHz mono FLAC (built-in decoder or ffmpeg) |
 | `src/soniox.rs` | Soniox REST client, error types, remote cleanup guard; `soniox::words` reads a transcript as words |
 | `src/languages.rs` | language codes `-l` takes, from Soniox (`languages::fetch(client)`) |
-| `captions/` | the [`captions`](captions/README.md) crate: words → cues → SRT, WebVTT, ASS, Premiere Pro transcript, and the CAPT format; no Soniox |
+| `captions/` | the [`captions`](captions/README.md) crate: words → cues → every subtitle format, and the CAPT format; no Soniox |
 | `src/srt.rs`, `src/premiere.rs` | a Soniox transcript straight to SRT / Premiere Pro transcript, through `captions` |
 | `src/cancel.rs` | Ctrl+C flag and per-job `CancelToken` |
 | `src/main.rs`, `src/cli.rs`, `src/ui.rs` | command line only: arguments, the list of files, log, stopping on fatal errors, the batch bar and its ETA |
@@ -220,14 +217,11 @@ thread, so create the `Client` where the job runs. On Windows, ffmpeg and ffprob
 
 To show progress without a console, set `Options::on_progress` to `progress::Callback::new(|p| ..)`. Each
 `Progress` names the stage (extracting, uploading, transcribing, downloading, writing), how far it is, and
-`overall` for one bar (extract 15 %, upload 15 %, transcribe 60 %, download 5 %, write 5 %). Extraction and
-upload are real fractions. Soniox only reports `queued` / `processing`, so while it transcribes the fraction is
-an estimate from the audio length and the speed of earlier jobs in the process; it stops at 95 % until Soniox is
-done, and nothing ever goes backwards.
-`fraction` is `None` while the length of the media is not known yet: show a busy bar. While transcribing,
-`detail` is the Soniox status (from the second report on) and `remaining` the estimated time left; `remaining: None`
-there means the estimate has run out and Soniox is still working (the bar sits at 95 % of the stage): say "finishing". The callback runs on the job's threads: send the value
-over a channel to your UI instead of touching it there.
+`overall` for one bar (extract 15 %, upload 15 %, transcribe 60 %, download 5 %, write 5 %). While Soniox
+transcribes, the fraction is an estimate from the audio length that stops at 95 % until Soniox is done; nothing
+goes backwards. `fraction: None`: the media's length is not known yet, show a busy bar. `remaining: None` while
+transcribing: the estimate has run out, say "finishing". The callback runs on the job's threads: send the value
+over a channel to your UI.
 
 ## Tests
 
@@ -240,17 +234,14 @@ cargo test --test live -- --ignored   # real Soniox round trip (needs SONIOX_API
 `dialog` (English voices plus a Russian and a Spanish line), `punctuation` (dense punctuation, abbreviations,
 numbers, a sentence without commas), `nospeech` (noise and music: Soniox's empty transcript), plus `noaudio.mp4`
 and `silence.m4a`. Each has the video, the transcript and expected subtitles for the default, `-u` and `-s`
-layouts, and `dialog`/`punctuation` the expected Premiere transcript; `dialog` also `.vtt`, `.ass` and `.karaoke.ass`. Review the `.srt` diff before committing regenerated fixtures.
+layouts, and `dialog`/`punctuation` the expected Premiere transcript. `dialog.capt` and the hand-written
+`marks.capt` have every other output; `BLESS=1 cargo test --test outputs` rewrites those. Review the diff before
+committing regenerated fixtures.
 
 ## Building for other platforms
 
-```sh
-cargo build --release                                   # this machine
-cargo build --release --target x86_64-unknown-linux-gnu # needs the target + linker
-cargo build --release --target aarch64-apple-darwin     # build on a Mac
-```
-
-TLS is rustls, so there is no OpenSSL dependency.
+`cargo build --release --target x86_64-unknown-linux-gnu` (or `aarch64-apple-darwin` on a Mac). TLS is rustls,
+so there is no OpenSSL dependency.
 
 ## Releases
 
