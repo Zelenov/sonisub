@@ -173,7 +173,7 @@ Exit codes: `0` ok, `1` some files failed, `2` fatal (key/balance/usage), `130` 
 ### As a library
 
 ```toml
-sonisub = { version = "0.5", default-features = false }
+sonisub = { version = "0.6", default-features = false }
 ```
 
 `premiere::to_srt(&json, &layout)` turns a `clip.premiere.json` back into SRT text and the cue count

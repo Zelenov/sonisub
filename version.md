@@ -1,4 +1,4 @@
-# NEXT
+# 0.6.0
 ## Added
 - The batch bar now moves while a file is worked on, not only when one finishes: extracting, uploading and transcribing count toward it by audio length. It shows `eta ~4 min`, computed from the audio left and the smoothed speed of the run (hidden until a file is done or 30 s have passed), and the cost so far. A single file gets the same bar.
 - Transcribing shows `~60% (est.)` beside Soniox's real status, as a bar that stays under 95% until the transcript is ready.
