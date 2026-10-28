@@ -1,4 +1,5 @@
-//! Minimal blocking client for the Soniox async transcription REST API.
+//! Minimal blocking client for the Soniox async transcription REST API, and a transcript's tokens as
+//! [`captions::Word`]s.
 
 use std::fmt;
 use std::fs::File;
@@ -9,6 +10,7 @@ use std::sync::atomic::{AtomicUsize, Ordering};
 use std::time::Duration;
 
 use anyhow::{Context, Result, anyhow};
+use captions::Word;
 use indicatif::ProgressBar;
 use reqwest::blocking::{Client as Http, RequestBuilder, Response, multipart};
 use serde::Deserialize;
@@ -421,4 +423,51 @@ pub fn api_error(e: &anyhow::Error) -> Option<&ApiError> {
 
 pub fn missing_key() -> anyhow::Error {
     anyhow!("no Soniox API key: set SONIOX_API_KEY or pass --api-key")
+}
+
+/// A Soniox transcript's tokens joined into words: Soniox marks a new word with a leading space,
+/// sometimes as a separate " " token. "finally—and" stays one word ([`captions::cues`] cuts it for
+/// subtitles). Audio events and translated tokens are left out. A word's language is its first
+/// token's; its confidence the mean of its tokens'.
+pub fn words(transcript: &Value) -> Vec<Word> {
+    let mut out: Vec<Word> = Vec::new();
+    let mut tokens: Vec<u32> = Vec::new();
+    let mut space = false;
+    for t in transcript["tokens"].as_array().into_iter().flatten() {
+        if t["is_audio_event"].as_bool() == Some(true) || t["translation_status"].as_str() == Some("translation") {
+            continue;
+        }
+        let text = t["text"].as_str().unwrap_or_default();
+        if text.trim().is_empty() {
+            space = true;
+            continue;
+        }
+        let (start, end) = (t["start_ms"].as_u64().unwrap_or(0), t["end_ms"].as_u64().unwrap_or(0));
+        let speaker = t["speaker"].as_str().map(str::to_string);
+        let confidence = t["confidence"].as_f64().unwrap_or(1.0);
+        let new_word = space || text.starts_with(char::is_whitespace);
+        space = text.ends_with(char::is_whitespace);
+        match (out.last_mut(), tokens.last_mut()) {
+            (Some(w), Some(n)) if !new_word && w.speaker == speaker => {
+                w.text.push_str(text.trim_end());
+                w.end = end;
+                w.confidence = (w.confidence * *n as f64 + confidence) / (*n + 1) as f64;
+                *n += 1;
+            }
+            _ => {
+                let language = t["language"].as_str().map(str::to_string);
+                out.push(Word {
+                    text: text.trim().to_string(),
+                    start,
+                    end,
+                    speaker,
+                    language,
+                    confidence,
+                    glued: false,
+                });
+                tokens.push(1);
+            }
+        }
+    }
+    out
 }

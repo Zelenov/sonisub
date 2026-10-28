@@ -1,3 +1,13 @@
+# NEXT
+## Added
+- `-t vtt` writes WebVTT subtitles (`clip.vtt`) and `-t ass` ASS subtitles (`clip.ass`), the same cues as the `.srt`. In `.ass` every speaker has a style of their own with its own colour (`Speaker 1`, or the `--speaker-names` name), and every line names its speaker, so a person is restyled or renamed in one place in Aegisub. `--karaoke` lights up each word as it is spoken.
+- `sonisub render words.json -t srt,vtt,ass,premiere` writes subtitles from saved words (a JSON list of words with timing), without Soniox.
+- The subtitle half of sonisub is its own crate, [`captions`](https://crates.io/crates/captions) 0.1.0: words with timing → cues → SRT, WebVTT, ASS, Premiere Pro transcript, without Soniox. `sonisub::captions` re-exports it.
+
+## Changed
+- Library: the layout rules, `Word` and the writers moved to `captions` (`srt::Layout`, `srt::Word` are now `captions::Layout`, `captions::Word`; `Word` has serde). `srt::*` and `premiere::*` keep their names as before; `soniox::words(transcript)` is the new home of `srt::words`.
+- Library: `job::Format` has `Vtt` and `Ass` (a `match` on it needs the new arms), and `job::Options` a new field `ass` (speaker names, karaoke); callers that build `Options` without `..Options::default()` add `ass: Default::default()`. `job::write_outputs` writes words in any format.
+
 # 0.6.0
 ## Added
 - The batch bar now moves while a file is worked on, not only when one finishes: extracting, uploading and transcribing count toward it by audio length. It shows `eta ~4 min`, computed from the audio left and the smoothed speed of the run (hidden until a file is done or 30 s have passed), and the cost so far. A single file gets the same bar.

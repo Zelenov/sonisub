@@ -3,8 +3,11 @@
 //! - [`job`] runs the whole pipeline for one file; [`batch`] turns folders into a list of files and a plan.
 //! - [`progress`] reports where a job is, for programs without a console.
 //! - [`usage`] reads what was spent, [`languages`] what each model recognises.
-//! - [`audio`] extracts audio, [`soniox`] talks to the API, [`srt`] turns a transcript into subtitles,
-//!   [`premiere`] into a Premiere Pro transcript.
+//! - [`audio`] extracts audio, [`soniox`] talks to the API and reads its tokens as words.
+//! - [`captions`] lays words out as SRT, WebVTT, ASS or a Premiere Pro transcript; [`srt`] and
+//!   [`premiere`] do it straight from a Soniox transcript.
+
+pub use captions;
 
 pub mod audio;
 pub mod batch;

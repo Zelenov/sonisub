@@ -72,3 +72,47 @@ fn saved_transcripts_need_no_key_and_print_plain_lines() {
     let err = plain(&out);
     assert!(err.contains("done: 2 processed"), "{err}");
 }
+
+#[test]
+fn render_writes_subtitles_from_saved_words() {
+    let dir = tempfile::tempdir().unwrap();
+    let input = dir.path().join("dialog.words.json");
+    let words = sonisub::soniox::words(&common::transcript());
+    std::fs::write(&input, serde_json::to_string(&words).unwrap()).unwrap();
+    let render = |extra: &[&str]| {
+        let mut args: Vec<&std::ffi::OsStr> =
+            vec!["render".as_ref(), input.as_os_str(), "-t".as_ref(), "srt,vtt,ass".as_ref()];
+        args.extend(extra.iter().map(std::ffi::OsStr::new));
+        sonisub(&args).output().unwrap()
+    };
+
+    let out = render(&[]);
+    let err = plain(&out);
+    assert!(out.status.success(), "{err}");
+    assert!(err.starts_with("✓ dialog.words.json — 10 cues -> "), "{err}");
+    for (file, golden) in [("dialog.srt", "dialog.srt"), ("dialog.vtt", "dialog.vtt"), ("dialog.ass", "dialog.ass")] {
+        let written = std::fs::read_to_string(dir.path().join(file)).unwrap();
+        assert_eq!(common::normalize(&written), common::golden(golden), "{file}");
+    }
+
+    let again = render(&[]);
+    assert!(plain(&again).contains("skipped, .srt, .vtt, .ass exist (--force to redo)"));
+    let forced = render(&["--force", "--karaoke"]);
+    assert!(forced.status.success(), "{}", plain(&forced));
+    let ass = std::fs::read_to_string(dir.path().join("dialog.ass")).unwrap();
+    assert_eq!(common::normalize(&ass), common::golden("dialog.karaoke.ass"));
+}
+
+#[test]
+fn render_rejects_what_is_not_words() {
+    let dir = tempfile::tempdir().unwrap();
+    for (name, body, says) in
+        [("t.soniox.json", r#"{"tokens": []}"#, "is not a JSON list of words"), ("empty.json", "[]", "has no words")]
+    {
+        let input = dir.path().join(name);
+        std::fs::write(&input, body).unwrap();
+        let out = sonisub(&["render".as_ref(), input.as_os_str()]).output().unwrap();
+        assert!(!out.status.success());
+        assert!(plain(&out).contains(says), "{}", plain(&out));
+    }
+}

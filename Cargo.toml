@@ -17,6 +17,11 @@ default = ["cli"]
 # (`default-features = false`) and build neither clap nor ctrlc.
 cli = ["dep:clap", "dep:ctrlc"]
 
+[workspace]
+members = [".", "captions"]
+# Plain `cargo build` / `cargo test` / `cargo clippy` cover both crates.
+default-members = [".", "captions"]
+
 [[bin]]
 name = "sonisub"
 path = "src/main.rs"
@@ -24,6 +29,7 @@ required-features = ["cli"]
 
 [dependencies]
 anyhow = "1.0.104"
+captions = { version = "0.1.0", path = "captions" }
 clap = { version = "4.6.7", features = ["derive", "env"], optional = true }
 ctrlc = { version = "3.5.2", optional = true }
 flacenc = "0.5.1"
