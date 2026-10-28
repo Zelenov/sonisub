@@ -1,5 +1,6 @@
 # NEXT
 ## Added
+- `-t sbv` writes YouTube's SBV subtitles (`clip.sbv`), the same cues as the `.srt`.
 - Subtitles from a CAPT file follow what the file says: they cut at its cut points (a ` / ` moved by hand moves the cut), end sentences where `sentence:` says, show `style:italic` in italic (SRT, WebVTT, ASS), mark words in another language (WebVTT), and put a subtitle where `pos:` says (top, middle, a point or a rectangle).
 - `--sdh`: `.srt`, `.vtt` and `.ass` become subtitles for the deaf and hard of hearing, with a subtitle for every sound (`[phone ringing]`, `Anna: [laughs]` with `-s`) and a label before words said in a voice of their own (`[whispering]`); English or Russian labels with `--labels` (which needs `--sdh`). Sounds and voices come from a CAPT file (Soniox reports none): mark them in `clip.capt` and `render` it; a file of sounds only works too.
 - `--vertical` (or `--frame 1080x1920`) for Reels, Shorts and TikTok: short two-line subtitles cut where they read well (not after "the" or "and", not too fast to read), and in `.ass` and `.vtt` the text kept clear of the phone app's caption and buttons. The frame goes into the `clip.capt` written, so the next `render` of it remembers it; `render clip.capt --vertical` leaves an existing `clip.capt` alone unless `-t capt -f` rewrites it (or put `frame:1080,1920` in its header).

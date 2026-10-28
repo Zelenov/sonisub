@@ -8,6 +8,7 @@
 //! - [`capt`] reads and writes CAPT, the transcript format between a recogniser and these writers.
 //! - From a CAPT file, with its sounds and voices: [`sdh`] (SRT, WebVTT and ASS for the deaf and
 //!   hard of hearing), labels from [`labels`].
+//! - [`sbv`] writes YouTube's SBV, the same cues as [`srt`].
 
 use serde::{Deserialize, Serialize};
 
@@ -16,6 +17,7 @@ pub mod capt;
 pub mod cues;
 pub mod labels;
 pub mod premiere;
+pub mod sbv;
 pub mod sdh;
 pub mod srt;
 mod style;
