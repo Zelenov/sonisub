@@ -168,10 +168,7 @@ file it writes.
 | SRT | `<i>` | | `{\anN}`, the nearest of nine | with `--sdh` | with `--sdh` |
 | WebVTT | `<i>` | `<lang xx>` | cue settings; a rectangle's width and top | with `--sdh` | with `--sdh` |
 | ASS | `{\i1}` | | alignment and margins; a rectangle's width and top | with `--sdh` | with `--sdh`, in the speaker's style |
-| TTML / IMSC | `<span>` | `<span xml:lang>` | a region; a rectangle exactly | with `--sdh` | with `--sdh` |
-| Transcript (`.txt`) | | | | `[whispering]` | the speaker's in their paragraph; one of no one after the sentence it falls in |
-| Fairlight ADR (`.adr.csv`) | | | | `[whispering]`, once a row | the speaker's own, in their cue |
-| Premiere, LRC, SBV | | | | | |
+| Premiere | | | | | |
 
 With `--sdh` a voice is a label where it starts (`[whispering] please`), and every sound is a subtitle of its
 own at the bottom (`[phone ringing]`; `Anna: [laughs]` when speakers are labelled), in order of start. A sound
@@ -185,4 +182,4 @@ that overlaps speech is shown with it: players draw both, the sound's subtitle s
 vertical. Subtitles then get short lines broken in two (22 characters) and short cues (4 s), unless
 `--max-line` or `--max-duration` says otherwise. Outputs that place text keep it clear of a phone
 app's caption and buttons: the bottom place ends at 72% of the height (ASS `MarginV`, WebVTT
-`line:72%,end`, the TTML bottom region), the top starts at 12%; ASS's `PlayResX/Y` is the frame.
+`line:72%,end`), the top starts at 12%; ASS's `PlayResX/Y` is the frame.

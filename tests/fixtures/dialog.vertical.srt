@@ -1,11 +1,11 @@
 1
-00:00:00,870 --> 00:00:01,650
-Hi, today we're
+00:00:00,870 --> 00:00:01,410
+Hi, today
 
 2
-00:00:01,650 --> 00:00:03,330
-testing the subtitle
-generator.
+00:00:01,410 --> 00:00:03,330
+we're testing the
+subtitle generator.
 
 3
 00:00:03,870 --> 00:00:04,370
@@ -13,8 +13,8 @@ Great.
 
 4
 00:00:04,590 --> 00:00:06,210
-I've prepared a very
-long sentence
+I've prepared
+a very long sentence
 
 5
 00:00:06,270 --> 00:00:08,430
@@ -52,8 +52,8 @@ and then continue?
 
 12
 00:00:22,890 --> 00:00:24,330
-Y una frase corta
-en español.
+Y una frase
+corta en español.
 
 13
 00:00:25,110 --> 00:00:25,610
@@ -61,6 +61,6 @@ Yes.
 
 14
 00:00:26,550 --> 00:00:28,290
-Okay, that's the end
-of the test.
+Okay, that's
+the end of the test.
 

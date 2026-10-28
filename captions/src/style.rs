@@ -127,8 +127,9 @@ pub(crate) struct Sound {
 /// around them ([`speaker_label`]), so one file never names a person two ways.
 pub(crate) fn sounds(doc: &Doc, layout: &Layout, lang: &str) -> Vec<Sound> {
     doc.sounds()
-        .into_iter()
-        .map(|(start, end, speaker, code)| {
+        .map(|b| {
+            let (start, end, speaker, code) =
+                (b.start, b.end, b.speaker.as_deref(), b.sound.as_deref().unwrap_or_default());
             let who = match speaker {
                 Some(sp) if layout.speaker_labels => format!("{}: ", speaker_label(sp, &layout.speaker_names)),
                 _ => String::new(),
@@ -141,16 +142,6 @@ pub(crate) fn sounds(doc: &Doc, layout: &Layout, lang: &str) -> Vec<Sound> {
             }
         })
         .collect()
-}
-
-/// The name a speaker is shown by where no subtitle shows it next to speech (TTML agents, ADR
-/// characters, transcript turns): the file's name, else the layout's, else "Speaker N".
-pub(crate) fn speaker_name(doc: &Doc, layout: &Layout, speaker: &str) -> String {
-    doc.speakers
-        .iter()
-        .find(|s| s.id == speaker)
-        .and_then(|s| s.name.clone())
-        .unwrap_or_else(|| speaker_label(speaker, &layout.speaker_names))
 }
 
 /// The numpad alignment of SRT and ASS (7 8 9 / 4 5 6 / 1 2 3) nearest to a place.

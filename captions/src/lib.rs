@@ -6,25 +6,19 @@
 //! - [`cues`] cuts words into subtitle cues by a [`Layout`].
 //! - [`srt`], [`vtt`] and [`ass`] write those cues; [`premiere`] writes a Premiere Pro transcript.
 //! - [`capt`] reads and writes CAPT, the transcript format between a recogniser and these writers.
-//! - From a CAPT file, with its sounds, voices and places: [`sdh`] (SRT for the deaf and hard of
-//!   hearing), [`ttml`] (TTML / IMSC), [`transcript`] (plain text) and [`adr`] (a Fairlight ADR cue
-//!   list). [`lrc`] (Enhanced LRC) and [`sbv`] (YouTube) write words like [`srt`].
+//! - From a CAPT file, with its sounds and voices: [`sdh`] (SRT, WebVTT and ASS for the deaf and
+//!   hard of hearing), labels from [`labels`].
 
 use serde::{Deserialize, Serialize};
 
-pub mod adr;
 pub mod ass;
 pub mod capt;
 pub mod cues;
 pub mod labels;
-pub mod lrc;
 pub mod premiere;
-pub mod sbv;
 pub mod sdh;
 pub mod srt;
 mod style;
-pub mod transcript;
-pub mod ttml;
 pub mod vtt;
 
 pub use cues::{Cue, Layout};
@@ -93,8 +87,8 @@ pub struct Marks {
     /// How the word is said (`whisper`, `laughter`); see [`labels`].
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub voice: Option<String>,
-    /// The word's language when it differs from the words around it (a span `lang:`), so outputs
-    /// that can mark a language (WebVTT, TTML) do.
+    /// The word's language when it differs from the file's (a block's or a span's `lang:`), so
+    /// outputs that can mark a language (WebVTT) do.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub lang: Option<String>,
 }

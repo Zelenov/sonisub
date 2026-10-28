@@ -85,8 +85,7 @@ pub struct RunArgs {
 
     /// What to write, comma separated: srt, vtt (WebVTT), ass (a style per speaker), premiere (Premiere Pro
     /// transcript, clip.premiere.json), capt (the whole transcript as small text, clip.capt; `sonisub render`
-    /// makes the other formats from it), ttml (TTML / IMSC), lrc (a time before every word), sbv (YouTube),
-    /// transcript (plain text, clip.txt), adr (a Fairlight ADR cue list, clip.adr.csv). Only missing files are written, so adding a format later reuses the saved
+    /// makes the other formats from it). Only missing files are written, so adding a format later reuses the saved
     /// transcript for free.
     #[arg(short = 't', long = "format", value_enum, value_delimiter = ',', default_value = "srt")]
     pub formats: Vec<Format>,
@@ -214,23 +213,15 @@ pub struct SegArgs {
     #[arg(long, value_parser = parse_frame)]
     pub frame: Option<(u32, u32)>,
 
-    /// Subtitles for the deaf and hard of hearing: .srt, .vtt, .ass and .ttml get a subtitle for every sound
+    /// Subtitles for the deaf and hard of hearing: .srt, .vtt and .ass get a subtitle for every sound
     /// ([phone ringing]) and a label before words said in a voice of their own ([whispering]).
-    #[arg(long)]
+    #[arg(long, help_heading = "Outputs")]
     pub sdh: bool,
 
-    /// The language of sound and voice labels (--sdh, .txt, .adr.csv): en ([laughs]) or ru ((смеётся)).
+    /// The language of sound and voice labels (--sdh): en ([laughs]) or ru ((смеётся)).
     /// Default: ru for a Russian transcript, else en.
-    #[arg(long, value_parser = captions::labels::LANGUAGES)]
+    #[arg(long, value_parser = captions::labels::LANGUAGES, help_heading = "Outputs")]
     pub labels: Option<String>,
-
-    /// Frame rate of the Fairlight timeline (.adr.csv): 23.976, 24, 25, 29.97, 30, 50, 59.94 or 60.
-    #[arg(long, default_value = "25", value_parser = captions::adr::Rate::parse)]
-    pub fps: captions::adr::Rate,
-
-    /// Where the Fairlight timeline starts (.adr.csv), HH:MM:SS:FF.
-    #[arg(long, default_value = "01:00:00:00")]
-    pub timeline_start: String,
 }
 
 fn parse_frame(s: &str) -> Result<(u32, u32), String> {
@@ -265,18 +256,14 @@ impl SegArgs {
         }
     }
 
-    /// How the formats are written beyond the layout; an error for a timeline start that is not a
-    /// timecode at --fps.
-    pub fn outputs(&self) -> anyhow::Result<job::Outputs> {
-        let start = captions::adr::parse_timecode(&self.timeline_start, self.fps)
-            .map_err(|e| anyhow::anyhow!("--timeline-start: {e}"))?;
-        Ok(job::Outputs {
+    /// How the formats are written beyond the layout.
+    pub fn outputs(&self) -> job::Outputs {
+        job::Outputs {
             ass: ass::Options { karaoke: self.karaoke, ..Default::default() },
-            adr: captions::adr::Options { rate: self.fps, start, ..Default::default() },
             sdh: self.sdh,
             labels: self.labels.clone(),
             frame: self.frame_given(),
-        })
+        }
     }
 }
 
@@ -287,7 +274,7 @@ pub struct RenderArgs {
     /// (start and end in milliseconds; speaker and language optional).
     pub input: PathBuf,
 
-    /// What to write, comma separated: srt, vtt, ass, premiere, capt, ttml, lrc, sbv, transcript, adr.
+    /// What to write, comma separated: srt, vtt, ass, premiere, capt.
     #[arg(short = 't', long = "format", value_enum, value_delimiter = ',', default_value = "srt")]
     pub formats: Vec<Format>,
 
@@ -304,9 +291,9 @@ pub struct RenderArgs {
 }
 
 impl RunArgs {
-    /// Per-file options for [`job::process`]; an error for options that do not make sense.
-    pub fn job_options(&self) -> anyhow::Result<job::Options> {
-        Ok(job::Options {
+    /// Per-file options for [`job::process`].
+    pub fn job_options(&self) -> job::Options {
+        job::Options {
             model: self.model.clone(),
             languages: self.lang.clone(),
             strict_languages: self.strict_lang,
@@ -319,7 +306,7 @@ impl RunArgs {
             formats: self.formats.clone(),
             force: self.force,
             layout: self.seg.layout(!self.no_diarization, None),
-            outputs: self.seg.outputs()?,
+            outputs: self.seg.outputs(),
             poll: Duration::from_secs_f64(self.poll.max(0.2)),
             prefix: String::new(),
             reference: "sonisub".into(),
@@ -327,7 +314,7 @@ impl RunArgs {
             on_progress: None,
             // Ctrl+C sets the process-wide flag, which every token also obeys.
             cancel: Default::default(),
-        })
+        }
     }
 }
 

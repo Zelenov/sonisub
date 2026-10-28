@@ -85,7 +85,7 @@ fn run(args: &RunArgs) -> Result<ExitCode> {
         items[0].output = job::output_base(o);
     }
 
-    let mut opts = args.job_options()?;
+    let mut opts = args.job_options();
     let scanning = spinner(format!("reading {} file(s)...", items.len()), folder_mode && !args.quiet);
     let plan = batch::plan(&items, &opts);
     scanning.finish_and_clear();
@@ -454,26 +454,24 @@ fn render(args: &RenderArgs) -> Result<()> {
         return Ok(());
     }
     let mut layout = args.seg.layout(true, doc.as_ref().and_then(|d| d.frame));
-    let mut outputs = args.seg.outputs()?;
+    let mut outputs = args.seg.outputs();
     let given = !layout.speaker_names.is_empty();
-    // Saved words become a CAPT file without an id: the input's name only seeds the Premiere ids.
-    let mut doc =
-        doc.or_else(|| targets.iter().any(|(f, _)| f.needs_capt(outputs.sdh)).then(|| Doc::from_words(&words, None)));
-    if let Some(doc) = &mut doc {
-        // --vertical or --frame go into the CAPT written, so the next render lays it out the same.
-        job::frame_into(doc, &outputs);
-        if given {
-            // --speaker-names win over a CAPT file's names, and go into the CAPT written.
-            job::name_speakers(doc, &layout, &outputs.ass);
-        } else {
-            layout.speaker_names = job::speaker_names(doc);
-        }
-        outputs.ass.names = doc.speakers.iter().filter_map(|s| Some((s.id.clone(), s.name.clone()?))).collect();
+    // Saved words become a CAPT file without an id (the input's name only seeds the Premiere ids),
+    // so every subtitle is made the same way as from a CAPT file.
+    let mut doc = doc.unwrap_or_else(|| Doc::from_words(&words, None));
+    // --vertical or --frame go into the CAPT written, so the next render lays it out the same.
+    job::frame_into(&mut doc, &outputs);
+    if given {
+        // --speaker-names win over a CAPT file's names, and go into the CAPT written.
+        job::name_speakers(&mut doc, &layout, &outputs.ass);
+    } else {
+        layout.speaker_names = job::speaker_names(&doc);
     }
-    let seed = doc.as_ref().and_then(|d| d.id.clone()).unwrap_or_else(|| name.clone());
-    let language = if is_capt { doc.as_ref().and_then(|d| d.lang.clone()) } else { None };
+    outputs.ass.names = doc.speakers.iter().filter_map(|s| Some((s.id.clone(), s.name.clone()?))).collect();
+    let seed = doc.id.clone().unwrap_or_else(|| name.clone());
+    let language = if is_capt { doc.lang.clone() } else { None };
     let (files, cues) =
-        job::write_outputs(&targets, &words, doc.as_ref(), &layout, &outputs, language.as_deref(), &seed)?;
+        job::write_outputs(&targets, &words, Some(&doc), &layout, &outputs, language.as_deref(), &seed)?;
     let what = if cues > 0 { format!("{cues} cues") } else { "transcript".into() };
     let paths: Vec<String> = files.iter().map(|f| f.display().to_string()).collect();
     eprintln!("✓ {name} — {what} -> {}", paths.join(", "));

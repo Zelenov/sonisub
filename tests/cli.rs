@@ -180,24 +180,21 @@ fn speaker_names_go_into_capt_and_come_back_out_of_it() {
 }
 
 #[test]
-fn every_new_format_from_a_saved_transcript_and_a_vertical_capt() {
+fn vertical_sdh_subtitles_from_a_saved_transcript_and_the_frame_in_its_capt() {
     let dir = tempfile::tempdir().unwrap();
     let t = dir.path().join("dialog.soniox.json");
     std::fs::copy(common::fixture("dialog.soniox.json"), &t).unwrap();
-    let all = "capt,ttml,lrc,sbv,transcript,adr,ass";
-    let args = [t.as_os_str(), "-t".as_ref(), all.as_ref(), "--vertical".as_ref(), "--fps".as_ref(), "29.97".as_ref()];
+    let all = "capt,srt,vtt,ass";
+    let args = [t.as_os_str(), "-t".as_ref(), all.as_ref(), "--vertical".as_ref(), "--sdh".as_ref()];
     let out = sonisub(&args).output().unwrap();
     assert!(out.status.success(), "{}", plain(&out));
-    for ext in ["capt", "ttml", "lrc", "sbv", "txt", "adr.csv", "ass"] {
+    for ext in ["capt", "srt", "vtt", "ass"] {
         assert!(dir.path().join(format!("dialog.{ext}")).is_file(), "dialog.{ext}");
     }
     let capt = std::fs::read_to_string(dir.path().join("dialog.capt")).unwrap();
     assert!(capt.contains("\nframe:1080,1920\n"), "the frame goes into the CAPT file:\n{capt}");
     let ass = std::fs::read_to_string(dir.path().join("dialog.ass")).unwrap();
     assert!(ass.contains("PlayResX: 1080\nPlayResY: 1920\n"), "{ass}");
-    // The first word, at 0.87 s, is frame 26 at 29.97 frames a second (21 at the default 25).
-    let adr = std::fs::read(dir.path().join("dialog.adr.csv")).unwrap();
-    assert!(adr.starts_with("\u{feff}\"1\",\"01:00:00:26\",".as_bytes()), "{}", String::from_utf8_lossy(&adr));
 
     // render takes the frame from the CAPT file: a vertical ASS again, without --vertical.
     let capt_path = dir.path().join("dialog.capt");
@@ -240,18 +237,4 @@ fn sdh_adds_sounds_and_voices_to_the_subtitles_it_writes() {
         let text = std::fs::read_to_string(dir.path().join(format!("marks.{ext}"))).unwrap();
         assert!(text.contains("[phone ringing]") && text.contains("[whispering]"), "{text}");
     }
-}
-
-#[test]
-fn a_timeline_start_past_the_frame_rate_is_refused() {
-    let dir = tempfile::tempdir().unwrap();
-    let capt = dir.path().join("marks.capt");
-    std::fs::copy(common::fixture("marks.capt"), &capt).unwrap();
-    let args = ["render".as_ref(), capt.as_os_str(), "-t".as_ref(), "adr".as_ref(), "--timeline-start".as_ref()];
-    let out = sonisub(&[&args[..], &["01:00:00:25".as_ref()]].concat()).output().unwrap();
-    assert!(!out.status.success());
-    assert!(plain(&out).contains("--timeline-start"), "{}", plain(&out));
-    let rate = ["01:00:00:29".as_ref(), "--fps".as_ref(), "29.97".as_ref()];
-    let out = sonisub(&[&args[..], &rate[..]].concat()).output().unwrap();
-    assert!(out.status.success(), "{}", plain(&out));
 }

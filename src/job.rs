@@ -29,17 +29,6 @@ pub enum Format {
     Premiere,
     /// CAPT, the whole transcript as small text, every other format can be made from: `clip.capt`.
     Capt,
-    /// TTML / IMSC: speakers, places, italic and languages: `clip.ttml`.
-    Ttml,
-    /// Enhanced LRC, a time before every word, for karaoke and music apps: `clip.lrc`.
-    Lrc,
-    /// YouTube's SBV: `clip.sbv`.
-    Sbv,
-    /// A plain text transcript, a paragraph per speaker turn, sounds and voices as labels: `clip.txt`.
-    #[cfg_attr(feature = "cli", value(alias = "text"))]
-    Transcript,
-    /// A DaVinci Resolve Fairlight ADR cue list: `clip.adr.csv`.
-    Adr,
 }
 
 impl Format {
@@ -51,11 +40,6 @@ impl Format {
             Format::Ass => output.with_extension("ass"),
             Format::Premiere => output.with_extension("premiere.json"),
             Format::Capt => output.with_extension("capt"),
-            Format::Ttml => output.with_extension("ttml"),
-            Format::Lrc => output.with_extension("lrc"),
-            Format::Sbv => output.with_extension("sbv"),
-            Format::Transcript => output.with_extension("txt"),
-            Format::Adr => output.with_extension("adr.csv"),
         }
     }
 
@@ -63,9 +47,9 @@ impl Format {
     /// with `sdh` subtitles need its sounds too.
     pub fn needs_capt(self, sdh: bool) -> bool {
         match self {
-            Format::Capt | Format::Ttml | Format::Transcript | Format::Adr => true,
+            Format::Capt => true,
             Format::Srt | Format::Vtt | Format::Ass => sdh,
-            Format::Premiere | Format::Lrc | Format::Sbv => false,
+            Format::Premiere => false,
         }
     }
 }
@@ -75,9 +59,7 @@ impl Format {
 pub struct Outputs {
     /// Speaker names and word highlight for [`Format::Ass`].
     pub ass: ass::Options,
-    /// Frame rate, timeline start and cue limits for [`Format::Adr`].
-    pub adr: captions::adr::Options,
-    /// Subtitles for the deaf and hard of hearing: SRT, WebVTT, ASS and TTML get sounds as
+    /// Subtitles for the deaf and hard of hearing: SRT, WebVTT and ASS get sounds as
     /// subtitles and voices as labels (`[phone ringing]`, `[whispering]`).
     pub sdh: bool,
     /// The language of sound and voice labels (`en`, `ru`); `None`: Russian for a Russian
@@ -270,19 +252,17 @@ pub fn process(input: &Path, output: &Path, opts: &Options, client: Option<&Clie
     rep.mark(Stage::Writing, 0.0);
     let layout = srt::Layout { by_speaker: opts.diarization, ..opts.layout.clone() };
     let hint = opts.languages.first().map(String::as_str);
-    let words = soniox::words(&transcript);
     let seed = transcript["id"].as_str().unwrap_or_default();
-    // CAPT keeps every token, so it is made only when asked for.
-    let doc = targets.iter().any(|(f, _)| f.needs_capt(opts.outputs.sdh)).then(|| {
-        let mut doc = soniox::capt(&transcript);
-        if !is_transcript(input) {
-            doc.media = input.file_name().map(|n| n.to_string_lossy().into_owned());
-        }
-        name_speakers(&mut doc, &layout, &opts.outputs.ass);
-        frame_into(&mut doc, &opts.outputs);
-        doc
-    });
-    let (files, cues) = write_outputs(&targets, &words, doc.as_ref(), &layout, &opts.outputs, hint, seed)?;
+    // Every output is a pass over the CAPT document, written or not, so `-t srt` and
+    // `-t srt,capt` (or `render clip.capt`) give the same subtitles.
+    let mut doc = soniox::capt(&transcript);
+    if !is_transcript(input) {
+        doc.media = input.file_name().map(|n| n.to_string_lossy().into_owned());
+    }
+    name_speakers(&mut doc, &layout, &opts.outputs.ass);
+    frame_into(&mut doc, &opts.outputs);
+    let words = soniox::words(&transcript);
+    let (files, cues) = write_outputs(&targets, &words, Some(&doc), &layout, &opts.outputs, hint, seed)?;
     rep.mark(Stage::Writing, 1.0);
     Ok(Outcome::Written { files, cues, json, cached, uploaded_s })
 }
@@ -315,11 +295,11 @@ pub fn name_speakers(doc: &mut captions::capt::Doc, layout: &srt::Layout, ass: &
     }
 }
 
-/// Writes `words` in every format of `targets`, and from `doc` (the same speech with its pieces,
-/// sounds and marks) the formats that need it ([`Format::needs_capt`]); the files written and the
-/// number of cues of the first subtitles written (0 with only a Premiere transcript, CAPT or a
-/// transcript). `default_language` and
-/// `seed` are for [`Format::Premiere`] ([`captions::premiere::build`]).
+/// Writes every format of `targets`: subtitles from `doc` (the same speech as `words` with its pieces,
+/// sounds and marks) when there is one, else from `words`; the Premiere transcript from `words`. The
+/// files written and the number of cues of the first subtitles written (0 with only a Premiere
+/// transcript or CAPT). `default_language` and `seed` are for [`Format::Premiere`]
+/// ([`captions::premiere::build`]); [`Format::needs_capt`] formats fail without `doc`.
 pub fn write_outputs(
     targets: &[(Format, PathBuf)],
     words: &[captions::Word],
@@ -332,24 +312,22 @@ pub fn write_outputs(
     let mut cues = 0;
     let mut files = Vec::new();
     let capt = || doc.ok_or_else(|| anyhow!("no CAPT document to write"));
+    // Subtitles follow the CAPT document when there is one (its marks, its 10 ms grid); the
+    // Premiere transcript keeps the recogniser's words, confidence to the third decimal.
+    let from_doc = doc.map(|d| d.to_words());
+    let cue_words = from_doc.as_deref().unwrap_or(words);
     let labels = outputs
         .labels
         .clone()
         .unwrap_or_else(|| captions::labels::for_language(doc.and_then(|d| d.lang.as_deref())).into());
-    let sdh = outputs.sdh.then_some(labels.as_str());
     for (format, path) in targets {
         let (text, n) = match format {
             Format::Srt if outputs.sdh => captions::sdh::srt(capt()?, layout, &labels),
             Format::Vtt if outputs.sdh => captions::sdh::vtt(capt()?, layout, &labels),
             Format::Ass if outputs.sdh => captions::sdh::ass(capt()?, layout, &outputs.ass, &labels),
-            Format::Srt => captions::srt::build(words, layout),
-            Format::Vtt => vtt::build(words, layout),
-            Format::Ass => ass::build(words, layout, &outputs.ass),
-            Format::Lrc => captions::lrc::build(words, layout),
-            Format::Sbv => captions::sbv::build(words, layout),
-            Format::Ttml => captions::ttml::build(capt()?, layout, sdh),
-            Format::Transcript => (captions::transcript::build(capt()?, layout, &labels), 0),
-            Format::Adr => captions::adr::build(capt()?, layout, &outputs.adr, &labels),
+            Format::Srt => captions::srt::build(cue_words, layout),
+            Format::Vtt => vtt::build(cue_words, layout),
+            Format::Ass => ass::build(cue_words, layout, &outputs.ass),
             Format::Premiere => {
                 let t = captions::premiere::build(words, layout, default_language, seed)
                     .ok_or_else(|| anyhow!("no words to write"))?;
@@ -493,24 +471,10 @@ pub fn default_output(input: &Path, out_dir: Option<&Path>) -> PathBuf {
 /// The .srt base for an `-o` path given with any output extension: `clip.premiere.json` -> `clip.srt`.
 pub fn output_base(path: &Path) -> PathBuf {
     let name = path.file_name().map_or_else(String::new, |n| n.to_string_lossy().into_owned());
-    let stem = [
-        ".premiere.json",
-        ".soniox.json",
-        ".words.json",
-        ".adr.csv",
-        ".srt",
-        ".vtt",
-        ".ass",
-        ".capt",
-        ".ttml",
-        ".lrc",
-        ".sbv",
-        ".txt",
-        ".json",
-    ]
-    .iter()
-    .find_map(|s| strip_suffix(&name, s))
-    .unwrap_or(&name);
+    let stem = [".premiere.json", ".soniox.json", ".words.json", ".srt", ".vtt", ".ass", ".capt", ".json"]
+        .iter()
+        .find_map(|s| strip_suffix(&name, s))
+        .unwrap_or(&name);
     path.with_file_name(format!("{stem}.srt"))
 }
 

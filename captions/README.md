@@ -40,9 +40,7 @@ let (ass, _) = ass::build(&words, &layout, &ass::Options { karaoke: true, ..Defa
   writers above; a CAPT file's cut points, sentence ends, places and italic reach every writer through
   `Word::marks`.
 - From a CAPT file with its sounds and voices: `sdh::srt`, `sdh::vtt`, `sdh::ass` (subtitles for the deaf and
-  hard of hearing), `ttml` (TTML / IMSC; SDH with labels), `transcript` (plain text), `adr` (a DaVinci Resolve
-  Fairlight ADR cue list, `adr::Rate` for 23.976 to 60 frames a second); `lrc` (Enhanced LRC) and `sbv` (YouTube)
-  from words. `labels` writes sounds and voices in English or Russian.
+  hard of hearing). `labels` writes sounds and voices in English or Russian.
 - `Layout::for_frame` and `Layout::vertical()`: short lines for a vertical video, cut where they read well, and
   text kept clear of a phone app.
 

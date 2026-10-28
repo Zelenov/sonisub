@@ -298,7 +298,10 @@ fn wrap(text: &str, max_line: usize, max_lines: usize, readable: bool) -> Option
                         0.0
                     };
                     let cost = c + (len as f64 - target).powi(2) + brk;
-                    if best[l][j].is_none_or(|(b, _)| cost < b) {
+                    // `i` falls, so for reading on a phone a tie goes to the later one: the shorter
+                    // line above, the longer below.
+                    let tie = if readable { 1e-9 } else { -1e-9 };
+                    if best[l][j].is_none_or(|(b, _)| cost < b + tie) {
                         best[l][j] = Some((cost, i));
                     }
                 }
@@ -366,6 +369,17 @@ fn is_weak(w: &str) -> bool {
     WEAK.contains(&w.to_lowercase().as_str())
 }
 
+/// Who does something, with or without its verb ("we're", "этот"): a cue should not end on one,
+/// cutting the subject from what it does; a line may.
+const SUBJECTS: [&str; 30] = [
+    "i", "i'm", "i've", "i'll", "you", "you're", "we", "we're", "we've", "we'll", "they", "they're", "he", "she",
+    "it's", "this", "these", "those", "я", "ты", "он", "она", "мы", "вы", "они", "этот", "эта", "это", "эти", "тот",
+];
+
+fn is_subject(w: &str) -> bool {
+    SUBJECTS.contains(&w.to_lowercase().replace('’', "'").as_str())
+}
+
 /// For reading on a phone: every way to cut the sentence is weighed at once. A cut at punctuation
 /// costs nothing, at a pause a little, between other words more, and after a short function word
 /// most; a cue shorter than `min_duration` or faster than 20 characters a second costs extra.
@@ -379,7 +393,7 @@ fn split_readable(ws: &[Word], prefix: &str, s: &Layout) -> Vec<Range<usize>> {
         let short = if dur < s.min_duration { 80.0 } else { 0.0 };
         let fast = if dur > 0.0 && chars / dur > 20.0 { (chars / dur - 20.0) * 4.0 } else { 0.0 };
         let last = &ws[j - 1];
-        let weak = if j < n && !ends(last) && is_weak(&last.text) { 120.0 } else { 0.0 };
+        let weak = if j < n && !ends(last) && (is_weak(&last.text) || is_subject(&last.text)) { 120.0 } else { 0.0 };
         Some(base + short + fast + weak)
     };
     let cut = |j: usize| -> f64 {
@@ -390,8 +404,17 @@ fn split_readable(ws: &[Word], prefix: &str, s: &Layout) -> Vec<Range<usize>> {
     };
     let mut best: Vec<Option<(f64, usize)>> = vec![None; n + 1];
     best[0] = Some((0.0, 0));
+    // A cue that is already too long or too slow only grows as it starts earlier: stop there, so a
+    // long sentence without punctuation costs its length times a cue, not its length cubed.
+    let capacity = if s.max_line > 0 { s.max_line * s.max_lines.max(1) + prefix.chars().count() } else { usize::MAX };
+    let max_ms = if s.max_duration > 0.0 { (s.max_duration * 1000.0) as u64 } else { u64::MAX };
     for j in 1..=n {
+        let mut chars = 0;
         for i in (0..j).rev() {
+            chars += ws[i].text.chars().count() + usize::from(i + 1 < j);
+            if i + 1 < j && (chars > capacity || ws[j - 1].end.saturating_sub(ws[i].start) > max_ms) {
+                break;
+            }
             let Some((c0, _)) = best[i] else { continue };
             // A single word always fits, so there is always a way through.
             let Some(c) = cost(i, j).or((j == i + 1).then_some(CUE_COST * 10.0)) else { continue };
@@ -576,5 +599,16 @@ mod tests {
         assert_eq!((parts[1].marks.cut, parts[1].marks.sentence), (Some(true), Some(false)));
         // What covers the whole word covers both parts.
         assert!(parts.iter().all(|p| p.marks.italic));
+    }
+
+    #[test]
+    fn a_long_sentence_without_punctuation_is_cut_quickly_on_a_vertical_frame() {
+        let words: Vec<Word> = (0..5000u64)
+            .map(|i| Word { text: "word".into(), start: i * 300, end: i * 300 + 250, ..Word::default() })
+            .collect();
+        let started = std::time::Instant::now();
+        let cues = cues(&words, &Layout::vertical());
+        assert!(cues.len() > 100);
+        assert!(started.elapsed() < std::time::Duration::from_secs(10), "{:?}", started.elapsed());
     }
 }

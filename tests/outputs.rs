@@ -8,7 +8,7 @@
 mod common;
 
 use sonisub::captions::capt::Doc;
-use sonisub::captions::{Layout, adr, ass, lrc, sbv, sdh, srt, transcript, ttml, vtt};
+use sonisub::captions::{Layout, ass, sdh, srt, vtt};
 
 fn doc(name: &str) -> Doc {
     Doc::parse(&common::golden(&format!("{name}.capt"))).unwrap()
@@ -35,28 +35,12 @@ fn check(name: &str, ext: &str, text: &str) {
     assert_eq!(common::normalize(text), common::golden(&file), "{file}");
 }
 
-/// Compared as written, not normalised: CRLF is what Fairlight reads.
-fn check_raw(file: &str, text: &str) {
-    if bless() {
-        std::fs::write(common::fixture(file), text).unwrap();
-    }
-    let expected = String::from_utf8(std::fs::read(common::fixture(file)).unwrap()).unwrap();
-    assert_eq!(text, expected, "{file}");
-}
-
 #[test]
 fn outputs_of_both_fixtures() {
     for name in ["dialog", "marks"] {
         let d = doc(name);
         let (l, _) = layouts(&d);
-        let words = d.to_words();
         check(name, "sdh.srt", &sdh::srt(&d, &l, "en").0);
-        check(name, "ttml", &ttml::build(&d, &l, None).0);
-        check(name, "sdh.ttml", &ttml::build(&d, &l, Some("en")).0);
-        check(name, "lrc", &lrc::build(&words, &l).0);
-        check(name, "sbv", &sbv::build(&words, &l).0);
-        check(name, "txt", &transcript::build(&d, &l, "en"));
-        check_raw(&format!("{name}.adr.csv"), &adr::build(&d, &l, &adr::Options::default(), "en").0);
     }
 }
 
@@ -82,9 +66,8 @@ fn sdh_is_the_same_cues_with_sounds_and_voices() {
     assert!(n > plain.1, "{text}");
     assert!(text.contains("[phone ringing]"), "{text}");
     assert!(text.contains("[whispering]"), "{text}");
-    // Plain TTML has neither.
-    let ttml = ttml::build(&d, &l, None).0;
-    assert!(!ttml.contains("[phone ringing]") && !ttml.contains("[whispering]"), "{ttml}");
+    // Plain SRT has neither.
+    assert!(!plain.0.contains("[phone ringing]") && !plain.0.contains("[whispering]"), "{}", plain.0);
 }
 
 #[test]
@@ -95,7 +78,6 @@ fn a_vertical_frame_keeps_text_clear_of_the_phone_app() {
     let karaoke = ass::Options { karaoke: true, ..Default::default() };
     check("marks", "vertical.ass", &ass::build(&words, &v, &karaoke).0);
     check("marks", "vertical.vtt", &vtt::build(&words, &v).0);
-    check("marks", "vertical.ttml", &ttml::build(&d, &v, None).0);
     let ass = ass::build(&words, &v, &karaoke).0;
     assert!(ass.contains("PlayResX: 1080\nPlayResY: 1920\n"));
     // The bottom stays clear: 28% of 1920 px.

@@ -1073,15 +1073,18 @@ impl Doc {
                     .filter(|p| *p != Pos::Bottom);
                 m.voice =
                     b.span_option(w.start(), "voice").and_then(|v| v.first().cloned()).or_else(|| b.voice.clone());
-                m.lang = b.span_option(w.start(), "lang").and_then(|v| v.first().cloned());
+                // Marked against the file's language: a Russian block in an English file is Russian
+                // all through, an English word inside it is not marked.
+                let language = out[first + k].language.clone();
+                out[first + k].marks.lang = language.filter(|l| Some(l) != self.lang.as_ref());
             }
         }
         out
     }
 
-    /// The sound blocks, in order: start, end, speaker (`None` for a sound of no one) and code.
-    pub fn sounds(&self) -> Vec<(u64, u64, Option<&str>, &str)> {
-        self.blocks.iter().filter_map(|b| Some((b.start, b.end, b.speaker.as_deref(), b.sound.as_deref()?))).collect()
+    /// The sound blocks (`sound` is set), in order.
+    pub fn sounds(&self) -> impl Iterator<Item = &Block> {
+        self.blocks.iter().filter(|b| b.sound.is_some())
     }
 }
 
