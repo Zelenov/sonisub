@@ -352,19 +352,72 @@ fn blocks_out_of_order_and_marks_past_the_end_are_errors() {
     );
 }
 
-#[test]
-fn a_line_break_or_tab_in_a_word_or_value_does_not_break_the_file() {
-    let w = |text: &str| captions::Word {
+fn word(text: &str, start: u64, end: u64, speaker: &str, lang: &str) -> captions::Word {
+    captions::Word {
         text: text.into(),
-        start: 0,
-        end: 500,
-        speaker: Some("x\ty".into()),
-        language: Some("en".into()),
+        start,
+        end,
+        speaker: Some(speaker.into()),
+        language: Some(lang.into()),
         confidence: 1.0,
         glued: false,
-    };
-    let doc = Doc::from_words(&[w("a\nb.")], None);
+    }
+}
+
+#[test]
+fn a_line_break_or_tab_in_a_word_or_value_does_not_break_the_file() {
+    let mut doc =
+        Doc::from_words(&[word("a\nb.", 0, 500, "x\ny", "en"), word("c\u{a0}d.", 600, 900, "x\ny", "en")], None);
     let read = Doc::parse(&doc.write()).unwrap_or_else(|e| panic!("{e}\n{}", doc.write()));
-    assert_eq!(read.to_words()[0].text, "a b.");
-    assert_eq!(read.blocks[0].speaker.as_deref(), Some("x\ty"));
+    assert_eq!(read, doc, "the Doc holds what the file holds");
+    let texts: Vec<String> = read.to_words().into_iter().map(|w| w.text).collect();
+    assert_eq!(texts, ["a b.", "c\u{a0}d."], "a line break becomes a space, a no-break space stays");
+    assert_eq!(read.blocks[0].speaker.as_deref(), Some("x y"));
+
+    // A name set on a Doc by hand (as --speaker-names does) keeps the header one line too.
+    doc.speakers[0].name = Some("Ann\nLee".into());
+    assert_eq!(Doc::parse(&doc.write()).unwrap().speakers[0].name.as_deref(), Some("Ann Lee"));
+}
+
+#[test]
+fn words_in_any_order_give_blocks_in_order() {
+    let doc = Doc::from_words(&[word("Hi.", 5000, 5500, "1", "en"), word("Bye.", 1000, 1500, "2", "en")], None);
+    assert_eq!(doc.blocks.iter().map(|b| b.start).collect::<Vec<_>>(), [1000, 5000]);
+    assert_eq!(Doc::parse(&doc.write()), Ok(doc));
+}
+
+#[test]
+fn a_word_between_two_in_another_language_keeps_its_own() {
+    let words = [
+        word("one", 0, 200, "1", "en"),
+        word("two", 300, 500, "1", "en"),
+        word("hola", 600, 1000, "1", "es"),
+        word("x", 1000, 1000, "1", "en"),
+        word("amigo", 1100, 1400, "1", "es"),
+        word("three.", 1500, 1800, "1", "en"),
+    ];
+    let read = Doc::parse(&Doc::from_words(&words, None).write()).unwrap();
+    let langs: Vec<Option<String>> = read.to_words().into_iter().map(|w| w.language).collect();
+    let es = Some("es".to_string());
+    let en = Some("en".to_string());
+    assert_eq!(langs, [en.clone(), en.clone(), es.clone(), en.clone(), es, en]);
+}
+
+#[test]
+fn a_hand_written_line_that_looks_like_a_block_line_stays_text() {
+    let file = "CAPT 1\n\n00:00:00.000 --> 00:00:05.000\n00:00:01.000 \\--> x\n";
+    let doc = Doc::parse(file).unwrap();
+    assert_eq!(Doc::parse(&doc.write()), Ok(doc));
+}
+
+#[test]
+fn a_mistyped_first_block_line_and_a_block_ending_before_it_starts_get_one_error_each() {
+    assert_eq!(
+        errors("CAPT 1\n\n00:00:01,000 --> 00:00:02.000\n{0}Hi.{50}\n"),
+        ["line 3: a block line is “HH:MM:SS.mmm --> HH:MM:SS.mmm key:value…”"]
+    );
+    assert_eq!(
+        errors("CAPT 1\n\n00:00:03.000 --> 00:00:02.000\n{0}Hi.{50}\n"),
+        ["line 3: the block ends before it starts"]
+    );
 }

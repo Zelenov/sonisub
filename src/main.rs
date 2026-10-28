@@ -435,7 +435,7 @@ fn render(args: &RenderArgs) -> Result<()> {
     let is_capt = input.extension().is_some_and(|e| e.eq_ignore_ascii_case("capt")) || text.starts_with("CAPT ");
     let (words, doc) = if is_capt {
         let doc = Doc::parse(text).map_err(|errors| {
-            let list: Vec<String> = errors.to_string().lines().map(|l| format!("  {l}")).collect();
+            let list: Vec<String> = errors.0.iter().map(|e| format!("  {e}")).collect();
             anyhow!("{} is not a valid CAPT file:\n{}", input.display(), list.join("\n"))
         })?;
         (doc.to_words(), Some(doc))

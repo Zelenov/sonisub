@@ -29,8 +29,8 @@ speaker:2
 A file is UTF-8 text with `\n` line ends (a reader also takes `\r\n` and a byte order mark).
 
 1. `CAPT 1` — the first line. The number changes only when old readers would misread a file.
-2. The header: lines of options, up to the first block line (a line that starts with a time and
-   ` --> `). A line with a `speaker` key describes that speaker: its `name` and any other key
+2. The header: lines of options, up to the first block line (a line whose first word starts with a
+   digit, followed by ` --> `). A line with a `speaker` key describes that speaker: its `name` and any other key
    belong to the speaker. Every other header line holds file options; several may share a line.
 3. Blocks, each followed by a blank line or the end of the file. A block is:
    - a **block line**: `HH:MM:SS.mmm --> HH:MM:SS.mmm` (start and end in the media), then the
@@ -94,8 +94,10 @@ tie by 10 ms), and a word with a span on its last piece ends at least 10 ms afte
   over the block by length.
 - A backslash makes the next character plain text. Writers escape exactly `\{`, `\}`, `\\`, `\ `
   for a space inside a word (`New\ York`), and `\/` for a slash that is a whole word (`and \/ or`;
-  `24/7` needs nothing). A line break, tab or other control character inside a word is written as a
-  space. Every mark lies within the block's start and end.
+  `24/7` needs nothing). A line break, tab or other control character in a word or an option value is
+  written as a space; other spaces, such as a no-break space, are kept. A text line without marks
+  that would read as a block line starts with a backslash. Every mark lies within the block's start
+  and end.
 
 ## Sentences
 

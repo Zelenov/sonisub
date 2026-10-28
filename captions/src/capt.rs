@@ -277,10 +277,12 @@ fn offset(base: u64, cs: u64) -> Option<u64> {
     base.checked_add(cs.checked_mul(10)?)
 }
 
-/// A block line starts with a time and ` --> `.
+/// A line meant as a block line: a first word that starts with a digit, then ` --> ` (a mistyped
+/// time is still one, so it gets the block line's error). A header key starts with a letter, a
+/// marked text line with `{`.
 fn is_block_line(line: &str) -> bool {
     let mut it = line.split(' ');
-    it.next().and_then(parse_time).is_some() && it.next() == Some("-->")
+    it.next().is_some_and(|t| t.starts_with(|c: char| c.is_ascii_digit())) && it.next() == Some("-->")
 }
 
 /// `key:value key:"a b",c` -> options. A part is bare (no space, comma or quote) or quoted, with
@@ -561,7 +563,8 @@ impl Doc {
                 doc.read_header(line, i, &mut errors);
             }
         }
-        let mut last_at: Option<usize> = None;
+        // The start and line of the block before, to check the order.
+        let mut prev: Option<(u64, usize)> = None;
         while i < lines.len() {
             if lines[i].trim().is_empty() {
                 i += 1;
@@ -580,8 +583,8 @@ impl Doc {
             }
             i += 1;
             if let Some(b) = parse_block(&block_lines, at, &mut errors) {
-                if let (Some(prev), Some(prev_at)) = (doc.blocks.last(), last_at)
-                    && b.start < prev.start
+                if let Some((prev_start, prev_at)) = prev
+                    && b.start < prev_start
                 {
                     errors.push(Error {
                         line: at,
@@ -590,7 +593,7 @@ impl Doc {
                         ),
                     });
                 }
-                last_at = Some(at);
+                prev = Some((b.start, at));
                 doc.blocks.push(b);
             }
         }
@@ -684,13 +687,15 @@ fn parse_block(lines: &[&str], at: usize, errors: &mut Vec<Error>) -> Option<Blo
             Ok((phrases, marked)) => {
                 b.phrases = phrases;
                 b.untimed = !marked;
-                if marked && let Some(w) = b.words().find(|w| w.end > end || w.pieces.iter().any(|p| p.start > end)) {
+                // Marks never go back, so a word's end is its latest mark. A block that ends before it
+                // starts is reported already.
+                if marked
+                    && end >= start
+                    && let Some(w) = b.words().find(|w| w.end > end)
+                {
                     errors.push(Error {
                         line: at + 1,
-                        message: format!(
-                            "the mark {{{}}} is after the block's end",
-                            (w.end.max(w.start()) - start) / 10
-                        ),
+                        message: format!("the mark {{{}}} is after the block's end", (w.end - start) / 10),
                     });
                     text_ok = false;
                 }
@@ -740,9 +745,15 @@ fn time(ms: u64) -> String {
     format!("{:02}:{:02}:{:02}.{:03}", ms / 3_600_000, ms / 60_000 % 60, ms / 1000 % 60, ms % 1000)
 }
 
+/// A control character (a line break, a tab) as a space: a file's lines must stay lines.
+fn one_line(s: &str) -> String {
+    s.chars().map(|c| if c.is_control() { ' ' } else { c }).collect()
+}
+
 fn part(p: &str) -> String {
-    if !p.is_empty() && !p.chars().any(|c| c == ',' || c == '"' || c.is_whitespace() || c.is_control()) {
-        return p.to_string();
+    let p = one_line(p);
+    if !p.is_empty() && !p.chars().any(|c| c == ',' || c == '"' || c.is_whitespace()) {
+        return p;
     }
     format!("\"{}\"", p.replace('\\', "\\\\").replace('"', "\\\""))
 }
@@ -780,9 +791,7 @@ fn escape(text: &str, whole_word: bool) -> String {
     if whole_word && text == "/" {
         return "\\/".into();
     }
-    // The text is one line: any other space or control character becomes a space.
-    let text: String = text.chars().map(|c| if c.is_whitespace() || c.is_control() { ' ' } else { c }).collect();
-    text.replace('\\', "\\\\").replace('{', "\\{").replace('}', "\\}").replace(' ', "\\ ")
+    one_line(text).replace('\\', "\\\\").replace('{', "\\{").replace('}', "\\}").replace(' ', "\\ ")
 }
 
 impl Doc {
@@ -851,7 +860,12 @@ impl Block {
         };
         let phrases: Vec<String> =
             self.phrases.iter().map(|p| p.iter().map(word).collect::<Vec<_>>().join(" ")).collect();
-        out.push_str(&phrases.join(" / "));
+        let text = phrases.join(" / ");
+        // A line without marks that would read as a block line starts with an escape.
+        if is_block_line(&text) {
+            out.push('\\');
+        }
+        out.push_str(&text);
         out.push('\n');
         for s in &self.spans {
             out.push_str(&format!("{{{}..{}}}", cs(s.from), cs(s.to)));
@@ -889,7 +903,8 @@ fn majority<'a>(langs: impl Iterator<Item = &'a str>) -> Option<String> {
     counts.iter().rev().max_by_key(|(_, n)| *n).map(|(l, _)| l.to_string())
 }
 
-/// The latest time a writer keeps: far below what a mark can hold, so `+ 10` never overflows.
+/// The latest time a writer keeps, so a written file reads back: a block's start plus a mark
+/// times 10 always fits a `u64`.
 const LATEST: u64 = u64::MAX / 100 * 10;
 
 /// Times on the 10 ms grid the marks are written on.
@@ -910,12 +925,24 @@ impl Doc {
     /// 10 ms after its last piece starts. `id` is the file's id (the transcription id): block ids
     /// and Premiere ids are made from it.
     pub fn from_spoken(spoken: &[Spoken], id: Option<String>) -> Doc {
-        // A piece without text cannot be written; a word without pieces is no word.
+        // What the file can hold, so the Doc is what reads back: a control character as a space,
+        // no empty piece, no word without pieces.
         let spoken: Vec<Spoken> = spoken
             .iter()
-            .map(|s| Spoken { pieces: s.pieces.iter().filter(|p| !p.text.is_empty()).cloned().collect(), ..s.clone() })
+            .map(|s| Spoken {
+                pieces: s
+                    .pieces
+                    .iter()
+                    .filter(|p| !p.text.is_empty())
+                    .map(|p| SpokenPiece { text: one_line(&p.text), ..p.clone() })
+                    .collect(),
+                end: s.end,
+                speaker: s.speaker.as_deref().map(one_line),
+                language: s.language.as_deref().map(one_line),
+            })
             .filter(|s| !s.pieces.is_empty())
             .collect();
+        let id = id.as_deref().map(one_line);
         let plain: Vec<crate::Word> = spoken
             .iter()
             .map(|s| {
@@ -950,6 +977,8 @@ impl Doc {
             });
             doc.blocks.push(b);
         }
+        // Blocks are in order of start, whatever order the words came in; overlaps stay.
+        doc.blocks.sort_by_key(|b| b.start);
         doc
     }
 
@@ -1029,7 +1058,8 @@ fn block(plain: &[crate::Word], spoken: &[Spoken], file_lang: Option<&String>) -
     let mut conf_spans = Vec::new();
     let mut lang_spans: Vec<Span> = Vec::new();
     let mut phrase: Vec<Word> = Vec::new();
-    let mut prev_end: Option<u64> = None;
+    // Whether the word before is in the last language span: only then does a word join it.
+    let mut in_span = false;
     for (k, ((w, s), pieces)) in plain.iter().zip(spoken).zip(all.iter().cloned()).enumerate() {
         if k > 0 && cues::cut_level(&plain[k - 1], w) <= 1 {
             b.phrases.push(std::mem::take(&mut phrase));
@@ -1054,11 +1084,11 @@ fn block(plain: &[crate::Word], spoken: &[Spoken], file_lang: Option<&String>) -
         if let Some(l) = other_lang {
             // Neighbouring words in the same other language share one span.
             match lang_spans.last_mut() {
-                Some(prev) if prev_end == Some(prev.to) && prev.options[0].1[0] == *l => prev.to = end,
+                Some(prev) if in_span && prev.options[0].1[0] == *l => prev.to = end,
                 _ => lang_spans.push(span(pieces[0].start, end, "lang", l.clone())),
             }
         }
-        prev_end = Some(end);
+        in_span = other_lang.is_some();
         phrase.push(Word { pieces, end });
     }
     b.phrases.push(phrase);
