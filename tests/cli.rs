@@ -238,3 +238,20 @@ fn sdh_adds_sounds_and_voices_to_the_subtitles_it_writes() {
         assert!(text.contains("[phone ringing]") && text.contains("[whispering]"), "{text}");
     }
 }
+
+#[test]
+fn a_capt_file_of_sounds_only_gives_sdh_subtitles() {
+    let dir = tempfile::tempdir().unwrap();
+    let capt = dir.path().join("intro.capt");
+    std::fs::write(&capt, "CAPT 1\n\n00:00:00.000 --> 00:00:04.000 sound:music\n").unwrap();
+    let out = sonisub(&["render".as_ref(), capt.as_os_str(), "-t".as_ref(), "srt".as_ref(), "--sdh".as_ref()])
+        .output()
+        .unwrap();
+    assert!(out.status.success(), "{}", plain(&out));
+    let srt = std::fs::read_to_string(dir.path().join("intro.srt")).unwrap();
+    assert_eq!(srt, "1\n00:00:00,000 --> 00:00:04,000\n[music]\n\n");
+    // Without --sdh there is nothing to write.
+    let out =
+        sonisub(&["render".as_ref(), capt.as_os_str(), "-t".as_ref(), "srt".as_ref(), "-f".as_ref()]).output().unwrap();
+    assert!(!out.status.success());
+}

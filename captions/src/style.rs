@@ -35,6 +35,8 @@ fn marked_lines(cue: &Cue, m: &Markup) -> Option<Vec<String>> {
     let mut prefix = if cue.prefix.is_empty() { 0 } else { pieces(cue.prefix.trim_end()).len() };
     let mut out = Vec::new();
     let mut voice: Option<&str> = None;
+    // Pieces still to come of a word with a space in it (`New York`).
+    let mut rest = 0;
     for line in &cue.lines {
         let mut text = String::new();
         let (mut italic, mut lang): (bool, Option<&str>) = (false, None);
@@ -58,7 +60,16 @@ fn marked_lines(cue: &Cue, m: &Markup) -> Option<Vec<String>> {
                 text.push_str(&(m.escape)(piece));
                 continue;
             }
-            let w = words.next().filter(|w| w.text == piece)?;
+            if rest > 0 {
+                rest -= 1;
+                if space {
+                    text.push(' ');
+                }
+                text.push_str(&(m.escape)(piece));
+                continue;
+            }
+            let w = words.next()?;
+            rest = word_pieces(w, piece)?;
             let want_italic = m.italic.is_some() && w.marks.italic;
             let want_lang = m.lang.and(w.marks.lang.as_deref());
             let new_voice = m.voice.is_some() && !w.glued && w.marks.voice.as_deref().is_some_and(|v| Some(v) != voice);
@@ -91,6 +102,13 @@ fn marked_lines(cue: &Cue, m: &Markup) -> Option<Vec<String>> {
         out.push(text);
     }
     words.next().is_none().then_some(out)
+}
+
+/// How many more pieces of a line `w` takes after `piece`, its first; `None` if the line does not
+/// go on with `w` there.
+pub(crate) fn word_pieces(w: &crate::Word, piece: &str) -> Option<usize> {
+    let own = pieces(&w.text);
+    (own.first().map(|p| p.0) == Some(piece)).then(|| own.len() - 1)
 }
 
 /// The place of a cue: the first word's (a cue never mixes places).

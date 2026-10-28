@@ -385,6 +385,9 @@ fn is_subject(w: &str) -> bool {
 /// most; a cue shorter than `min_duration` or faster than 20 characters a second costs extra.
 fn split_readable(ws: &[Word], prefix: &str, s: &Layout) -> Vec<Range<usize>> {
     let n = ws.len();
+    if s.max_line == 0 && s.max_duration <= 0.0 {
+        return std::iter::once(0..n).collect();
+    }
     let cost = |i: usize, j: usize| -> Option<f64> {
         let p = if i == 0 { prefix } else { "" };
         let base = cue_cost(&ws[i..j], p, s)?;
@@ -609,6 +612,9 @@ mod tests {
         let started = std::time::Instant::now();
         let cues = cues(&words, &Layout::vertical());
         assert!(cues.len() > 100);
+        // No limits: one cue, as without a frame.
+        let unlimited = Layout { max_line: 0, max_duration: 0.0, ..Layout::vertical() };
+        assert_eq!(super::cues(&words, &unlimited).len(), 1);
         assert!(started.elapsed() < std::time::Duration::from_secs(10), "{:?}", started.elapsed());
     }
 }

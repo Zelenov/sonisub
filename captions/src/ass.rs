@@ -82,6 +82,8 @@ fn karaoke(cue: &Cue, voice: Option<&dyn Fn(&str) -> String>) -> Option<String> 
     let mut out = String::new();
     let mut italic = false;
     let mut said: Option<&str> = None;
+    // Pieces still to come of a word with a space in it, lit with its first piece.
+    let mut rest = 0;
     for (l, line) in cue.lines.iter().enumerate() {
         if l > 0 {
             out.push_str("\\N");
@@ -95,7 +97,13 @@ fn karaoke(cue: &Cue, voice: Option<&dyn Fn(&str) -> String>) -> Option<String> 
                 out.push_str(&escape(piece));
                 continue;
             }
-            let w = words.next().filter(|w| w.text == piece)?;
+            if rest > 0 {
+                rest -= 1;
+                out.push_str(&escape(piece));
+                continue;
+            }
+            let w = words.next()?;
+            rest = style::word_pieces(w, piece)?;
             if !w.glued && w.marks.voice.as_deref() != said {
                 said = w.marks.voice.as_deref();
                 if let (Some(f), Some(v)) = (voice, said) {

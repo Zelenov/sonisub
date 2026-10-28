@@ -214,7 +214,8 @@ pub struct SegArgs {
     pub frame: Option<(u32, u32)>,
 
     /// Subtitles for the deaf and hard of hearing: .srt, .vtt and .ass get a subtitle for every sound
-    /// ([phone ringing]) and a label before words said in a voice of their own ([whispering]).
+    /// ([phone ringing]) and a label before words said in a voice of their own ([whispering]), as a CAPT file marks
+    /// them (Soniox reports no sounds: add them to clip.capt and `render` it).
     #[arg(long, help_heading = "Outputs")]
     pub sdh: bool,
 

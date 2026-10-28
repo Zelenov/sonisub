@@ -174,3 +174,14 @@ fn karaoke_keeps_line_breaks_dashes_and_the_speaker_label() {
     assert!(second.contains("\\N"), "{second}");
     assert!(second.contains("wrap—{\\k"), "the glued half of a dash word is timed on its own: {second}");
 }
+
+#[test]
+fn a_word_with_a_space_keeps_the_marks_of_its_cue() {
+    let file = "CAPT 1\n\n00:00:01.000 --> 00:00:03.000\n{0}I{10} {20}love{50} {60}New\\ York{120} {130}a{140} {150}lot.{180}\n{20..50} style:italic\n";
+    let doc = captions::capt::Doc::parse(file).unwrap();
+    let text = srt::build(&doc.to_words(), &Layout::default()).0;
+    assert!(text.contains("I <i>love</i> New York a lot."), "{text}");
+    let karaoke =
+        ass::build(&doc.to_words(), &Layout::default(), &ass::Options { karaoke: true, ..Default::default() }).0;
+    assert!(karaoke.contains(r"{\i1}{\k40}love {\i0}{\k70}New York {\k20}a"), "{karaoke}");
+}

@@ -444,7 +444,8 @@ fn render(args: &RenderArgs) -> Result<()> {
             .with_context(|| format!("{} is neither a CAPT file nor a JSON list of words", input.display()))?;
         (words, None)
     };
-    if words.is_empty() {
+    let sounds = doc.as_ref().is_some_and(|d| d.sounds().next().is_some());
+    if words.is_empty() && !(args.seg.sdh && sounds) {
         bail!("{} has no words", input.display());
     }
     let output = job::output_base(args.output.as_deref().unwrap_or(input));
