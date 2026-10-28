@@ -54,7 +54,7 @@ fn every_part_reads_and_writes_back() {
     assert_eq!(texts, ["Type", "{name}", "and", "/", "C:\\temp", "etc."]);
     assert_eq!(styled.span_option(38_100, "mood"), Some(&["calm".to_string()][..]));
 
-    assert!(!plain.marked);
+    assert!(plain.untimed);
     let w: Vec<(String, u64, u64)> = plain.words().map(|w| (w.text(), w.start(), w.end)).collect();
     assert_eq!(w.first().map(|w| w.1), Some(39_000));
     assert_eq!(w.last().map(|w| w.2), Some(41_000));
@@ -104,7 +104,7 @@ fn from_words_makes_a_block_per_sentence_with_cut_points() {
 fn errors(file: &str) -> Vec<String> {
     match Doc::parse(file) {
         Ok(_) => Vec::new(),
-        Err(e) => e.iter().map(ToString::to_string).collect(),
+        Err(e) => e.0.iter().map(ToString::to_string).collect(),
     }
 }
 
@@ -141,10 +141,10 @@ fn a_reader_reports_every_problem_with_its_line() {
             "line 6: a mark holds a time in hundredths, not “ 5”",
             "line 8: the rectangle 0.8,0.1,0.4,0.2 runs out of the frame or has no size",
             "line 9: a “}” at column 5 closes nothing: write \\} for a brace in the text",
-            "line 16: after the text a block has only spans, “{from..to} key:value”",
             "line 13: {30..40}: {40} is not a later mark of this block",
             "line 14: {35..50}: no piece starts at {35}",
             "line 15: {0..30}: “lang:” covers whole words: from a word start to a word end",
+            "line 16: after the text a block has only spans, “{from..to} key:value”",
             "line 19: a sound block has no text: the sound is its code",
             "line 21: a block line is “HH:MM:SS.mmm --> HH:MM:SS.mmm key:value…”",
         ]
@@ -255,4 +255,87 @@ fn a_speaker_line_keeps_its_other_options_and_may_start_with_any_key() {
     assert_eq!(doc.speakers[0].id, "3");
     assert_eq!(doc.speakers[0].name.as_deref(), Some("Bob"));
     assert_eq!(doc.write(), "CAPT 1\nspeaker:3 name:Bob colour:red\n");
+}
+
+#[test]
+fn a_block_built_by_hand_writes_its_times() {
+    use captions::capt::{Block, Piece, Word};
+    let word = |t: &str, s: u64, e: u64| Word { pieces: vec![Piece { text: t.into(), start: s }], end: e };
+    let b = Block {
+        start: 1000,
+        end: 2000,
+        phrases: vec![vec![word("Hi", 1000, 1400), word("there.", 1500, 2000)]],
+        ..Block::default()
+    };
+    let doc = Doc { blocks: vec![b], ..Doc::default() };
+    assert_eq!(doc.write(), "CAPT 1\n\n00:00:01.000 --> 00:00:02.000\n{0}Hi{40} {50}there.{100}\n");
+    assert_eq!(Doc::parse(&doc.write()), Ok(doc));
+}
+
+#[test]
+fn errors_are_one_error_with_a_line_each() {
+    fn read(text: &str) -> Result<Doc, Box<dyn std::error::Error>> {
+        Ok(Doc::parse(text)?)
+    }
+    let e = read("CAPT 1\n\n00:00:01.000 --> 00:00:02.000\n{0}a{x}\n{0..9} lang:en\n").unwrap_err();
+    assert_eq!(e.to_string(), "line 4: a mark holds a time in hundredths, not “x”");
+}
+
+#[test]
+fn words_from_another_recogniser_may_overlap_or_be_empty() {
+    let w = |text: &str, start: u64, end: u64, lang: &str| captions::Word {
+        text: text.into(),
+        start,
+        end,
+        speaker: Some("1".into()),
+        language: Some(lang.into()),
+        confidence: 1.0,
+        glued: false,
+    };
+    let words = [
+        w("Мы", 0, 300, "ru"),
+        w("used", 280, 500, "en"),
+        w("", 500, 510, "en"),
+        w("the", 520, 600, "en"),
+        w("API.", 620, 900, "en"),
+        w("Да.", 1000, 1200, "ru"),
+    ];
+    let doc = Doc::from_words(&words, None);
+    let read = Doc::parse(&doc.write()).unwrap_or_else(|e| panic!("{e}\n{}", doc.write()));
+    assert_eq!(read, doc);
+    let texts: Vec<String> = read.words().into_iter().map(|w| w.text).collect();
+    assert_eq!(texts, ["Мы", "used", "the", "API.", "Да."], "the empty word is dropped");
+    assert!(read.words()[0].end <= read.words()[1].start, "a word ends before the next one starts");
+}
+
+#[test]
+fn a_huge_time_from_a_recogniser_does_not_panic() {
+    let w = captions::Word {
+        text: "x".into(),
+        start: u64::MAX,
+        end: u64::MAX,
+        speaker: None,
+        language: None,
+        confidence: 0.5,
+        glued: false,
+    };
+    let _ = Doc::from_words(&[w], None).write();
+}
+
+#[test]
+fn marks_that_go_back_or_cover_only_part_of_a_line_are_errors() {
+    for (text, says) in [
+        ("{0}Hello{30} {20}there{40}", "the mark {20} is earlier than the mark {30} before it"),
+        ("{0}Hello{50} brave {60}new{100}", "every word of a line has marks, or none does: {start}word{end}"),
+        ("{0}a{0}b{20}", "two pieces start at {0}: a piece starts after the one before it"),
+    ] {
+        let file = format!("CAPT 1\n\n00:00:01.000 --> 00:00:02.000\n{text}\n");
+        assert_eq!(errors(&file), [format!("line 4: {says}")], "{text}");
+    }
+}
+
+#[test]
+fn a_missing_blank_line_between_blocks_is_named() {
+    let file = "CAPT 1\n\n00:00:01.000 --> 00:00:02.000\n{0}a{10}\n00:00:03.000 --> 00:00:04.000\n{0}b{10}\n";
+    assert_eq!(errors(file)[0], "line 5: a blank line ends a block before the next block line");
 }

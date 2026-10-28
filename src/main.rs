@@ -435,7 +435,7 @@ fn render(args: &RenderArgs) -> Result<()> {
     let is_capt = input.extension().is_some_and(|e| e.eq_ignore_ascii_case("capt")) || text.starts_with("CAPT ");
     let (words, doc) = if is_capt {
         let doc = Doc::parse(text).map_err(|errors| {
-            let list: Vec<String> = errors.iter().map(|e| format!("  {e}")).collect();
+            let list: Vec<String> = errors.0.iter().map(|e| format!("  {e}")).collect();
             anyhow!("{} is not a valid CAPT file:\n{}", input.display(), list.join("\n"))
         })?;
         (doc.words(), Some(doc))
@@ -454,21 +454,20 @@ fn render(args: &RenderArgs) -> Result<()> {
         return Ok(());
     }
     let mut layout = args.seg.layout(true);
-    let ass = args.seg.ass();
-    // A CAPT file's speaker names are used unless --speaker-names gives others.
-    if let Some(doc) = &doc
-        && layout.speaker_names.is_empty()
-    {
-        layout.speaker_names = numbered_names(doc);
-    }
+    let mut ass = args.seg.ass();
+    let given = !layout.speaker_names.is_empty();
     // Saved words become a CAPT file without an id: the input's name only seeds the Premiere ids.
-    let doc = doc.or_else(|| {
-        targets.iter().any(|(f, _)| *f == job::Format::Capt).then(|| {
-            let mut doc = Doc::from_words(&words, None);
-            job::name_speakers(&mut doc, &layout, &ass);
-            doc
-        })
-    });
+    let mut doc =
+        doc.or_else(|| targets.iter().any(|(f, _)| *f == job::Format::Capt).then(|| Doc::from_words(&words, None)));
+    if let Some(doc) = &mut doc {
+        if given {
+            // --speaker-names win over a CAPT file's names, and go into the CAPT written.
+            job::name_speakers(doc, &layout, &ass);
+        } else {
+            layout.speaker_names = job::speaker_names(doc);
+        }
+        ass.names = doc.speakers.iter().filter_map(|s| Some((s.id.clone(), s.name.clone()?))).collect();
+    }
     let seed = doc.as_ref().and_then(|d| d.id.clone()).unwrap_or_else(|| name.clone());
     let language = if is_capt { doc.as_ref().and_then(|d| d.lang.clone()) } else { None };
     let (files, cues) = job::write_outputs(&targets, &words, doc.as_ref(), &layout, &ass, language.as_deref(), &seed)?;
@@ -476,22 +475,6 @@ fn render(args: &RenderArgs) -> Result<()> {
     let paths: Vec<String> = files.iter().map(|f| f.display().to_string()).collect();
     eprintln!("✓ {name} — {what} -> {}", paths.join(", "));
     Ok(())
-}
-
-/// A CAPT file's speaker names by number (`speaker:2 name:Anna` -> the second name), as `--speaker-names` gives them.
-fn numbered_names(doc: &sonisub::captions::capt::Doc) -> Vec<String> {
-    let mut names: Vec<String> = Vec::new();
-    for s in &doc.speakers {
-        if let (Some(name), Ok(n)) = (&s.name, s.id.parse::<usize>())
-            && n > 0
-        {
-            if names.len() < n {
-                names.resize(n, String::new());
-            }
-            names[n - 1] = name.clone();
-        }
-    }
-    names
 }
 
 fn show_languages(api: &ApiArgs) -> Result<()> {

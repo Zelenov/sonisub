@@ -62,10 +62,24 @@ pub enum Pos {
     Top,
     /// The centre of the frame.
     Middle,
-    /// The text is centred on a point; parts of the frame from its top left corner.
-    Point { x: f64, y: f64 },
-    /// The text wraps inside a rectangle (top left corner, width, height) and starts at its top.
-    Rect { x: f64, y: f64, w: f64, h: f64 },
+    /// The text is centred on a point.
+    Point {
+        /// Share of the frame's width from its left edge, 0 to 1.
+        x: f64,
+        /// Share of the frame's height from its top edge, 0 to 1.
+        y: f64,
+    },
+    /// The text wraps inside a rectangle and starts at its top.
+    Rect {
+        /// The left edge, as a share of the frame's width.
+        x: f64,
+        /// The top edge, as a share of the frame's height.
+        y: f64,
+        /// The width, as a share of the frame's width.
+        w: f64,
+        /// The height, as a share of the frame's height.
+        h: f64,
+    },
 }
 
 /// One source of sound over a stretch of time.
@@ -91,9 +105,9 @@ pub struct Block {
     pub other: KeyValues,
     /// The text: phrases (the words between cut points), each a list of words.
     pub phrases: Vec<Vec<Word>>,
-    /// Whether the text line has marks; a hand-written line may have none, and its words get times
-    /// spread over the block by length.
-    pub marked: bool,
+    /// The text line had no marks (a hand-written line): its words got times spread over the block
+    /// by length, and it is written back without marks. `false` writes every time.
+    pub untimed: bool,
     /// Options for parts of the text.
     pub spans: Vec<Span>,
 }
@@ -144,6 +158,20 @@ impl fmt::Display for Error {
 
 impl std::error::Error for Error {}
 
+/// Every problem [`Doc::parse`] found, in order of line.
+#[derive(Debug, Clone, PartialEq)]
+pub struct Errors(pub Vec<Error>);
+
+impl fmt::Display for Errors {
+    /// One problem per line: `line 4: a mark holds a time in hundredths, not “x”`.
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let lines: Vec<String> = self.0.iter().map(ToString::to_string).collect();
+        f.write_str(&lines.join("\n"))
+    }
+}
+
+impl std::error::Error for Errors {}
+
 /// A word as a recogniser hears it, for [`Doc::from_spoken`]: [`crate::Word`] with its pieces.
 #[derive(Debug, Clone, PartialEq)]
 pub struct Spoken {
@@ -160,6 +188,7 @@ pub struct Spoken {
 /// A piece of a [`Spoken`] word: a token of the recogniser.
 #[derive(Debug, Clone, PartialEq)]
 pub struct SpokenPiece {
+    /// The token's text, without the spaces around it.
     pub text: String,
     /// Start, milliseconds from the start of the audio.
     pub start: u64,
@@ -204,7 +233,8 @@ impl Block {
         self.phrases.iter().flatten()
     }
 
-    /// The first value of a span option covering the piece that starts at `at`.
+    /// The value (its parts) of option `key` in the first span that covers the piece starting at
+    /// `at` and has that option.
     pub fn span_option(&self, at: u64, key: &str) -> Option<&[String]> {
         self.spans
             .iter()
@@ -410,12 +440,14 @@ fn end_word(word: &mut Option<Word>, phrases: &mut [Vec<Word>], last: &mut Optio
     *last = None;
 }
 
-/// Tokens -> phrases of words, and whether the line has marks.
+/// Tokens -> phrases of words, and whether the line has marks. A line has marks on every word or
+/// on none; marks never go back, and piece starts rise strictly.
 fn words_of(tokens: Vec<Token>, base: u64) -> Result<(Vec<Vec<Word>>, bool), String> {
     let mut phrases: Vec<Vec<Word>> = vec![Vec::new()];
     let mut word: Option<Word> = None;
     let mut last: Option<u64> = None;
     let mut marked = false;
+    let (mut prev_mark, mut prev_piece) = (None::<u64>, None::<(u64, u64)>);
     for t in tokens {
         match t {
             Token::Space => end_word(&mut word, &mut phrases, &mut last),
@@ -426,22 +458,38 @@ fn words_of(tokens: Vec<Token>, base: u64) -> Result<(Vec<Vec<Word>>, bool), Str
             Token::Mark(cs) => {
                 marked = true;
                 let t = offset(base, cs).ok_or_else(|| format!("the mark {{{cs}}} is too large"))?;
+                if let Some(p) = prev_mark.filter(|&p| t < p) {
+                    let rel = (p - base) / 10;
+                    return Err(format!("the mark {{{cs}}} is earlier than the mark {{{rel}}} before it"));
+                }
+                prev_mark = Some(t);
                 last = Some(t);
                 word.get_or_insert_with(|| Word { pieces: Vec::new(), end: UNTIMED }).end = t;
             }
             Token::Text(text) => {
+                let start = last.unwrap_or(UNTIMED);
+                if let Some((_, cs)) = prev_piece.filter(|&(p, _)| start != UNTIMED && start <= p) {
+                    return Err(format!("two pieces start at {{{cs}}}: a piece starts after the one before it"));
+                }
+                if start != UNTIMED {
+                    prev_piece = Some((start, (start - base) / 10));
+                }
                 let w = word.get_or_insert_with(|| Word { pieces: Vec::new(), end: UNTIMED });
-                w.pieces.push(Piece { text, start: last.unwrap_or(UNTIMED) });
+                w.pieces.push(Piece { text, start });
                 w.end = UNTIMED;
             }
         }
     }
     end_word(&mut word, &mut phrases, &mut last);
     phrases.retain(|p| !p.is_empty());
+    let untimed = phrases.iter().flatten().any(|w| w.end == UNTIMED || w.pieces.iter().any(|p| p.start == UNTIMED));
+    if marked && untimed {
+        return Err("every word of a line has marks, or none does: {start}word{end}".into());
+    }
     Ok((phrases, marked))
 }
 
-/// Words with no time get times spread over the block by length; a marked word keeps its own.
+/// A line without marks: its words get times spread over the block by length.
 fn spread_times(b: &mut Block) {
     let total: usize = b.words().map(|w| w.text().chars().count() + 1).sum();
     if total == 0 {
@@ -497,7 +545,7 @@ fn check_spans(b: &Block, lines: &[(usize, Span)], errors: &mut Vec<Error>) {
 
 impl Doc {
     /// Reads a CAPT file. Every problem found is returned, each with its line.
-    pub fn parse(text: &str) -> Result<Doc, Vec<Error>> {
+    pub fn parse(text: &str) -> Result<Doc, Errors> {
         let text = text.strip_prefix('\u{feff}').unwrap_or(text);
         let lines: Vec<&str> = text.split('\n').map(|l| l.strip_suffix('\r').unwrap_or(l)).collect();
         let mut errors = Vec::new();
@@ -529,7 +577,8 @@ impl Doc {
                 doc.blocks.push(b);
             }
         }
-        if errors.is_empty() { Ok(doc) } else { Err(errors) }
+        errors.sort_by_key(|e| e.line);
+        if errors.is_empty() { Ok(doc) } else { Err(Errors(errors)) }
     }
 
     /// One header line: a speaker when it has `speaker:`, else file options.
@@ -608,13 +657,19 @@ fn parse_block(lines: &[&str], at: usize, errors: &mut Vec<Error>) -> Option<Blo
         }
         return Some(b);
     }
+    let mut text_ok = true;
     if let Some(line) = lines.get(1) {
         match scan(line).and_then(|t| words_of(t, start)) {
-            Err(message) => errors.push(Error { line: at + 1, message }),
+            Err(message) => {
+                errors.push(Error { line: at + 1, message });
+                text_ok = false;
+            }
             Ok((phrases, marked)) => {
                 b.phrases = phrases;
-                b.marked = marked;
-                spread_times(&mut b);
+                b.untimed = !marked;
+                if b.untimed {
+                    spread_times(&mut b);
+                }
             }
         }
     }
@@ -627,10 +682,12 @@ fn parse_block(lines: &[&str], at: usize, errors: &mut Vec<Error>) -> Option<Blo
             (all_digits(a) && all_digits(z)).then_some((a, z, opts))
         });
         let Some((a, z, opts)) = parsed else {
-            errors.push(Error {
-                line: line_no,
-                message: "after the text a block has only spans, “{from..to} key:value”".into(),
-            });
+            let message = if is_block_line(line) {
+                "a blank line ends a block before the next block line"
+            } else {
+                "after the text a block has only spans, “{from..to} key:value”"
+            };
+            errors.push(Error { line: line_no, message: message.into() });
             continue;
         };
         let from = a.parse().ok().and_then(|a| offset(start, a));
@@ -644,7 +701,10 @@ fn parse_block(lines: &[&str], at: usize, errors: &mut Vec<Error>) -> Option<Blo
             Ok(options) => spans.push((line_no, Span { from, to, options })),
         }
     }
-    check_spans(&b, &spans, errors);
+    // Spans are checked against the words, so only when the text line could be read.
+    if text_ok {
+        check_spans(&b, &spans, errors);
+    }
     b.spans = spans.into_iter().map(|(_, s)| s).collect();
     Some(b)
 }
@@ -754,7 +814,7 @@ impl Block {
         let cs = |ms: u64| (ms.saturating_sub(self.start) + 5) / 10;
         let word = |w: &Word| {
             let whole = w.pieces.len() == 1;
-            if !self.marked {
+            if self.untimed {
                 return w.pieces.iter().map(|x| escape(&x.text, whole)).collect::<String>();
             }
             let mut s: String =
@@ -804,7 +864,7 @@ fn majority<'a>(langs: impl Iterator<Item = &'a str>) -> Option<String> {
 
 /// Times on the 10 ms grid the marks are written on.
 fn grid(ms: u64) -> u64 {
-    (ms + 5) / 10 * 10
+    ms.saturating_add(5) / 10 * 10
 }
 
 fn span(from: u64, to: u64, key: &str, value: String) -> Span {
@@ -820,6 +880,12 @@ impl Doc {
     /// 10 ms after its last piece starts. `id` is the file's id (the transcription id): block ids
     /// and Premiere ids are made from it.
     pub fn from_spoken(spoken: &[Spoken], id: Option<String>) -> Doc {
+        // A piece without text cannot be written; a word without pieces is no word.
+        let spoken: Vec<Spoken> = spoken
+            .iter()
+            .map(|s| Spoken { pieces: s.pieces.iter().filter(|p| !p.text.is_empty()).cloned().collect(), ..s.clone() })
+            .filter(|s| !s.pieces.is_empty())
+            .collect();
         let plain: Vec<crate::Word> = spoken
             .iter()
             .map(|s| {
@@ -908,46 +974,55 @@ fn block(plain: &[crate::Word], spoken: &[Spoken], file_lang: Option<&String>) -
         end: plain.last().expect("a sentence has words").end,
         speaker: plain[0].speaker.clone(),
         lang: block_lang.clone().filter(|l| Some(l) != file_lang),
-        marked: true,
         ..Block::default()
     };
+    // Piece starts rise strictly through the block: a tie moves by 10 ms.
+    let mut prev: Option<u64> = None;
+    let all: Vec<Vec<Piece>> = plain
+        .iter()
+        .zip(spoken)
+        .map(|(w, s)| {
+            s.pieces
+                .iter()
+                .enumerate()
+                .map(|(i, p)| {
+                    let t = if i == 0 { w.start } else { grid(p.start) };
+                    let t = prev.map_or(t, |prev| t.max(prev.saturating_add(10)));
+                    prev = Some(t);
+                    Piece { text: p.text.clone(), start: t }
+                })
+                .collect()
+        })
+        .collect();
     let mut conf_spans = Vec::new();
     let mut lang_spans: Vec<Span> = Vec::new();
     let mut phrase: Vec<Word> = Vec::new();
-    let mut prev_start: Option<u64> = None;
     let mut prev_end: Option<u64> = None;
-    for (k, (w, s)) in plain.iter().zip(spoken).enumerate() {
+    for (k, ((w, s), pieces)) in plain.iter().zip(spoken).zip(all.iter().cloned()).enumerate() {
         if k > 0 && cues::cut_level(&plain[k - 1], w) <= 1 {
             b.phrases.push(std::mem::take(&mut phrase));
         }
-        let mut pieces: Vec<Piece> = Vec::new();
-        for (i, p) in s.pieces.iter().enumerate() {
-            let t = if i == 0 { w.start } else { grid(p.start) };
-            let t = prev_start.map_or(t, |prev| t.max(prev + 10));
-            prev_start = Some(t);
-            pieces.push(Piece { text: p.text.clone(), start: t });
-        }
+        let confs: Vec<f64> = s.pieces.iter().map(|p| (p.confidence * 100.0).round() / 100.0).collect();
+        let other_lang = w.language.as_ref().filter(|l| block_lang.as_ref().is_some_and(|bl| bl != *l));
         // A span is a stretch of time, so a word with a span on its last piece ends at least 10 ms
         // after that piece starts; any other word keeps its own end (Soniox gives some no length).
-        let last = prev_start.unwrap_or(w.start);
-        let other_lang = w.language.is_some() && block_lang.is_some() && w.language != block_lang;
-        let unsure = s.pieces.last().is_some_and(|p| (p.confidence * 100.0).round() < 100.0);
-        let end = if other_lang || unsure { w.end.max(last + 10) } else { w.end.max(last) };
-        for (i, p) in s.pieces.iter().enumerate() {
-            let conf = (p.confidence * 100.0).round() / 100.0;
-            if conf < 1.0 {
+        // No word ends after the next one starts, so a span never covers part of the next word.
+        let last = pieces.last().expect("a word has pieces").start;
+        let floor =
+            if other_lang.is_some() || confs.last().is_some_and(|c| *c < 1.0) { last.saturating_add(10) } else { last };
+        // The next word starts at least 10 ms after this one's last piece, so `floor` always fits.
+        let next = all.get(k + 1).map_or(u64::MAX, |n| n[0].start);
+        let end = w.end.max(floor).min(next);
+        for (i, conf) in confs.iter().enumerate() {
+            if *conf < 1.0 {
                 let to = pieces.get(i + 1).map_or(end, |n| n.start);
                 conf_spans.push(span(pieces[i].start, to, "conf", format!("{conf:.2}")));
             }
         }
-        if let (Some(l), Some(bl)) = (&w.language, &block_lang)
-            && l != bl
-        {
+        if let Some(l) = other_lang {
             // Neighbouring words in the same other language share one span.
             match lang_spans.last_mut() {
-                Some(prev) if prev_end == Some(prev.to) && prev.options[0].1[0] == *l => {
-                    prev.to = end;
-                }
+                Some(prev) if prev_end == Some(prev.to) && prev.options[0].1[0] == *l => prev.to = end,
                 _ => lang_spans.push(span(pieces[0].start, end, "lang", l.clone())),
             }
         }

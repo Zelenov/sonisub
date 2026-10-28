@@ -236,6 +236,24 @@ pub fn process(input: &Path, output: &Path, opts: &Options, client: Option<&Clie
     Ok(Outcome::Written { files, cues, json, cached, uploaded_s })
 }
 
+/// A CAPT file's names of numbered speakers in order (`speaker:2 name:Anna` is the second), as
+/// [`srt::Layout::speaker_names`] takes them. A speaker with another id is named by
+/// [`ass::Options::names`] only.
+pub fn speaker_names(doc: &captions::capt::Doc) -> Vec<String> {
+    let mut names: Vec<String> = Vec::new();
+    for s in &doc.speakers {
+        if let (Some(name), Ok(n)) = (&s.name, s.id.parse::<usize>())
+            && n > 0
+        {
+            if names.len() < n {
+                names.resize(n, String::new());
+            }
+            names[n - 1] = name.clone();
+        }
+    }
+    names
+}
+
 /// The names the user gave (`--speaker-names`, ASS names) into a CAPT file's header.
 pub fn name_speakers(doc: &mut captions::capt::Doc, layout: &srt::Layout, ass: &ass::Options) {
     for s in &mut doc.speakers {
