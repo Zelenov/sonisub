@@ -1,8 +1,12 @@
 # sonisub
 
+<img src="https://raw.githubusercontent.com/Zelenov/sonisub/main/docs/icon/sonisub-256.png" align="left" width="128" height="128" alt="sonisub icon">
+
 Generate subtitles (`.srt`, WebVTT, ASS) and Premiere Pro transcripts for video and audio files with
 [Soniox](https://soniox.com) speech-to-text.
 One self-contained binary: no Python, no ffmpeg required.
+
+<br clear="left">
 
 ```
 sonisub clip.MP4
@@ -188,7 +192,7 @@ Exit codes: `0` ok, `1` some files failed, `2` fatal (key/balance/usage), `130` 
 ### As a library
 
 ```toml
-sonisub = { version = "0.6", default-features = false }
+sonisub = { version = "0.7", default-features = false }
 ```
 
 Subtitle formats live in the [`captions`](captions/README.md) crate, re-exported as `sonisub::captions`:
