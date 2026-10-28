@@ -9,6 +9,7 @@
 use serde::{Deserialize, Serialize};
 
 pub mod ass;
+pub mod capt;
 pub mod cues;
 pub mod premiere;
 pub mod srt;

@@ -1,3 +1,12 @@
+# 0.8.0
+## Added
+- `-t capt` writes `clip.capt`: the whole transcript as small text (about 1/15 of the Soniox JSON) with every piece of a word and its time, words, sentences, cut points, speakers, languages and confidence. It is readable and editable by hand; the format is in [docs/capt.md](docs/capt.md).
+- `sonisub render clip.capt -t srt,vtt,ass,premiere` makes the other formats from a CAPT file, the same subtitles as from the transcript. A broken file is reported line by line.
+- Library: `captions::capt` (captions 0.2.0) reads, writes and makes CAPT files (`Doc::parse`, `Doc::write`, `Doc::from_spoken`, `Doc::words`); `soniox::spoken` and `soniox::capt` make them from a Soniox transcript.
+
+## Changed
+- Library: `job::Format` has `Capt` (a `match` on it needs the new arm), and `job::write_outputs` takes the `captions::capt::Doc` to write as CAPT after the words (`soniox::capt(&transcript)`, or `Doc::from_words(&words, None)`).
+
 # 0.7.0
 ## Added
 - `-t vtt` writes WebVTT subtitles (`clip.vtt`) and `-t ass` ASS subtitles (`clip.ass`), the same cues as the `.srt`. In `.ass` every speaker has a style of their own with its own colour (`Speaker 1`, or the `--speaker-names` name), and every line names its speaker, so a person is restyled or renamed in one place in Aegisub. `--karaoke` lights up each word as it is spoken.

@@ -425,24 +425,40 @@ fn show_usage(api: &ApiArgs, days: u64) -> Result<()> {
     Ok(())
 }
 
-/// `sonisub render`: subtitles from saved words, no Soniox.
+/// `sonisub render`: subtitles from a CAPT file or saved words, no Soniox.
 fn render(args: &RenderArgs) -> Result<()> {
+    use sonisub::captions::capt::Doc;
     let input = &args.input;
     let text = std::fs::read_to_string(input).with_context(|| format!("cannot read {}", input.display()))?;
-    let words: Vec<sonisub::captions::Word> = serde_json::from_str(text.strip_prefix('\u{feff}').unwrap_or(&text))
-        .with_context(|| format!("{} is not a JSON list of words", input.display()))?;
+    let text = text.strip_prefix('\u{feff}').unwrap_or(&text);
+    let name = input.file_name().map_or_else(|| input.display().to_string(), |n| n.to_string_lossy().into_owned());
+    let is_capt = input.extension().is_some_and(|e| e.eq_ignore_ascii_case("capt")) || text.starts_with("CAPT ");
+    let (words, doc) = if is_capt {
+        let doc = Doc::parse(text).map_err(|errors| {
+            let list: Vec<String> = errors.iter().map(|e| format!("  {e}")).collect();
+            anyhow!("{} is not a valid CAPT file:\n{}", input.display(), list.join("\n"))
+        })?;
+        (doc.words(), doc)
+    } else {
+        let words: Vec<sonisub::captions::Word> = serde_json::from_str(text)
+            .with_context(|| format!("{} is neither a CAPT file nor a JSON list of words", input.display()))?;
+        let doc = Doc::from_words(&words, Some(name.clone()));
+        (words, doc)
+    };
     if words.is_empty() {
         bail!("{} has no words", input.display());
     }
     let output = job::output_base(args.output.as_deref().unwrap_or(input));
-    let name = input.file_name().map_or_else(|| input.display().to_string(), |n| n.to_string_lossy().into_owned());
     let targets = job::missing_outputs(&output, &args.formats, args.force);
     if targets.is_empty() {
         eprintln!("· {name} — skipped, {} (--force to redo)", exists_label(&args.formats));
         return Ok(());
     }
     let layout = args.seg.layout(true);
-    let (files, cues) = job::write_outputs(&targets, &words, &layout, &args.seg.ass(), None, &name)?;
+    // A CAPT file keeps the transcription's id, so a Premiere transcript gets the ids it had.
+    let seed = doc.id.clone().unwrap_or_else(|| name.clone());
+    let (files, cues) =
+        job::write_outputs(&targets, &words, &doc, &layout, &args.seg.ass(), doc.lang.as_deref(), &seed)?;
     let what = if cues > 0 { format!("{cues} cues") } else { "transcript".into() };
     let paths: Vec<String> = files.iter().map(|f| f.display().to_string()).collect();
     eprintln!("✓ {name} — {what} -> {}", paths.join(", "));

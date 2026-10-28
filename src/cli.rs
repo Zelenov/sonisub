@@ -84,7 +84,8 @@ pub struct RunArgs {
     pub api: ApiArgs,
 
     /// What to write, comma separated: srt, vtt (WebVTT), ass (a style per speaker), premiere (Premiere Pro
-    /// transcript, clip.premiere.json). Only missing files are written, so adding a format later reuses the
+    /// transcript, clip.premiere.json), capt (the whole transcript as small text, clip.capt; `sonisub render`
+    /// makes the other formats from it). Only missing files are written, so adding a format later reuses the
     /// saved transcript for free.
     #[arg(short = 't', long = "format", value_enum, value_delimiter = ',', default_value = "srt")]
     pub formats: Vec<Format>,
@@ -225,11 +226,12 @@ impl SegArgs {
 
 #[derive(Args, Debug)]
 pub struct RenderArgs {
-    /// Words saved as JSON: [{"text": "Hello,", "start": 120, "end": 480, "speaker": "1", "language": "en"}, ...]
+    /// A CAPT file (`clip.capt`), or words saved as JSON:
+    /// [{"text": "Hello,", "start": 120, "end": 480, "speaker": "1", "language": "en"}, ...]
     /// (start and end in milliseconds; speaker and language optional).
     pub input: PathBuf,
 
-    /// What to write, comma separated: srt, vtt, ass, premiere.
+    /// What to write, comma separated: srt, vtt, ass, premiere, capt.
     #[arg(short = 't', long = "format", value_enum, value_delimiter = ',', default_value = "srt")]
     pub formats: Vec<Format>,
 

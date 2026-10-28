@@ -66,6 +66,8 @@ sonisub clip.MP4 -t srt,premiere          # also clip.premiere.json for Premiere
 sonisub . -t premiere                     # only the Premiere transcript; saved .soniox.json files are reused
 sonisub clip.MP4 -t srt,vtt,ass           # also clip.vtt (WebVTT) and clip.ass (a style per speaker)
 sonisub clip.MP4 -t ass --karaoke         # each word lights up as it is spoken
+sonisub clip.MP4 -t srt,capt              # also clip.capt, the whole transcript as small text
+sonisub render clip.capt -t vtt,premiere  # other formats from a CAPT file, no Soniox
 sonisub render clip.words.json -t srt,ass # subtitles from saved words, no Soniox
 sonisub clip.MP4 --no-json                # don't keep clip.soniox.json
 sonisub clip.MP4 -u                       # no length limit: one cue per sentence
@@ -138,6 +140,11 @@ highlight (`\k`).
 (`[{"text": "Hello,", "start": 120, "end": 480, "speaker": "1", "language": "en"}, ...]`, times in milliseconds),
 for example words a program stored after transcribing. It takes `-t`, `-o`, `-f` and the layout options.
 
+`-t capt` writes `clip.capt`, the whole transcript in a small text format: every piece of a word with its time,
+words, sentences, the points where subtitles may be cut, speakers, languages and confidence
+([docs/capt.md](docs/capt.md)). You can read and edit it by hand; `sonisub render clip.capt` makes the other
+formats from it, the same subtitles as from the Soniox transcript.
+
 ## How subtitles are cut
 
 - A cue never mixes speakers and never runs past the end of a sentence (`Dr.`, `e.g.`, `3.5`, `...` are not ends).
@@ -184,7 +191,7 @@ Exit codes: `0` ok, `1` some files failed, `2` fatal (key/balance/usage), `130` 
 | `src/audio.rs` | audio track → 16 kHz mono FLAC (built-in decoder or ffmpeg) |
 | `src/soniox.rs` | Soniox REST client, error types, remote cleanup guard; `soniox::words` reads a transcript as words |
 | `src/languages.rs` | language codes `-l` takes, from Soniox (`languages::fetch(client)`) |
-| `captions/` | the [`captions`](captions/README.md) crate: words → cues → SRT, WebVTT, ASS, Premiere Pro transcript; no Soniox |
+| `captions/` | the [`captions`](captions/README.md) crate: words → cues → SRT, WebVTT, ASS, Premiere Pro transcript, and the CAPT format; no Soniox |
 | `src/srt.rs`, `src/premiere.rs` | a Soniox transcript straight to SRT / Premiere Pro transcript, through `captions` |
 | `src/cancel.rs` | Ctrl+C flag and per-job `CancelToken` |
 | `src/main.rs`, `src/cli.rs`, `src/ui.rs` | command line only: arguments, the list of files, log, stopping on fatal errors, the batch bar and its ETA |
@@ -192,11 +199,12 @@ Exit codes: `0` ok, `1` some files failed, `2` fatal (key/balance/usage), `130` 
 ### As a library
 
 ```toml
-sonisub = { version = "0.7", default-features = false }
+sonisub = { version = "0.8", default-features = false }
 ```
 
 Subtitle formats live in the [`captions`](captions/README.md) crate, re-exported as `sonisub::captions`:
 `soniox::words(&transcript)` gives the words, `captions::vtt::build(&words, &layout)` and the others lay them out.
+`soniox::capt(&transcript)` makes a CAPT file (`captions::capt::Doc`; `write`, `parse`, `words`).
 
 `premiere::to_srt(&json, &layout)` turns a `clip.premiere.json` back into SRT text and the cue count
 (`None` when it is not a Premiere transcript). Tested on transcripts sonisub wrote; transcripts from

@@ -1,0 +1,161 @@
+//! CAPT: every part of the format read and written back, and the errors a reader reports.
+
+use captions::capt::{Doc, Pos};
+
+/// A file with every part of the format, as `Doc::write` writes it.
+const FILE: &str = r#"CAPT 1
+id:691529b1-72ac-4e08-8fe1-4c3a84d29b28
+title:"Moon Interview"
+lang:en
+media:"moon interview.mp4" duration:00:12:31.040
+studio:north
+speaker:1 name:Anna
+speaker:2 name:"Ann \"Lee\""
+
+00:00:29.000 --> 00:00:31.500 id:h2k9wq sound:music
+
+00:00:33.000 --> 00:00:36.100 id:w3n8fd speaker:2 lang:ru
+{0}Короче,{40} / {52}этот{70} {76}deploy{98}ment{120} {126}упал,{160}
+{0..40} conf:0.68 alt:Корочe,0.20
+{76..120} lang:en
+
+00:00:36.600 --> 00:00:38.300 id:r4c7tz speaker:1 pos:0.05,0.05,0.4,0.2 voice:whisper
+{0}Type{30} {36}\{name\}{90} / {100}and{112} {116}\/{122} {126}C:\\temp{140} {150}etc.{170}
+{36..90} style:italic
+{150..170} sentence:continues mood:calm
+
+00:00:39.000 --> 00:00:41.000 speaker:1
+plain words, no marks
+"#;
+
+#[test]
+fn every_part_reads_and_writes_back() {
+    let doc = Doc::parse(FILE).unwrap_or_else(|e| panic!("{e:?}"));
+    assert_eq!(doc.title.as_deref(), Some("Moon Interview"));
+    assert_eq!(doc.media.as_deref(), Some("moon interview.mp4"));
+    assert_eq!(doc.duration, Some(751_040));
+    assert_eq!(doc.other, vec![("studio".to_string(), vec!["north".to_string()])]);
+    assert_eq!(doc.speakers[1].name.as_deref(), Some("Ann \"Lee\""));
+
+    let [sound, mixed, styled, plain] = &doc.blocks[..] else { panic!("four blocks") };
+    assert_eq!((sound.sound.as_deref(), sound.phrases.len()), (Some("music"), 0));
+
+    assert_eq!(mixed.lang.as_deref(), Some("ru"));
+    assert_eq!(mixed.phrases.len(), 2);
+    let deploy = &mixed.phrases[1][1];
+    assert_eq!(deploy.text(), "deployment");
+    assert_eq!((deploy.start(), deploy.end), (33_760, 34_200));
+    assert_eq!(mixed.span_option(33_760, "lang"), Some(&["en".to_string()][..]));
+    assert_eq!(mixed.span_option(33_000, "alt"), Some(&["Корочe".to_string(), "0.20".to_string()][..]));
+
+    assert_eq!(styled.pos, Some(Pos::Rect { x: 0.05, y: 0.05, w: 0.4, h: 0.2 }));
+    assert_eq!(styled.voice.as_deref(), Some("whisper"));
+    let texts: Vec<String> = styled.words().map(|w| w.text()).collect();
+    assert_eq!(texts, ["Type", "{name}", "and", "/", "C:\\temp", "etc."]);
+    assert_eq!(styled.span_option(38_100, "mood"), Some(&["calm".to_string()][..]));
+
+    assert!(!plain.marked);
+    let w: Vec<(String, u64, u64)> = plain.words().map(|w| (w.text(), w.start(), w.end)).collect();
+    assert_eq!(w.first().map(|w| w.1), Some(39_000));
+    assert_eq!(w.last().map(|w| w.2), Some(41_000));
+    assert!(w.windows(2).all(|p| p[0].2 <= p[1].1), "{w:?}");
+
+    assert_eq!(doc.write(), FILE);
+}
+
+#[test]
+fn words_take_the_span_language_and_the_mean_confidence() {
+    let doc = Doc::parse(FILE).unwrap();
+    let words = doc.words();
+    let get = |t: &str| words.iter().find(|w| w.text == t).unwrap();
+    assert_eq!(get("Короче,").confidence, 0.68);
+    assert_eq!(get("Короче,").language.as_deref(), Some("ru"));
+    assert_eq!(get("deployment").language.as_deref(), Some("en"));
+    assert_eq!(get("Type").language.as_deref(), Some("en"), "the file's language");
+    assert_eq!(get("Type").speaker.as_deref(), Some("1"));
+    assert!(words.iter().all(|w| w.text != "music"), "sounds are not words");
+}
+
+#[test]
+fn from_words_makes_a_block_per_sentence_with_cut_points() {
+    let w = |text: &str, start: u64, end: u64| captions::Word {
+        text: text.into(),
+        start,
+        end,
+        speaker: Some("1".into()),
+        language: Some("en".into()),
+        confidence: if text == "fine." { 0.5 } else { 1.0 },
+        glued: false,
+    };
+    let words =
+        [w("Well,", 0, 300), w("this", 400, 600), w("is", 600, 700), w("fine.", 700, 1000), w("Yes.", 2000, 2300)];
+    let doc = Doc::from_words(&words, Some("seed".into()));
+    let file = doc.write();
+    assert_eq!(
+        file.split("\n\n").skip(1).collect::<Vec<_>>(),
+        [
+            "00:00:00.000 --> 00:00:01.000 id:k4t6yk speaker:1\n{0}Well,{30} / {40}this{60} {60}is{70} {70}fine.{100}\n{70..100} conf:0.50",
+            "00:00:02.000 --> 00:00:02.300 id:2ccfxp speaker:1\n{0}Yes.{30}\n"
+        ]
+    );
+    assert_eq!(Doc::parse(&file).unwrap(), doc);
+}
+
+fn errors(file: &str) -> Vec<String> {
+    match Doc::parse(file) {
+        Ok(_) => Vec::new(),
+        Err(e) => e.iter().map(ToString::to_string).collect(),
+    }
+}
+
+#[test]
+fn a_reader_reports_every_problem_with_its_line() {
+    let file = "CAPT 2\n\
+                title:\"open\n\
+                duration:12.5\n\
+                \n\
+                00:00:01.000 --> 00:00:02.000 pos:left\n\
+                {0}a{ 5}\n\
+                \n\
+                00:00:03.000 --> 00:00:04.000 pos:0.8,0.1,0.4,0.2\n\
+                {0}b} c{10}\n\
+                \n\
+                00:00:05.000 --> 00:00:06.000\n\
+                {0}one{20} {30}two{50}\n\
+                {30..40} conf:0.5\n\
+                {35..50} conf:0.5\n\
+                {0..30} lang:en\n\
+                junk\n\
+                \n\
+                00:00:07.000 --> 00:00:08.000 sound:phone\n\
+                ring\n\
+                \n\
+                1:2 --> later\n";
+    assert_eq!(
+        errors(file),
+        [
+            "line 1: a CAPT file starts with the line “CAPT 1”",
+            "line 2: the quoted value of “title:” is never closed",
+            "line 3: duration is HH:MM:SS.mmm, not “12.5”",
+            "line 5: pos is bottom, top, middle, a point x,y or a rectangle x,y,w,h, as parts of the frame from 0 to 1; not “left”",
+            "line 6: a mark holds a time in hundredths, not “ 5”",
+            "line 8: the rectangle 0.8,0.1,0.4,0.2 runs out of the frame or has no size",
+            "line 9: a “}” at column 5 closes nothing: write \\} for a brace in the text",
+            "line 16: after the text a block has only spans, “{from..to} key:value”",
+            "line 13: {30..40}: {40} is not a later mark of this block",
+            "line 14: {35..50}: no piece starts at {35}",
+            "line 15: {0..30}: “lang:” covers whole words: from a word start to a word end",
+            "line 19: a sound block has no text: the sound is its code",
+            "line 21: a block line is “HH:MM:SS.mmm --> HH:MM:SS.mmm key:value…”",
+        ]
+    );
+}
+
+#[test]
+fn values_that_need_quotes_get_them() {
+    let mut doc = Doc { title: Some("a, b".into()), lang: Some("en".into()), ..Doc::default() };
+    doc.other.push(("note".into(), vec![String::new(), "x\\y".into()]));
+    let file = doc.write();
+    assert_eq!(file, "CAPT 1\ntitle:\"a, b\"\nlang:en\nnote:\"\",x\\y\n");
+    assert_eq!(Doc::parse(&file).unwrap(), doc);
+}
