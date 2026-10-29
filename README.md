@@ -62,6 +62,7 @@ sonisub clip.MP4 -t srt,premiere          # also clip.premiere.json for Premiere
 sonisub . -t premiere                     # only the Premiere transcript; saved .soniox.json files are reused
 sonisub clip.MP4 -t srt,vtt,ass           # also clip.vtt (WebVTT) and clip.ass (a style per speaker)
 sonisub clip.MP4 -t ass --karaoke         # each word lights up as it is spoken
+sonisub clip.MP4 -t srt,transcript        # also clip.txt, a plain text transcript to read and search
 sonisub clip.MP4 -t srt,capt              # also clip.capt, the whole transcript as small text
 sonisub clip.MP4 -t ass,vtt --vertical    # Reels, Shorts, TikTok: short lines, clear of the app's buttons
 sonisub render clip.capt -t srt --sdh     # for the deaf and hard of hearing: sounds and voices marked in clip.capt
@@ -131,7 +132,7 @@ orange, violet, red, then repeating), black outline, bottom centre. Every line n
 you restyle or rename a person in one place. Without diarization all lines use the `Default` style. `--karaoke` adds word-by-word
 highlight (`\k`).
 
-`-t transcript` (or `-t text`) writes a plain text transcript (`clip.txt`): a paragraph per speaker turn, headed by
+`-t transcript` (or `-t text`, `-t txt`) writes a plain text transcript (`clip.txt`): a paragraph per speaker turn, headed by
 the name and the time, a new paragraph after a pause or a minute; sounds and voices a CAPT file marks as labels in
 English or Russian (`--labels en|ru`; by default the transcript's language).
 

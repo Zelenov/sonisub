@@ -203,11 +203,11 @@ fn a_transcript_keeps_a_sentence_whole_when_someone_else_talks_or_laughs_in_it()
 }
 
 #[test]
-fn a_sound_in_the_last_word_comes_right_after_that_sentence() {
+fn a_sound_of_no_one_in_the_last_word_comes_after_the_paragraph() {
     let file = "CAPT 1\n\n00:00:01.000 --> 00:00:01.500\n{0}One{20} {30}two.{50}\n\n\
                 00:00:01.350 --> 00:00:01.900 sound:phone\n\n\
                 00:00:02.000 --> 00:00:02.500\n{0}Three{20} {30}four.{50}\n";
-    assert_eq!(transcript(file), "[00:00:01]\nOne two.\n\n[00:00:01]\n[phone ringing]\n\n[00:00:02]\nThree four.\n\n");
+    assert_eq!(transcript(file), "[00:00:01]\nOne two. Three four.\n\n[00:00:01]\n[phone ringing]\n\n");
 }
 
 #[test]
@@ -223,4 +223,32 @@ fn what_waits_for_a_sentence_that_never_ends_comes_after_it() {
     let file = "CAPT 1\n\n00:00:01.000 --> 00:00:02.000 speaker:1\n{0}And{30} {40}so{90}\n\n\
                 00:00:01.500 --> 00:00:02.000 sound:phone\n";
     assert_eq!(transcript(file), "Speaker 1  [00:00:01]\nAnd so\n\n[00:00:01]\n[phone ringing]\n\n");
+}
+
+#[test]
+fn an_unfinished_sentence_does_not_hold_back_what_is_said_after_it() {
+    let file = "CAPT 1\nspeaker:1 name:Anna\nspeaker:2 name:Boris\n\n\
+                00:00:01.000 --> 00:00:01.500 speaker:1\n{0}I{20} {30}think{50}\n\n\
+                00:00:02.000 --> 00:00:10.000 speaker:2\n{0}No.{50} {100}That{150} {200}is{250} {300}wrong.{400}\n\n\
+                00:01:00.000 --> 00:01:00.500 speaker:1\n{0}Okay.{50}\n";
+    assert_eq!(
+        transcript(file),
+        "Anna  [00:00:01]\nI think\n\nBoris  [00:00:02]\nNo. That is wrong.\n\nAnna  [00:01:00]\nOkay.\n\n"
+    );
+}
+
+#[test]
+fn a_sound_of_no_one_waits_for_the_paragraph_it_falls_in() {
+    let file = "CAPT 1\n\n00:00:10.000 --> 00:00:11.000 speaker:1\n{0}Still{40} {50}here.{100}\n\n\
+                00:00:10.200 --> 00:00:11.000 sound:phone\n\n\
+                00:00:11.200 --> 00:00:11.800 speaker:1 sound:laughter\n";
+    assert_eq!(transcript(file), "Speaker 1  [00:00:10]\nStill here. [laughs]\n\n[00:00:10]\n[phone ringing]\n\n");
+}
+
+#[test]
+fn a_minute_long_paragraph_is_cut_at_its_next_sentence_end() {
+    let file = "CAPT 1\n\n00:00:00.000 --> 00:00:40.000\n{0}One{100} {2000}long{3000} {3900}sentence.{4000}\n\n\
+                00:00:41.000 --> 00:01:05.000\n{0}And{100} {2300}more.{2400}\n\n\
+                00:01:06.000 --> 00:01:07.000\n{0}Then{40} {50}this.{100}\n";
+    assert_eq!(transcript(file), "[00:00:00]\nOne long sentence. And more.\n\n[00:01:06]\nThen this.\n\n");
 }
