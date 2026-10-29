@@ -159,7 +159,7 @@ whole-word option on part of a word. Problems are listed in order of line.
 
 `sonisub render clip.capt -t …` reads everything above. Every subtitle output cuts at the file's
 cut points (a ` / ` moved by hand moves the cut), ends sentences as `sentence:` says, and never lets
-one subtitle span two places. Speaker names go to ASS styles for any id, and to `-s` labels and
+one subtitle span two places. Speaker names go to ASS styles and transcript headings for any id, and to `-s` labels and
 Premiere only for numbered speakers (`speaker:1`); `--speaker-names` replaces them, also in a CAPT
 file it writes.
 

@@ -299,8 +299,8 @@ pub fn name_speakers(doc: &mut captions::capt::Doc, layout: &srt::Layout, ass: &
 /// `words`, SDH subtitles and CAPT from `doc` (the same speech with its sounds). A transcript from
 /// Soniox passes `doc.to_words()` and Soniox's words (confidence to the third decimal), saved words
 /// pass themselves twice. The files written and the number of cues of the first subtitles written
-/// (0 with only a Premiere transcript or CAPT). `default_language` and `seed` are for
-/// [`Format::Premiere`] ([`captions::premiere::build`]); with no `words` nothing is written.
+/// (0 with only a Premiere transcript, CAPT or a text transcript). `default_language` and `seed` are
+/// for [`Format::Premiere`] ([`captions::premiere::build`]), which needs `words`.
 #[allow(clippy::too_many_arguments)]
 pub fn write_outputs(
     targets: &[(Format, PathBuf)],

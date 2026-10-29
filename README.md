@@ -132,8 +132,11 @@ orange, violet, red, then repeating), black outline, bottom centre. Every line n
 you restyle or rename a person in one place. Without diarization all lines use the `Default` style. `--karaoke` adds word-by-word
 highlight (`\k`).
 
+## Plain text transcript
+
 `-t transcript` (or `-t text`, `-t txt`) writes a plain text transcript (`clip.txt`): a paragraph per speaker turn, headed by
-the name and the time, a new paragraph after a pause, a minute at a sentence end, or two minutes; sounds and voices a CAPT file marks as labels in
+the name and the time, a new paragraph after a pause of over 5 s, at the first sentence end after a minute, or after two minutes
+without one; sounds and voices a CAPT file marks as labels in
 English or Russian (`--labels en|ru`; by default the transcript's language).
 
 `--sdh` makes `.srt`, `.vtt` and `.ass` subtitles for the deaf and hard of hearing from the sounds and voices

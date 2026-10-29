@@ -448,8 +448,8 @@ fn render(args: &RenderArgs) -> Result<()> {
     };
     // A file of sounds only still has SDH subtitles and a transcript.
     let sounds = doc.as_ref().is_some_and(|d| d.sounds().next().is_some());
-    let of_sounds = args.seg.sdh || args.formats.contains(&job::Format::Transcript);
-    if words.is_empty() && !(of_sounds && sounds) {
+    let sounds_suffice = args.seg.sdh || args.formats.contains(&job::Format::Transcript);
+    if words.is_empty() && !(sounds_suffice && sounds) {
         bail!("{} has no words", input.display());
     }
     let output = job::output_base(args.output.as_deref().unwrap_or(input));

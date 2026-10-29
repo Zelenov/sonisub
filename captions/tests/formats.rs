@@ -287,3 +287,16 @@ fn what_waited_comes_before_a_later_sound() {
         "Anna  [00:00:00]\nHello there friend.\n\nBoris  [00:00:01]\nYes.\n\n[00:01:00]\n[phone ringing]\n\n"
     );
 }
+
+#[test]
+fn a_speakers_own_sound_does_not_keep_their_sentence_open() {
+    let file = "CAPT 1\nspeaker:1 name:Anna\nspeaker:2 name:Boris\n\n\
+                00:00:00.000 --> 00:00:01.000 speaker:1\n{0}I{20} {30}think{100}\n\n\
+                00:00:01.000 --> 00:00:30.000 speaker:1 sound:laughter\n\n\
+                00:00:05.000 --> 00:00:05.500 speaker:2\n{0}No.{50}\n\n\
+                00:00:31.000 --> 00:00:31.500 speaker:1\n{0}so.{50}\n";
+    assert_eq!(
+        transcript(file),
+        "Anna  [00:00:00]\nI think [laughs]\n\nBoris  [00:00:05]\nNo.\n\nAnna  [00:00:31]\nso.\n\n"
+    );
+}
