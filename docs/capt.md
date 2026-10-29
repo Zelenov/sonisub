@@ -65,7 +65,6 @@ The same on every line: `key:value`, separated by single spaces.
 | `id` | ✓ | ✓ | | the file's id: made once, never changed; the seed of Premiere's speaker ids (made from Soniox, it is the transcription id). A block's id: six characters of Crockford base32 (`0-9 a-z` without `i l o u`), unique in the file |
 | `title` | ✓ | | | the name of the work |
 | `media`, `duration` | ✓ | | | the source file and its length, so a program can check the file belongs to the video |
-| `frame` | ✓ | | | the video's width and height in pixels (`frame:1080,1920`); a vertical frame changes the layout and keeps text clear of a phone app (below) |
 | `speaker`, `name` | ✓ | | | `speaker:1 name:Anna` names a speaker; one without a name is "Speaker N". A writer lists every speaker it knows before the first block |
 | `speaker` | | ✓ | | who speaks or makes the sound; none for a sound of no one |
 | `sound` | | ✓ | | the block is a sound, not speech: `sound:phone`. It has no text line |
@@ -165,23 +164,10 @@ file it writes.
 
 | Output | Italic | Language | Place | Voice | Sounds |
 |---|---|---|---|---|---|
-| SRT | `<i>` | | `{\anN}`, the nearest of nine | with `--sdh` | with `--sdh` |
-| WebVTT | `<i>` | `<lang xx>` | cue settings; a rectangle's width and top | with `--sdh` | with `--sdh` |
-| ASS | `{\i1}` | | alignment and margins; a rectangle's width and top | with `--sdh` | with `--sdh`, in the speaker's style |
+| SRT | `<i>` | | `{\anN}`, the nearest of nine | | |
+| WebVTT | `<i>` | `<lang xx>` | cue settings; a rectangle's width and top | | |
+| ASS | `{\i1}` | | alignment and margins; a rectangle's width and top | | |
 | Fairlight ADR (`.adr.csv`) | | | | `[whispering]`, once a row | the speaker's own, in their cue |
 | Premiere | | | | | |
 
-With `--sdh` a voice is a label where it starts (`[whispering] please`), and every sound is a subtitle of its
-own at the bottom (`[phone ringing]`; `Anna: [laughs]` when speakers are labelled), in order of start. A sound
-that overlaps speech is shown with it: players draw both, the sound's subtitle stacked with the speech.
-
-`alt` is kept in the file but no output shows it yet.
-
-## Vertical video
-
-`frame:1080,1920` in the header (`--vertical` or `--frame 1080x1920` writes it into a CAPT file
-being written; `render clip.capt -t capt -f --vertical` rewrites an existing one) makes a file
-vertical. Subtitles then get short lines broken in two (22 characters) and short cues (4 s), unless
-`--max-line` or `--max-duration` says otherwise. Outputs that place text keep it clear of a phone
-app's caption and buttons: the bottom place ends at 72% of the height (ASS `MarginV`, WebVTT
-`line:72%,end`), the top starts at 12%; ASS's `PlayResX/Y` is the frame.
+Only the ADR cue list shows sounds and voices; `alt` is kept in the file but no output shows it.

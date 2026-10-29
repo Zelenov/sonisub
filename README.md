@@ -64,8 +64,6 @@ sonisub clip.MP4 -t srt,vtt,ass           # also clip.vtt (WebVTT) and clip.ass 
 sonisub clip.MP4 -t ass --karaoke         # each word lights up as it is spoken
 sonisub render clip.capt -t adr --fps 29.97  # a DaVinci Resolve Fairlight ADR cue list
 sonisub clip.MP4 -t srt,capt              # also clip.capt, the whole transcript as small text
-sonisub clip.MP4 -t ass,vtt --vertical    # Reels, Shorts, TikTok: short lines, clear of the app's buttons
-sonisub render clip.capt -t srt --sdh     # for the deaf and hard of hearing: sounds and voices marked in clip.capt
 sonisub render clip.capt -t vtt,premiere  # other formats from a CAPT file or saved words, no Soniox
 sonisub clip.MP4 --no-json                # don't keep clip.soniox.json
 sonisub clip.MP4 -u                       # no length limit: one cue per sentence
@@ -133,14 +131,9 @@ you restyle or rename a person in one place. Without diarization all lines use t
 highlight (`\k`).
 
 `-t adr` writes a DaVinci Resolve Fairlight ADR cue list (`clip.adr.csv`; Fairlight page > ADR > List > Import Cue
-List): a row per breath of speech, joined per speaker, with the speaker's own sounds and voices as directions; `--fps
-23.976|24|25|29.97|30|50|59.94|60` and `--timeline-start 01:00:00:00` (where the clip starts on the timeline, non-drop
-frame) match the timeline.
-
-`--sdh` makes `.srt`, `.vtt` and `.ass` subtitles for the deaf and hard of hearing from the sounds and voices
-marked in a CAPT file (`sound:phone`, `voice:whisper` → `[phone ringing]`, `[whispering]`; `--labels en|ru`).
-Soniox reports no sounds, so a fresh transcript has none until they are added to `clip.capt`.
-For Reels, Shorts and TikTok add `--vertical`: short two-line subtitles cut where they read well; `.ass` and `.vtt` also keep them clear of the app's buttons (`.srt` has no position).
+List): a row per breath of speech, joined per speaker, with the speaker's own sounds and voices as directions
+(`--labels en|ru`); `--fps 23.976|24|25|29.97|30|50|59.94|60` and `--timeline-start 01:00:00:00` (where the clip
+starts on the timeline, non-drop frame) match the timeline.
 
 `sonisub render` makes the same files without Soniox: from a CAPT file (`-t capt` writes `clip.capt`, the whole
 transcript as small text you can read and edit, see [docs/capt.md](docs/capt.md)), or from words saved as JSON

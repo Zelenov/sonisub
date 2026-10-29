@@ -1,4 +1,4 @@
-//! Labels for sounds and voices, as subtitles for the deaf and hard of hearing (SDH) write them.
+//! Labels for sounds and voices, as the ADR cue list writes them as directions.
 //!
 //! CAPT keeps a sound or a voice as a code (`sound:laughter`, `voice:whisper`), the same in every
 //! language; an output writes its label: `[laughs]` in English, `(смеётся)` in Russian. The codes

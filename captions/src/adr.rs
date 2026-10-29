@@ -303,7 +303,6 @@ pub fn build(doc: &Doc, layout: &Layout, o: &Options, lang: &str) -> Result<(Str
         by_speaker: true,
         speaker_labels: false,
         wrap_lines: false,
-        readable: false,
         ..layout.clone()
     };
     let max_ms = (o.max_duration * 1000.0) as u64;

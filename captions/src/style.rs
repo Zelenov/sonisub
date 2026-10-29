@@ -1,9 +1,8 @@
-//! What the writers share for a CAPT file's marks: a cue's lines with markup for italic,
-//! language and voice, and where on screen a cue goes in each format.
+//! What the writers share for a CAPT file's marks: a cue's lines with markup for italic and
+//! language, and where on screen a cue goes in each format.
 
 use crate::capt::{Doc, Pos};
 use crate::cues::{Cue, Layout, pieces, speaker_label};
-use crate::labels;
 
 /// The tags around words in a language: `en` -> (`<lang en>`, `</lang>`).
 pub(crate) type LangTags<'a> = &'a dyn Fn(&str) -> (String, String);
@@ -12,13 +11,12 @@ pub(crate) type LangTags<'a> = &'a dyn Fn(&str) -> (String, String);
 pub(crate) struct Markup<'a> {
     pub italic: Option<(&'a str, &'a str)>,
     pub lang: Option<LangTags<'a>>,
-    pub voice: Option<&'a dyn Fn(&str) -> String>,
     pub escape: &'a dyn Fn(&str) -> String,
 }
 
 /// Whether any word of the cue has something to mark.
 fn marked(cue: &Cue) -> bool {
-    cue.words.iter().any(|w| w.marks.italic || w.marks.lang.is_some() || w.marks.voice.is_some())
+    cue.words.iter().any(|w| w.marks.italic || w.marks.lang.is_some())
 }
 
 /// The cue's lines with markup, escaped; its lines as they are (escaped) when nothing is marked or
@@ -34,7 +32,6 @@ fn marked_lines(cue: &Cue, m: &Markup) -> Option<Vec<String>> {
     let mut words = cue.words.iter().peekable();
     let mut prefix = if cue.prefix.is_empty() { 0 } else { pieces(cue.prefix.trim_end()).len() };
     let mut out = Vec::new();
-    let mut voice: Option<&str> = None;
     // Pieces still to come of a word with a space in it (`New York`).
     let mut rest = 0;
     for line in &cue.lines {
@@ -72,17 +69,9 @@ fn marked_lines(cue: &Cue, m: &Markup) -> Option<Vec<String>> {
             rest = word_pieces(w, piece)?;
             let want_italic = m.italic.is_some() && w.marks.italic;
             let want_lang = m.lang.and(w.marks.lang.as_deref());
-            let new_voice = m.voice.is_some() && !w.glued && w.marks.voice.as_deref().is_some_and(|v| Some(v) != voice);
-            if !w.glued {
-                voice = w.marks.voice.as_deref();
-            }
-            if want_italic != italic || want_lang != lang || new_voice {
+            if want_italic != italic || want_lang != lang {
                 close(&mut text, &mut italic, &mut lang);
                 if space {
-                    text.push(' ');
-                }
-                if new_voice && let (Some(f), Some(v)) = (m.voice, voice) {
-                    text.push_str(&(m.escape)(&f(v)));
                     text.push(' ');
                 }
                 if want_italic && let Some((start, _)) = m.italic {
@@ -116,55 +105,9 @@ pub(crate) fn place(cue: &Cue) -> Option<Pos> {
     cue.words.first().and_then(|w| w.marks.pos)
 }
 
-/// The share of the frame's height a vertical video keeps clear at the bottom (a phone app's
-/// caption, buttons and progress bar); 0 for a horizontal one.
-pub(crate) fn bottom_clear(layout: &Layout) -> f64 {
-    if layout.is_vertical() { 0.28 } else { 0.0 }
-}
-
-/// The share a vertical video keeps clear at the top (the app's tabs); 0 for a horizontal one.
-pub(crate) fn top_clear(layout: &Layout) -> f64 {
-    if layout.is_vertical() { 0.12 } else { 0.0 }
-}
-
 /// Text as it is, for formats that escape nothing.
 pub(crate) fn plain(text: &str) -> String {
     text.to_string()
-}
-
-/// A sound as a subtitle of its own, for subtitles for the deaf and hard of hearing.
-pub(crate) struct Sound {
-    pub start: u64,
-    pub end: u64,
-    pub speaker: Option<String>,
-    /// The label, after the speaker's name when the layout labels speakers: `Anna: [laughs]`.
-    pub text: String,
-}
-
-/// The sound blocks of `doc` as subtitles, labels in `lang`; speakers named like the speech
-/// around them ([`speaker_label`]), so one file never names a person two ways.
-pub(crate) fn sounds(doc: &Doc, layout: &Layout, lang: &str) -> Vec<Sound> {
-    // As speech is labelled: by speaker, when more than one is heard.
-    let mut heard: Vec<&str> = doc.blocks.iter().filter_map(|b| b.speaker.as_deref()).collect();
-    heard.sort_unstable();
-    heard.dedup();
-    let label = layout.speaker_labels && layout.by_speaker && heard.len() > 1;
-    doc.sounds()
-        .map(|b| {
-            let (start, end, speaker, code) =
-                (b.start, b.end, b.speaker.as_deref(), b.sound.as_deref().unwrap_or_default());
-            let who = match speaker {
-                Some(sp) if label => format!("{}: ", speaker_label(sp, &layout.speaker_names)),
-                _ => String::new(),
-            };
-            Sound {
-                start,
-                end,
-                speaker: speaker.map(str::to_string),
-                text: format!("{who}{}", labels::sound(code, lang)),
-            }
-        })
-        .collect()
 }
 
 /// The name a speaker is shown by where no subtitle shows it next to speech (ADR characters): the
