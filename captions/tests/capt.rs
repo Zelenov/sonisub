@@ -426,10 +426,3 @@ fn a_mistyped_first_block_line_and_a_block_ending_before_it_starts_get_one_error
         ["line 3: the block ends before it starts"]
     );
 }
-
-#[test]
-fn a_frame_that_is_not_two_sizes_is_an_error() {
-    assert_eq!(errors("CAPT 1\nframe:1080\n"), ["line 2: frame is width,height in pixels, not “1080”"]);
-    assert_eq!(errors("CAPT 1\nframe:0,1920\n"), ["line 2: frame is width,height in pixels, not “0,1920”"]);
-    assert_eq!(Doc::parse("CAPT 1\nframe:1080,1920\n").unwrap().frame, Some((1080, 1920)));
-}

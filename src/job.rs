@@ -60,20 +60,9 @@ impl Format {
 pub struct Outputs {
     /// Speaker names and word highlight for [`Format::Ass`].
     pub ass: ass::Options,
-    /// Subtitles for the deaf and hard of hearing: SRT, WebVTT and ASS get sounds as
-    /// subtitles and voices as labels (`[phone ringing]`, `[whispering]`).
-    pub sdh: bool,
-    /// The language of sound and voice labels (`en`, `ru`); `None`: Russian for a Russian
-    /// transcript, else English.
+    /// The language of the transcript's sound and voice labels (`en`, `ru`); `None`: Russian for a
+    /// Russian transcript, else English.
     pub labels: Option<String>,
-}
-
-/// The layout's frame into a CAPT file's header when it is not the one the file already says, so
-/// the next `render` of the file lays it out the same.
-pub fn frame_into(doc: &mut captions::capt::Doc, layout: &srt::Layout) {
-    if doc.frame.unwrap_or(captions::cues::DEFAULT_FRAME) != layout.frame {
-        doc.frame = Some(layout.frame);
-    }
 }
 
 /// What to do with a file.
@@ -100,7 +89,7 @@ pub struct Options {
     /// Overwrite existing outputs and ignore a saved `.soniox.json` (transcribe again).
     pub force: bool,
     pub layout: srt::Layout,
-    /// How the formats are written beyond the layout: ASS options, SDH, label language, frame.
+    /// How the formats are written beyond the layout.
     pub outputs: Outputs,
     /// Interval between transcription status checks.
     pub poll: Duration,
@@ -260,7 +249,6 @@ pub fn process(input: &Path, output: &Path, opts: &Options, client: Option<&Clie
         doc.media = input.file_name().map(|n| n.to_string_lossy().into_owned());
     }
     name_speakers(&mut doc, &layout, &opts.outputs.ass);
-    frame_into(&mut doc, &layout);
     let words = soniox::words(&transcript);
     let (files, cues) = write_outputs(&targets, &doc.to_words(), &words, &doc, &layout, &opts.outputs, hint, seed)?;
     rep.mark(Stage::Writing, 1.0);
@@ -296,7 +284,7 @@ pub fn name_speakers(doc: &mut captions::capt::Doc, layout: &srt::Layout, ass: &
 }
 
 /// Writes every format of `targets`: subtitles from `cue_words`, the Premiere transcript from
-/// `words`, SDH subtitles and CAPT from `doc` (the same speech with its sounds). A transcript from
+/// `words`, CAPT from `doc` (the same speech with every piece of a word). A transcript from
 /// Soniox passes `doc.to_words()` and Soniox's words (confidence to the third decimal), saved words
 /// pass themselves twice. The files written and the number of cues of the first subtitles written
 /// (0 with only a Premiere transcript, CAPT or a text transcript). `default_language` and `seed` are
@@ -317,15 +305,12 @@ pub fn write_outputs(
     }
     let mut cues = 0;
     let mut files = Vec::new();
-    let labels = outputs.labels.clone().unwrap_or_else(|| captions::labels::for_language(doc.lang.as_deref()).into());
     // Everything is made before anything is written, so a format with nothing to show leaves no
     // files behind.
     let mut made = Vec::new();
+    let labels = outputs.labels.clone().unwrap_or_else(|| captions::labels::for_language(doc.lang.as_deref()).into());
     for (format, path) in targets {
         let (text, n) = match format {
-            Format::Srt if outputs.sdh => captions::sdh::srt(doc, layout, &labels),
-            Format::Vtt if outputs.sdh => captions::sdh::vtt(doc, layout, &labels),
-            Format::Ass if outputs.sdh => captions::sdh::ass(doc, layout, &outputs.ass, &labels),
             Format::Srt => captions::srt::build(cue_words, layout),
             Format::Vtt => vtt::build(cue_words, layout),
             Format::Ass => ass::build(cue_words, layout, &outputs.ass),
@@ -338,10 +323,7 @@ pub fn write_outputs(
             Format::Capt => (doc.write(), 0),
         };
         if n == 0 && format.has_cues() {
-            bail!(
-                "nothing to write in {}: no words, and --sdh adds sounds only to .srt, .vtt and .ass",
-                path.display()
-            );
+            bail!("nothing to write in {}: no words", path.display());
         }
         if cues == 0 {
             cues = n;
