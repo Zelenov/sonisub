@@ -41,7 +41,7 @@ fn outputs_of_both_fixtures() {
         let d = doc(name);
         let (l, _) = layouts(&d);
         check(name, "sdh.srt", &sdh::srt(&d, &l, "en").0);
-        check(name, "ytt", &ytt::build(&d, &l).0);
+        check(name, "ytt", &ytt::build(&d.to_words(), &l).0);
         check(name, "sdh.ytt", &sdh::ytt(&d, &l, "en").0);
     }
 }
@@ -80,7 +80,7 @@ fn a_vertical_frame_keeps_text_clear_of_the_phone_app() {
     let karaoke = ass::Options { karaoke: true, ..Default::default() };
     check("marks", "vertical.ass", &ass::build(&words, &v, &karaoke).0);
     check("marks", "vertical.vtt", &vtt::build(&words, &v).0);
-    check("marks", "vertical.ytt", &ytt::build(&d, &v).0);
+    check("marks", "vertical.ytt", &ytt::build(&words, &v).0);
     let ass = ass::build(&words, &v, &karaoke).0;
     assert!(ass.contains("PlayResX: 1080\nPlayResY: 1920\n"));
     // The bottom stays clear: 28% of 1920 px.

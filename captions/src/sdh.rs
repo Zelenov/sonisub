@@ -28,5 +28,6 @@ pub fn ass(doc: &Doc, layout: &Layout, opts: &ass::Options, lang: &str) -> (Stri
 
 /// SDH as YTT (YouTube's srv3), and the number of subtitles.
 pub fn ytt(doc: &Doc, layout: &Layout, lang: &str) -> (String, usize) {
-    ytt::write(doc, layout, Some(lang))
+    let voice = |v: &str| labels::voice(v, lang);
+    ytt::write(&cues(&doc.to_words(), layout), &style::sounds(doc, layout, lang), layout, Some(&voice))
 }

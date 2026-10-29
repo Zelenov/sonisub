@@ -327,13 +327,8 @@ pub fn write_outputs(
             Format::Srt => captions::srt::build(cue_words, layout),
             Format::Vtt => vtt::build(cue_words, layout),
             Format::Ass => ass::build(cue_words, layout, &outputs.ass),
-            Format::Ytt => {
-                if outputs.sdh {
-                    captions::sdh::ytt(doc, layout, &labels)
-                } else {
-                    captions::ytt::build(doc, layout)
-                }
-            }
+            Format::Ytt if outputs.sdh => captions::sdh::ytt(doc, layout, &labels),
+            Format::Ytt => captions::ytt::build(cue_words, layout),
             Format::Premiere => {
                 let t = captions::premiere::build(words, layout, default_language, seed)
                     .ok_or_else(|| anyhow!("no words to write"))?;

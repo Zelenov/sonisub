@@ -10,7 +10,7 @@ use std::collections::BTreeMap;
 
 use crate::Word;
 use crate::capt::Pos;
-use crate::cues::{Cue, Layout, cues, pieces, speaker_label};
+use crate::cues::{Cue, Layout, cues, speaker_label};
 use crate::style::{self, Markup, Sound};
 
 /// What ASS adds to the layout.
@@ -76,54 +76,36 @@ fn escape(text: &str) -> String {
 /// in centiseconds; a voice label before words said in a new voice, with `voice`. `None` if the
 /// lines do not split back into the cue's words.
 fn karaoke(cue: &Cue, voice: Option<&dyn Fn(&str) -> String>) -> Option<String> {
-    let mut words = cue.words.iter().peekable();
     let base = cue.start / 10;
-    let mut prefix_pieces = if cue.prefix.is_empty() { 0 } else { pieces(cue.prefix.trim_end()).len() };
     let mut out = String::new();
     let mut italic = false;
-    let mut said: Option<&str> = None;
-    // Pieces still to come of a word with a space in it, lit with its first piece.
-    let mut rest = 0;
-    for (l, line) in cue.lines.iter().enumerate() {
-        if l > 0 {
+    for step in style::steps(cue)? {
+        if step.new_line {
             out.push_str("\\N");
+        } else if step.space {
+            out.push(' ');
         }
-        for (i, (piece, glued)) in pieces(line).into_iter().enumerate() {
-            if i > 0 && !glued {
-                out.push(' ');
-            }
-            if prefix_pieces > 0 {
-                prefix_pieces -= 1;
-                out.push_str(&escape(piece));
-                continue;
-            }
-            if rest > 0 {
-                rest -= 1;
-                out.push_str(&escape(piece));
-                continue;
-            }
-            let w = words.next()?;
-            rest = style::word_pieces(w, piece)?;
-            if !w.glued && w.marks.voice.as_deref() != said {
-                said = w.marks.voice.as_deref();
-                if let (Some(f), Some(v)) = (voice, said) {
-                    out.push_str(&escape(&f(v)));
-                    out.push(' ');
-                }
-            }
-            if w.marks.italic != italic {
-                italic = w.marks.italic;
-                out.push_str(if italic { "{\\i1}" } else { "{\\i0}" });
-            }
-            let until = words.peek().map_or(cue.end.max(w.end), |n| n.start) / 10;
-            let from = (w.start / 10).max(base);
-            out.push_str(&format!("{{\\k{}}}{}", until.saturating_sub(from), escape(piece)));
+        let style::StepKind::Word { index, word: w, voice: starts } = step.kind else {
+            // The speaker label, or the rest of a word with a space in it, lit with its first piece.
+            out.push_str(&escape(step.text));
+            continue;
+        };
+        if let (Some(f), Some(v)) = (voice, starts) {
+            out.push_str(&escape(&f(v)));
+            out.push(' ');
         }
+        if w.marks.italic != italic {
+            italic = w.marks.italic;
+            out.push_str(if italic { "{\\i1}" } else { "{\\i0}" });
+        }
+        let until = cue.words.get(index + 1).map_or(cue.end.max(w.end), |n| n.start) / 10;
+        let from = (w.start / 10).max(base);
+        out.push_str(&format!("{{\\k{}}}{}", until.saturating_sub(from), escape(step.text)));
     }
     if italic {
         out.push_str("{\\i0}");
     }
-    words.next().is_none().then_some(out)
+    Some(out)
 }
 
 /// The override tag and the margins (left, right, vertical) that put a cue in its place on the

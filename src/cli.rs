@@ -83,10 +83,10 @@ pub struct RunArgs {
     #[command(flatten)]
     pub api: ApiArgs,
 
-    /// What to write, comma separated: srt, vtt (WebVTT), ass (a style per speaker), premiere (Premiere Pro
-    /// transcript, clip.premiere.json), capt (the whole transcript as small text, clip.capt; `sonisub render`
-    /// makes the other formats from it), ytt (YouTube's srv3, a time for every word, clip.ytt). Only missing files are written, so adding a format later reuses the saved
-    /// transcript for free.
+    /// What to write, comma separated: srt, vtt (WebVTT), ass (a style per speaker), premiere (Premiere Pro transcript,
+    /// clip.premiere.json), capt (the whole transcript as small text, clip.capt; `sonisub render` makes the other
+    /// formats from it), ytt (YouTube's srv3, a time for every word, clip.ytt). Only missing files are written, so
+    /// adding a format later reuses the saved transcript for free.
     #[arg(short = 't', long = "format", value_enum, value_delimiter = ',', default_value = "srt")]
     pub formats: Vec<Format>,
 
