@@ -37,7 +37,7 @@ pub enum Format {
 impl Format {
     /// Subtitles: a file of them with no cue is empty, not written.
     fn has_cues(self) -> bool {
-        matches!(self, Format::Srt | Format::Vtt | Format::Ass)
+        matches!(self, Format::Srt | Format::Vtt | Format::Ass | Format::Adr)
     }
 
     /// Where this format goes for the output base path (`clip.srt` -> `clip.premiere.json`).
@@ -329,7 +329,7 @@ pub fn write_outputs(
             Format::Srt => captions::srt::build(cue_words, layout),
             Format::Vtt => vtt::build(cue_words, layout),
             Format::Ass => ass::build(cue_words, layout, &outputs.ass),
-            Format::Adr => captions::adr::build(doc, layout, &outputs.adr, &labels),
+            Format::Adr => captions::adr::build(doc, layout, &outputs.adr, &labels).map_err(|e| anyhow!(e))?,
             Format::Premiere => {
                 let t = captions::premiere::build(words, layout, default_language, seed)
                     .ok_or_else(|| anyhow!("no words to write"))?;

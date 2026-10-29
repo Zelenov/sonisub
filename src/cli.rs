@@ -83,10 +83,10 @@ pub struct RunArgs {
     #[command(flatten)]
     pub api: ApiArgs,
 
-    /// What to write, comma separated: srt, vtt (WebVTT), ass (a style per speaker), premiere (Premiere Pro
-    /// transcript, clip.premiere.json), capt (the whole transcript as small text, clip.capt; `sonisub render`
-    /// makes the other formats from it), adr (a DaVinci Resolve Fairlight ADR cue list, clip.adr.csv). Only missing files are written, so adding a format later reuses the saved
-    /// transcript for free.
+    /// What to write, comma separated: srt, vtt (WebVTT), ass (a style per speaker), premiere (Premiere Pro transcript,
+    /// clip.premiere.json), capt (the whole transcript as small text, clip.capt; `sonisub render` makes the other
+    /// formats from it), adr (a DaVinci Resolve Fairlight ADR cue list, clip.adr.csv). Only missing files are written,
+    /// so adding a format later reuses the saved transcript for free.
     #[arg(short = 't', long = "format", value_enum, value_delimiter = ',', default_value = "srt")]
     pub formats: Vec<Format>,
 
@@ -233,6 +233,14 @@ pub struct SegArgs {
     pub timeline_start: captions::adr::Timecode,
 }
 
+fn parse_frame(s: &str) -> Result<(u32, u32), String> {
+    let (w, h) = s.split_once(['x', 'X']).ok_or("expected WIDTHxHEIGHT, like 1080x1920")?;
+    match (w.trim().parse::<u32>(), h.trim().parse::<u32>()) {
+        (Ok(w), Ok(h)) if w > 0 && h > 0 => Ok((w, h)),
+        _ => Err("expected WIDTHxHEIGHT in pixels, like 1080x1920".into()),
+    }
+}
+
 impl SegArgs {
     /// Options that make no sense for `formats`, said instead of ignored.
     pub fn check(&self, formats: &[Format]) -> anyhow::Result<()> {
@@ -244,17 +252,7 @@ impl SegArgs {
         }
         Ok(())
     }
-}
 
-fn parse_frame(s: &str) -> Result<(u32, u32), String> {
-    let (w, h) = s.split_once(['x', 'X']).ok_or("expected WIDTHxHEIGHT, like 1080x1920")?;
-    match (w.trim().parse::<u32>(), h.trim().parse::<u32>()) {
-        (Ok(w), Ok(h)) if w > 0 && h > 0 => Ok((w, h)),
-        _ => Err("expected WIDTHxHEIGHT in pixels, like 1080x1920".into()),
-    }
-}
-
-impl SegArgs {
     /// The frame --vertical or --frame gives, if either does.
     pub fn frame_given(&self) -> Option<(u32, u32)> {
         self.vertical.then(|| srt::Layout::vertical().frame).or(self.frame)

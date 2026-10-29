@@ -50,7 +50,7 @@ fn outputs_of_both_fixtures() {
         let d = doc(name);
         let (l, _) = layouts(&d);
         check(name, "sdh.srt", &sdh::srt(&d, &l, "en").0);
-        check_raw(&format!("{name}.adr.csv"), &adr::build(&d, &l, &adr::Options::default(), "en").0);
+        check_raw(&format!("{name}.adr.csv"), &adr::build(&d, &l, &adr::Options::default(), "en").unwrap().0);
     }
 }
 

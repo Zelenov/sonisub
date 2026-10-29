@@ -334,3 +334,15 @@ fn a_timeline_start_past_the_frame_rate_is_refused_only_for_adr() {
     let out = sonisub(&[&srt[..], &["01:00:00:25".as_ref()]].concat()).output().unwrap();
     assert!(out.status.success(), "{}", plain(&out));
 }
+
+#[test]
+fn an_adr_list_with_no_rows_is_not_written() {
+    let dir = tempfile::tempdir().unwrap();
+    let capt = dir.path().join("nospk.capt");
+    std::fs::write(&capt, "CAPT 1\n\n00:00:00.000 --> 00:00:04.000 sound:phone\n").unwrap();
+    let out = sonisub(&["render".as_ref(), capt.as_os_str(), "-t".as_ref(), "adr".as_ref(), "--sdh".as_ref()])
+        .output()
+        .unwrap();
+    assert!(!out.status.success(), "{}", plain(&out));
+    assert!(!dir.path().join("nospk.adr.csv").exists());
+}
