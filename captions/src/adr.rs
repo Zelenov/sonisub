@@ -290,8 +290,9 @@ fn dialogue(heard: &[(u64, Heard)], lang: &str) -> String {
 }
 
 /// The cue list for `doc`, speaker names as `layout` gives them, sound and voice labels in
-/// `lang` (`en`, `ru`), and the number of cues. An error for a start the rate does not have, or a
-/// list that would run past 23:59:59 of the timeline.
+/// `lang` (`en`, `ru`), and the number of cues. Only `layout.speaker_names` is read: a cue list is
+/// cut by `o` (`max_gap`, `max_duration`, `max_chars`). An error for a start the rate does not
+/// have, or a list that would run past 23:59:59 of the timeline.
 pub fn build(doc: &Doc, layout: &Layout, o: &Options, lang: &str) -> Result<(String, usize), String> {
     let start = o.start.frames_at(o.rate)?;
     let cut = Layout {
@@ -319,10 +320,15 @@ pub fn build(doc: &Doc, layout: &Layout, o: &Options, lang: &str) -> Result<(Str
         match inside {
             Some(i) => {
                 let next = cues[i + 1..].iter().find(|c| c.speaker == cues[i].speaker).map_or(u64::MAX, |c| c.start);
-                let end = b.end.min(cues[i].start + max_ms).min(next).max(cues[i].end);
+                // Only up to the sound's own end: when the cue is cut, the part with the sound
+                // keeps its own Out, not the whole cue's.
+                let end = b.end.min(cues[i].start + max_ms).min(next).max(b.start);
                 heard[i].push((b.start, Heard::Sound(code, end)));
             }
-            None => alone.push(Piece::of(Some(sp), vec![(b.start, Heard::Sound(code, b.end))])),
+            None => {
+                let end = b.end.min(b.start + max_ms);
+                alone.push(Piece::of(Some(sp), vec![(b.start, Heard::Sound(code, end))]));
+            }
         }
     }
     let mut pieces: Vec<Piece> = Vec::new();
@@ -369,6 +375,8 @@ pub fn build(doc: &Doc, layout: &Layout, o: &Options, lang: &str) -> Result<(Str
         })
     };
     let mut out = String::from("\u{feff}");
+    // The Out frame of each actor's last row written.
+    let mut outs: Vec<(Option<&str>, u64)> = Vec::new();
     for (n, r) in rows.iter().enumerate() {
         // A transcript without speakers still names the one voice, as the subtitles would; a
         // file with named speakers gives speech of no one a name of its own.
@@ -377,9 +385,19 @@ pub fn build(doc: &Doc, layout: &Layout, o: &Options, lang: &str) -> Result<(Str
             None if doc.speakers.is_empty() => speaker_label("1", &layout.speaker_names),
             None => labels::unknown_speaker(lang),
         };
-        // A cue is at least a frame long, so Resolve shows it.
-        let from = o.rate.frame(r.start, false);
-        let to = o.rate.frame(r.end, true).max(from + 1);
+        // One actor never has two rows at once, counted in frames (Out is rounded up and In down,
+        // so rows apart in milliseconds can still share a frame): a row starts no earlier than the
+        // actor's last one ends, and ends by the frame their next one starts on. A cue is at least
+        // a frame long, so Resolve shows it; that frame wins over the next row, which then starts
+        // after it.
+        let last_out = outs.iter().find(|(s, _)| *s == r.speaker).map_or(0, |(_, f)| *f);
+        let from = o.rate.frame(r.start, false).max(last_out);
+        let next = rows[n + 1..].iter().find(|x| x.speaker == r.speaker).map(|x| o.rate.frame(x.start, false));
+        let to = o.rate.frame(r.end, true).min(next.unwrap_or(u64::MAX)).max(from + 1);
+        match outs.iter_mut().find(|(s, _)| *s == r.speaker) {
+            Some(last) => last.1 = to,
+            None => outs.push((r.speaker, to)),
+        }
         let row = [(n + 1).to_string(), tc(from)?, tc(to)?, who, dialogue(&r.heard, lang)];
         out.push_str(&row.iter().map(|f| quote(f)).collect::<Vec<_>>().join(","));
         out.push_str("\r\n");

@@ -68,7 +68,7 @@ sonisub clip.MP4 -t lrc                   # clip.lrc for karaoke players and mus
 sonisub clip.MP4 -t srt,transcript        # also clip.txt, a plain text transcript to read and search
 sonisub render clip.capt -t adr --fps 29.97  # a DaVinci Resolve Fairlight ADR cue list
 sonisub clip.MP4 -t srt,capt              # also clip.capt, the whole transcript as small text
-sonisub render clip.capt -t ytt           # YouTube: word by word, like its own captions
+sonisub render clip.capt -t ytt           # YouTube's srv3: a time for every word
 sonisub render clip.capt -t vtt,premiere  # other formats from a CAPT file or saved words, no Soniox
 sonisub clip.MP4 --no-json                # don't keep clip.soniox.json
 sonisub clip.MP4 -u                       # no length limit: one cue per sentence
@@ -152,12 +152,14 @@ line, add `-w --max-line 42`.
 
 `-t adr` writes a DaVinci Resolve Fairlight ADR cue list (`clip.adr.csv`; Fairlight page > ADR > List > Import Cue
 List): a row per breath of speech, joined per speaker, with the speaker's own sounds and voices as directions
-(`--labels en|ru`); `--fps 23.976|24|25|29.97|30|50|59.94|60` and `--timeline-start 01:00:00:00` (where the clip
-starts on the timeline, non-drop frame) match the timeline.
+(`--labels en|ru`); `--fps 23.976|24|25|29.97|30|50|59.94|60` (default 25) and `--timeline-start` (where the clip
+starts on the timeline, non-drop frame; default 01:00:00:00) match the timeline. The rows are Cue ID, In, Out, Character,
+Dialogue, with no header: in Resolve's import preview, check that the columns come in in that order.
 
-`-t ytt` writes YTT, YouTube's own timed text (`clip.ytt`, also called srv3): a time for every word, so YouTube can
-show an uploaded subtitle word by word like its own captions, plus places and italic. Upload it in YouTube Studio as
-a subtitle file.
+`-t ytt` writes YTT, YouTube's own timed text (`clip.ytt`, also called srv3): a time for every word, plus places and
+italic, written as YTSubConverter writes srv3 so YouTube can show the words one by one. Upload it in YouTube Studio as
+a subtitle file. Google does not document srv3, and this file has not yet been checked on YouTube itself
+([#21](https://github.com/Zelenov/sonisub/issues/21)).
 
 `sonisub render` makes the same files without Soniox: from a CAPT file (`-t capt` writes `clip.capt`, the whole
 transcript as small text you can read and edit, see [docs/capt.md](docs/capt.md)), or from words saved as JSON

@@ -171,7 +171,7 @@ file it writes.
 | LRC | | | | | |
 | Transcript (`.txt`) | | | | `[whispering]` | the speaker's in their paragraph; another's or no one's after the sentence it falls in |
 | TTML / IMSC | `<span>` | `<span xml:lang>` | a region; a rectangle exactly (it grows if its text needs more lines) | | |
-| Fairlight ADR (`.adr.csv`) | | | | `[whispering]`, once a row | the speaker's own, in their cue |
+| Fairlight ADR (`.adr.csv`) | | | | `[whispering]`, once a row | the speaker's own: in their cue, or a row of its own; no one's left out |
 | YTT (`.ytt`, srv3) | pen `i="1"` | | a window position; a rectangle's top and centre | | |
 | Premiere | | | | | |
 

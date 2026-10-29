@@ -1,3 +1,12 @@
+# 0.9.1
+## Changed
+- `-t ytt`: up to eight lines shown at once each get a window of their own (from four on they used to be drawn on top of each other).
+- `-t ytt`: a line lasts until its last word shows.
+- `-t ytt`, `-t ttml`: characters XML forbids are left out, so YouTube and strict importers do not refuse the file.
+- `-t adr`: one actor's rows never overlap, not even by a frame (a cut cue, a long sound and speech during it, rows starting in one frame); a sound heard alone stays within 8 s.
+- `--fps` and `--timeline-start` without `-t adr` are now an error (they used to be ignored), so a script that passes them for every format must pass them only with `-t adr`. The result line of a file says the rate and start its ADR list was written at (`(ADR at 25 fps from 01:00:00:00)`).
+- captions 0.3.1.
+
 # 0.9.0
 ## Added
 - Subtitles from a CAPT file follow what the file says: they cut at its cut points (a ` / ` moved by hand moves the cut), end sentences where `sentence:` says, show `style:italic` in italic (SRT, WebVTT, ASS), mark words in another language (WebVTT), and put a subtitle where `pos:` says (top, middle, a point or a rectangle).

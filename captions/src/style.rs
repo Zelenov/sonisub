@@ -163,6 +163,12 @@ pub(crate) fn place(cue: &Cue) -> Option<Pos> {
     cue.words.first().and_then(|w| w.marks.pos)
 }
 
+/// Text without the characters XML 1.0 forbids (control characters other than tab and newline,
+/// U+FFFE and U+FFFF): one in a file makes the whole file unreadable to an XML importer.
+pub(crate) fn xml_chars(text: &str) -> String {
+    text.chars().filter(|c| matches!(c, '\t' | '\n') || (*c >= ' ' && !matches!(c, '\u{fffe}' | '\u{ffff}'))).collect()
+}
+
 /// Text as it is, for formats that escape nothing.
 pub(crate) fn plain(text: &str) -> String {
     text.to_string()

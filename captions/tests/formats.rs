@@ -774,19 +774,191 @@ fn ytt_lines_at_the_same_time_never_share_a_window() {
     let file = "CAPT 1\n\n00:00:01.000 --> 00:00:04.000 speaker:1\n{0}Hello{100} {110}there{200} {210}friend.{300}\n\n\
                 00:00:01.500 --> 00:00:03.000 speaker:2\n{0}Hi.{50}\n\n00:00:02.000 --> 00:00:03.500 speaker:3\n{0}Hey.{50}\n";
     let ytt = ytt_of(file);
-    let ps: Vec<(u64, u64, String)> = ytt
+    assert_eq!(ytt.matches("<p ").count(), 3, "{ytt}");
+    assert_eq!(ytt_shared_windows(&ytt), Vec::<(String, String)>::new(), "{ytt}");
+}
+
+/// The value of attribute `n` in a YTT line.
+fn ytt_attr(l: &str, n: &str) -> String {
+    l.split(&format!(" {n}=\"")).nth(1).unwrap().split('"').next().unwrap().to_string()
+}
+
+/// Every pair of `<p>` shown at the same time in one window.
+fn ytt_shared_windows(ytt: &str) -> Vec<(String, String)> {
+    let ps: Vec<(u64, u64, String, String)> = ytt
         .lines()
         .filter(|l| l.starts_with("<p "))
         .map(|l| {
-            let attr = |n: &str| l.split(&format!("{n}=\"")).nth(1).unwrap().split('"').next().unwrap().to_string();
-            let t: u64 = attr("t").parse().unwrap();
-            (t, t + attr("d").parse::<u64>().unwrap(), attr("wp"))
+            let t: u64 = ytt_attr(l, "t").parse().unwrap();
+            (t, t + ytt_attr(l, "d").parse::<u64>().unwrap(), ytt_attr(l, "wp"), l.to_string())
         })
         .collect();
-    assert_eq!(ps.len(), 3, "{ytt}");
+    let mut shared = Vec::new();
     for (i, a) in ps.iter().enumerate() {
         for b in &ps[i + 1..] {
-            assert!(!(a.2 == b.2 && a.0 < b.1 && b.0 < a.1), "{a:?} and {b:?} share a window\n{ytt}");
+            if a.2 == b.2 && a.0 < b.1 && b.0 < a.1 {
+                shared.push((a.3.clone(), b.3.clone()));
+            }
         }
     }
+    shared
+}
+
+#[test]
+fn ytt_up_to_eight_lines_at_once_each_get_a_window() {
+    let file: String = (0..8)
+        .map(|i| format!("00:00:01.{i}00 --> 00:00:04.000 speaker:{i}\n{{0}}Line{i}.{{100}}\n"))
+        .collect::<Vec<_>>()
+        .join("\n");
+    let ytt = ytt_of(&format!("CAPT 1\n\n{file}"));
+    assert_eq!(ytt.matches("<p ").count(), 8, "{ytt}");
+    assert_eq!(ytt_shared_windows(&ytt), Vec::<(String, String)>::new(), "{ytt}");
+    // A ninth goes where it wants, the bottom, over another: there is no window left.
+    let nine = format!("CAPT 1\n\n{file}\n00:00:01.950 --> 00:00:04.000 speaker:9\n{{0}}Line9.{{100}}\n");
+    assert_eq!(ytt_shared_windows(&ytt_of(&nine)).len(), 1);
+}
+
+#[test]
+fn ytt_words_said_at_once_stay_inside_their_line() {
+    let words: Vec<Word> =
+        (0..600).map(|i| Word { text: format!("w{i}"), start: 1000, end: 1000, ..Word::default() }).collect();
+    let ytt = ytt::build(&words, &Layout::unlimited()).0;
+    for l in ytt.lines().filter(|l| l.starts_with("<p ")) {
+        let d: u64 = ytt_attr(l, "d").parse().unwrap();
+        let last: u64 = l.rsplit(" t=\"").next().unwrap().split('"').next().unwrap().parse().unwrap();
+        assert!(last < d, "the last section starts at {last} ms, the line ends at {d} ms");
+    }
+}
+
+#[test]
+fn ytt_leaves_out_characters_xml_forbids() {
+    let ytt = ytt_of("CAPT 1\n\n00:00:01.000 --> 00:00:02.000\n{0}a\u{1}b{100}\n");
+    assert!(!ytt.contains('\u{1}') && ytt.contains(">ab</p>"), "{ytt:?}");
+}
+
+#[test]
+fn ytt_places_the_middle_and_a_point() {
+    let ytt = ytt_of(
+        "CAPT 1\n\n00:00:01.000 --> 00:00:02.000 pos:middle\n{0}Mid.{50}\n\n\
+         00:00:03.000 --> 00:00:04.000 pos:0.25,0.75\n{0}Point.{50}\n",
+    );
+    // A point of v percent is written (v - 2) / 0.96: 25% -> 24, 75% -> 76.
+    assert!(ytt.contains(r#"ap="4" ah="50" av="50""#), "{ytt}");
+    assert!(ytt.contains(r#"ap="4" ah="24" av="76""#), "{ytt}");
+}
+
+/// In, Out and dialogue of each ADR row.
+fn adr_spans(rows: &[String]) -> Vec<(String, String, String)> {
+    rows.iter()
+        .map(|r| {
+            let f: Vec<&str> = r.trim_matches('"').split("\",\"").collect();
+            (f[1].to_string(), f[2].to_string(), f[4].to_string())
+        })
+        .collect()
+}
+
+#[test]
+fn a_cut_adr_cue_gives_each_row_its_own_out() {
+    let word = "abcdefghijklmnopqrstu";
+    let words: Vec<String> = (0..9).map(|i| format!("{{{}}}{word}{{{}}}", i * 50, i * 50 + 40)).collect();
+    let file = format!(
+        "CAPT 1\nspeaker:1 name:Anna\n\n00:00:00.000 --> 00:00:05.000 speaker:1\n{}\n\n\
+         00:00:00.420 --> 00:00:00.480 speaker:1 sound:laughter\n",
+        words.join(" ")
+    );
+    let spans = adr_spans(&adr(&file));
+    assert_eq!(spans.len(), 2, "{spans:?}");
+    assert!(spans[0].1 <= spans[1].0, "rows of one actor overlap: {spans:?}");
+}
+
+#[test]
+fn an_adr_sound_alone_stays_within_the_row_limit() {
+    let spans =
+        adr_spans(&adr("CAPT 1\nspeaker:1 name:Anna\n\n00:00:00.000 --> 00:00:20.000 speaker:1 sound:laughter\n"));
+    assert!(spans.iter().all(|(_, out, _)| out.as_str() <= "01:00:08:00"), "{spans:?}");
+}
+
+#[test]
+fn a_long_adr_sound_and_the_speech_during_it_do_not_overlap() {
+    let words: Vec<String> = (0..8).map(|i| format!("{{{}}}w{i}{{{}}}", i * 100, i * 100 + 50)).collect();
+    let file = format!(
+        "CAPT 1\nspeaker:1 name:Anna\n\n00:00:10.000 --> 00:00:13.000 speaker:1 sound:laughter\n\n\
+         00:00:11.000 --> 00:00:18.500 speaker:1\n{}\n",
+        words.join(" ")
+    );
+    let spans = adr_spans(&adr(&file));
+    for p in spans.windows(2) {
+        assert!(p[0].1 <= p[1].0, "rows of one actor overlap: {spans:?}");
+    }
+}
+
+#[test]
+fn an_adr_list_at_29_97_fps_from_a_minute_before_the_hour() {
+    let doc = captions::capt::Doc::parse(
+        "CAPT 1\nspeaker:1 name:Anna\n\n00:00:01.000 --> 00:00:01.500 speaker:1\n{0}Hi.{50}\n",
+    )
+    .unwrap();
+    let start = captions::adr::Timecode::parse("00:59:59:00").unwrap();
+    let o = captions::adr::Options { rate: captions::adr::Rate::Fps29_97, start, ..Default::default() };
+    let rows: Vec<String> = captions::adr::build(&doc, &Layout::default(), &o, "en")
+        .unwrap()
+        .0
+        .trim_start_matches('\u{feff}')
+        .lines()
+        .map(str::to_string)
+        .collect();
+    // 1 s of media is 29.97 frames: In at frame 29 (rounded down), Out at 1.5 s = 44.955, up to 45.
+    let spans = adr_spans(&rows);
+    assert_eq!((spans[0].0.as_str(), spans[0].1.as_str()), ("00:59:59:29", "01:00:00:15"), "{spans:?}");
+}
+
+#[test]
+fn adr_rows_of_one_actor_never_share_a_frame() {
+    // The speech starts off a frame (11.010 s at 25 fps): the laugh before it ends by that frame.
+    let words: Vec<String> = (0..8).map(|i| format!("{{{}}}w{i}{{{}}}", i * 100, i * 100 + 50)).collect();
+    let file = format!(
+        "CAPT 1\nspeaker:1 name:Anna\n\n00:00:10.000 --> 00:00:13.000 speaker:1 sound:laughter\n\n\
+         00:00:11.010 --> 00:00:18.600 speaker:1\n{}\n",
+        words.join(" ")
+    );
+    let spans = adr_spans(&adr(&file));
+    for p in spans.windows(2) {
+        assert!(p[0].1 <= p[1].0, "rows of one actor overlap: {spans:?}");
+    }
+}
+
+#[test]
+fn a_ytt_line_holds_its_window_while_its_last_word_shows() {
+    let mut words: Vec<Word> = (0..20)
+        .map(|i| Word { text: format!("x{i}"), start: 1000, end: 1000, speaker: Some("1".into()), ..Word::default() })
+        .collect();
+    words.push(Word { text: "Next.".into(), start: 1005, end: 2000, speaker: Some("2".into()), ..Word::default() });
+    let layout = Layout { by_speaker: true, ..Layout::unlimited() };
+    let ytt = ytt::build(&words, &layout).0;
+    assert_eq!(ytt_shared_windows(&ytt), Vec::<(String, String)>::new(), "{ytt}");
+}
+
+#[test]
+fn adr_rows_of_one_actor_starting_in_one_frame_do_not_overlap() {
+    // A laugh alone, then the same actor's speech 20 ms later (one frame at 25 fps), too long to join.
+    let word = "abcdefghijklmnopqrstu";
+    let words: Vec<String> = (0..9).map(|i| format!("{{{}}}{word}{{{}}}", i * 50, i * 50 + 40)).collect();
+    let file = format!(
+        "CAPT 1\nspeaker:1 name:Anna\n\n00:00:10.000 --> 00:00:10.010 speaker:1 sound:laughter\n\n\
+         00:00:10.020 --> 00:00:15.000 speaker:1\n{}\n",
+        words.join(" ")
+    );
+    let spans = adr_spans(&adr(&file));
+    assert_eq!(spans.len(), 2, "{spans:?}");
+    for p in spans.windows(2) {
+        assert!(p[0].1 <= p[1].0 && p[1].0 < p[1].1, "rows of one actor overlap: {spans:?}");
+    }
+}
+
+#[test]
+fn ttml_leaves_out_characters_xml_forbids_and_keeps_tabs() {
+    let doc =
+        captions::capt::Doc::parse("CAPT 1\n\n00:00:01.000 --> 00:00:02.000\n{0}a\u{1}b\u{fffe}c\td{100}\n").unwrap();
+    let ttml = captions::ttml::build(&doc, &Layout::default()).0;
+    assert!(ttml.contains("abc\td</p>"), "{ttml:?}");
 }

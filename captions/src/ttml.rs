@@ -40,7 +40,7 @@ fn timestamp(ms: u64) -> String {
 }
 
 fn xml(s: &str) -> String {
-    s.replace('&', "&amp;").replace('<', "&lt;").replace('>', "&gt;").replace('"', "&quot;")
+    style::xml_chars(s).replace('&', "&amp;").replace('<', "&lt;").replace('>', "&gt;").replace('"', "&quot;")
 }
 
 /// The characters a player shows for TTML text: tags left out, an entity one character.

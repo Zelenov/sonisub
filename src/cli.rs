@@ -210,14 +210,14 @@ pub struct SegArgs {
     pub labels: Option<String>,
 
     /// Frame rate of the Fairlight timeline (-t adr): 23.976, 24, 25, 29.97, 30, 50, 59.94 or 60; in Resolve, Project
-    /// Settings > Master Settings > Timeline frame rate.
-    #[arg(long, default_value = "25", value_parser = captions::adr::Rate::parse, help_heading = "Fairlight ADR")]
-    pub fps: captions::adr::Rate,
+    /// Settings > Master Settings > Timeline frame rate. [default: 25]
+    #[arg(long, value_parser = captions::adr::Rate::parse, help_heading = "Fairlight ADR")]
+    pub fps: Option<captions::adr::Rate>,
 
     /// Where the clip starts on the Fairlight timeline (-t adr), HH:MM:SS:FF, non-drop frame; usually the
-    /// timeline's own start (Timeline > Starting Timecode, 01:00:00:00 unless changed).
-    #[arg(long, default_value = "01:00:00:00", value_parser = captions::adr::Timecode::parse, help_heading = "Fairlight ADR")]
-    pub timeline_start: captions::adr::Timecode,
+    /// timeline's own start (Timeline > Starting Timecode). [default: 01:00:00:00]
+    #[arg(long, value_parser = captions::adr::Timecode::parse, help_heading = "Fairlight ADR")]
+    pub timeline_start: Option<captions::adr::Timecode>,
 }
 
 impl SegArgs {
@@ -240,19 +240,42 @@ impl SegArgs {
     pub fn outputs(&self) -> job::Outputs {
         job::Outputs {
             ass: ass::Options { karaoke: self.karaoke, ..Default::default() },
-            adr: captions::adr::Options { rate: self.fps, start: self.timeline_start, ..Default::default() },
+            adr: self.adr_options(),
             labels: self.labels.clone(),
         }
     }
 
+    /// The ADR list's rate and start: the ones given, else 25 fps from 01:00:00:00.
+    pub fn adr_options(&self) -> captions::adr::Options {
+        let default = captions::adr::Options::default();
+        captions::adr::Options {
+            rate: self.fps.unwrap_or(default.rate),
+            start: self.timeline_start.unwrap_or(default.start),
+            ..default
+        }
+    }
+
+    /// What an ADR list is timed by, `ADR at 25 fps from 01:00:00:00`, with `-t adr`.
+    pub fn adr_timing(&self, formats: &[Format]) -> Option<String> {
+        formats.contains(&Format::Adr).then(|| {
+            let o = self.adr_options();
+            format!("ADR at {} fps from {}", o.rate, o.start)
+        })
+    }
+
     /// Options that make no sense for `formats`, said instead of ignored.
     pub fn check(&self, formats: &[Format]) -> anyhow::Result<()> {
-        if self.labels.is_some() && !formats.contains(&Format::Transcript) && !formats.contains(&Format::Adr) {
+        let adr = formats.contains(&Format::Adr);
+        if self.labels.is_some() && !formats.contains(&Format::Transcript) && !adr {
             anyhow::bail!("--labels needs -t transcript or -t adr: nothing else writes a label");
         }
-        if formats.contains(&Format::Adr) {
-            self.timeline_start
-                .frames_at(self.fps)
+        if !adr && (self.fps.is_some() || self.timeline_start.is_some()) {
+            anyhow::bail!("--fps and --timeline-start need -t adr: nothing else is timed by frames");
+        }
+        if adr {
+            let o = self.adr_options();
+            o.start
+                .frames_at(o.rate)
                 .map_err(|e| anyhow::anyhow!("--timeline-start: {e}; pass --fps to match the timeline"))?;
         }
         Ok(())
