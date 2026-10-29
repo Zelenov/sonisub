@@ -13,7 +13,7 @@
       <region xml:id="middle" tts:origin="10% 40%" tts:extent="80% 20%" tts:displayAlign="center" tts:textAlign="center"/>
     </layout>
   </head>
-  <body>
+  <body tts:color="white" tts:textOutline="black 0.05c" tts:fontFamily="proportionalSansSerif" tts:lineHeight="125%">
     <div>
       <p begin="00:00:00.870" end="00:00:03.330" region="bottom" ttm:agent="speaker_1">Speaker 1: Hi, today we're testing the subtitle generator.</p>
       <p begin="00:00:03.870" end="00:00:04.370" region="bottom" ttm:agent="speaker_2">Speaker 2: Great.</p>

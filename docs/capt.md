@@ -168,7 +168,7 @@ file it writes.
 | SRT | `<i>` | | `{\anN}`, the nearest of nine | with `--sdh` | with `--sdh` |
 | WebVTT | `<i>` | `<lang xx>` | cue settings; a rectangle's width and top | with `--sdh` | with `--sdh` |
 | ASS | `{\i1}` | | alignment and margins; a rectangle's width and top | with `--sdh` | with `--sdh`, in the speaker's style |
-| TTML / IMSC | `<span>` | `<span xml:lang>` | a region; a rectangle exactly | with `--sdh` | with `--sdh` |
+| TTML / IMSC | `<span>` | `<span xml:lang>` | a region; a rectangle exactly (it grows if its text needs more lines) | with `--sdh` | with `--sdh` |
 | Premiere | | | | | |
 
 With `--sdh` a voice is a label where it starts (`[whispering] please`), and every sound is a subtitle of its

@@ -318,3 +318,107 @@ fn a_ttml_region_that_takes_a_moved_subtitle_grows_for_both() {
     // Four lines of 1.25 cells, 20 rows.
     assert!(height >= 4.0 * 1.25 / 20.0 * 100.0 - 0.2, "{height}%\n{ttml}");
 }
+
+/// Checks a TTML document the way IMSC 1.1 Text asks: at any moment at most four regions are
+/// shown, none of them overlap, and each is tall enough for its lines at `line` (a share of the
+/// frame). Returns the problems found.
+fn imsc_problems(ttml: &str) -> Vec<String> {
+    let attr = |line: &str, name: &str| -> Option<String> {
+        let start = line.find(&format!("{name}=\""))? + name.len() + 2;
+        Some(line[start..].split('"').next()?.to_string())
+    };
+    let pct = |s: &str| -> Vec<f64> {
+        s.split(' ').map(|v| v.trim_end_matches('%').parse::<f64>().unwrap() / 100.0).collect()
+    };
+    let regions: Vec<(String, [f64; 4])> = ttml
+        .lines()
+        .filter(|l| l.contains("<region "))
+        .map(|l| {
+            let (o, e) = (pct(&attr(l, "tts:origin").unwrap()), pct(&attr(l, "tts:extent").unwrap()));
+            (attr(l, "xml:id").unwrap(), [o[0], o[1], e[0], e[1]])
+        })
+        .collect();
+    let rect = |id: &str| regions.iter().find(|(r, _)| r == id).unwrap().1;
+    let ms = |t: &str| -> u64 {
+        let p: Vec<f64> = t.split(':').map(|x| x.parse().unwrap()).collect();
+        ((p[0] * 3600.0 + p[1] * 60.0 + p[2]) * 1000.0).round() as u64
+    };
+    let ps: Vec<(u64, u64, String)> = ttml
+        .lines()
+        .filter(|l| l.trim_start().starts_with("<p "))
+        .map(|l| (ms(&attr(l, "begin").unwrap()), ms(&attr(l, "end").unwrap()), attr(l, "region").unwrap()))
+        .collect();
+    let mut problems = Vec::new();
+    for (t, _, _) in &ps {
+        let mut on: Vec<&str> = ps.iter().filter(|(b, e, _)| b <= t && e > t).map(|(_, _, r)| r.as_str()).collect();
+        on.sort_unstable();
+        on.dedup();
+        if on.len() > 4 {
+            problems.push(format!("{} regions at {t}", on.len()));
+        }
+        for (i, a) in on.iter().enumerate() {
+            for b in &on[i + 1..] {
+                let ([ax, ay, aw, ah], [bx, by, bw, bh]) = (rect(a), rect(b));
+                if ax < bx + bw - 1e-6 && bx < ax + aw - 1e-6 && ay < by + bh - 1e-6 && by < ay + ah - 1e-6 {
+                    problems.push(format!("{a} over {b} at {t}"));
+                }
+            }
+        }
+    }
+    problems
+}
+
+fn timed(text: &str, from: u64) -> String {
+    text.split(' ')
+        .enumerate()
+        .map(|(i, w)| format!("{{{}}}{w}{{{}}}", from + i as u64 * 9, from + i as u64 * 9 + 8))
+        .collect::<Vec<_>>()
+        .join(" ")
+}
+
+#[test]
+fn a_narrow_ttml_box_grows_for_its_wrapped_lines() {
+    let file = format!(
+        "CAPT 1\n\n00:00:01.000 --> 00:00:03.000 pos:0.45,0.45,0.1,0.05\n{}\n",
+        timed("Forty characters of text here, okay.", 0)
+    );
+    let doc = captions::capt::Doc::parse(&file).unwrap();
+    let ttml = captions::ttml::build(&doc, &Layout::default()).0;
+    let r1 = ttml.lines().find(|l| l.contains(r#"xml:id="r1""#)).unwrap();
+    let height: f64 =
+        r1.split("tts:extent=\"").nth(1).unwrap().split(' ').nth(1).unwrap().trim_end_matches("%\"").parse().unwrap();
+    // 10% of 1920 px holds 6 characters of 54 px text: 36 characters are 6 lines of 1.25 cells, 20 rows.
+    assert!(height >= 6.0 * 1.25 / 20.0 * 100.0, "{height}%\n{ttml}");
+}
+
+#[test]
+fn ttml_shows_at_most_four_regions_and_none_overlap() {
+    let file = format!(
+        "CAPT 1\n\n00:00:01.000 --> 00:00:03.000 speaker:1 pos:top\n{}\n\n\
+         00:00:01.000 --> 00:00:03.000 speaker:2 pos:middle\n{}\n\n\
+         00:00:01.000 --> 00:00:03.000 speaker:3\n{}\n\n\
+         00:00:01.000 --> 00:00:03.000 speaker:4 pos:0.0,0.3,0.09,0.05\n{}\n\n\
+         00:00:01.000 --> 00:00:03.000 speaker:5 pos:0.91,0.3,0.09,0.05\n{}\n",
+        timed("Up.", 0),
+        timed("Mid.", 0),
+        timed("Low.", 0),
+        timed("Left.", 0),
+        timed("Right.", 0)
+    );
+    let doc = captions::capt::Doc::parse(&file).unwrap();
+    let ttml = captions::sdh::ttml(&doc, &Layout::default(), "en").0;
+    assert_eq!(imsc_problems(&ttml), Vec::<String>::new(), "{ttml}");
+    // Nine thin boxes at once, no length limit: they end in regions that do not overlap.
+    let boxes: Vec<String> = (0..9)
+        .map(|i| {
+            format!(
+                "00:00:01.000 --> 00:00:03.000 speaker:{i} pos:0.1,{},0.8,0.01\n{}\n",
+                i as f64 * 0.05,
+                timed("Some words here.", 0)
+            )
+        })
+        .collect();
+    let doc = captions::capt::Doc::parse(&format!("CAPT 1\n\n{}", boxes.join("\n"))).unwrap();
+    let ttml = captions::ttml::build(&doc, &Layout::unlimited()).0;
+    assert_eq!(imsc_problems(&ttml), Vec::<String>::new(), "{ttml}");
+}
