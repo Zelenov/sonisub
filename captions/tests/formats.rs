@@ -255,3 +255,30 @@ fn an_adr_row_without_a_speaker_names_speaker_1_and_the_list_ends_with_the_day()
     let err = captions::adr::build(&doc, &Layout::default(), &o, "en").unwrap_err();
     assert!(err.contains("23:59:59"), "{err}");
 }
+
+#[test]
+fn an_adr_cue_lasts_as_long_as_the_speakers_sound_in_it() {
+    let rows = adr("CAPT 1\nspeaker:1 name:Anna\n\n\
+                    00:00:00.000 --> 00:00:02.000 speaker:1\n{0}So{50} {100}funny.{200}\n\n\
+                    00:00:01.800 --> 00:00:04.000 speaker:1 sound:laughter\n");
+    assert_eq!(rows, [r#""1","01:00:00:00","01:00:04:00","Anna","So funny. [laughs]""#]);
+    // A sound of no length is still a frame long.
+    let rows = adr("CAPT 1\n\n00:00:01.000 --> 00:00:01.000 speaker:1 sound:laughter\n");
+    assert!(rows[0].starts_with(r#""1","01:00:01:00","01:00:01:01""#), "{rows:?}");
+}
+
+#[test]
+fn an_adr_row_counts_its_labels_in_its_length() {
+    let mut file = String::from("CAPT 1\n");
+    for i in 0..6u64 {
+        let voice = if i % 2 == 0 { "whisper" } else { "shout" };
+        file.push_str(&format!(
+            "\n00:00:{:02}.000 --> 00:00:{:02}.900 speaker:1 voice:{voice}\n{{0}}aaaaaaaaaaaaaaaaaaaa{{20}} {{30}}bbbbbbbbbbbbbbbbbbbb.{{50}}\n",
+            i, i
+        ));
+    }
+    for row in adr(&file) {
+        let dialogue = row.rsplit("\",\"").next().unwrap().trim_end_matches('"');
+        assert!(dialogue.chars().count() <= 200, "{row}");
+    }
+}

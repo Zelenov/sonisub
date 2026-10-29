@@ -228,7 +228,8 @@ pub struct SegArgs {
     #[arg(long, default_value = "25", value_parser = captions::adr::Rate::parse, help_heading = "Fairlight ADR")]
     pub fps: captions::adr::Rate,
 
-    /// Where the Fairlight timeline starts (-t adr), HH:MM:SS:FF, non-drop frame.
+    /// Where the clip starts on the Fairlight timeline (-t adr), HH:MM:SS:FF, non-drop frame; usually the
+    /// timeline's own start.
     #[arg(long, default_value = "01:00:00:00", value_parser = captions::adr::Timecode::parse, help_heading = "Fairlight ADR")]
     pub timeline_start: captions::adr::Timecode,
 }
@@ -248,7 +249,9 @@ impl SegArgs {
             anyhow::bail!("--labels needs --sdh or -t adr: nothing else writes a label");
         }
         if formats.contains(&Format::Adr) {
-            self.timeline_start.frames_at(self.fps).map_err(|e| anyhow::anyhow!("--timeline-start: {e}"))?;
+            self.timeline_start
+                .frames_at(self.fps)
+                .map_err(|e| anyhow::anyhow!("--timeline-start: {e}; pass --fps to match the timeline"))?;
         }
         Ok(())
     }

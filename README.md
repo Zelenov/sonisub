@@ -62,6 +62,7 @@ sonisub clip.MP4 -t srt,premiere          # also clip.premiere.json for Premiere
 sonisub . -t premiere                     # only the Premiere transcript; saved .soniox.json files are reused
 sonisub clip.MP4 -t srt,vtt,ass           # also clip.vtt (WebVTT) and clip.ass (a style per speaker)
 sonisub clip.MP4 -t ass --karaoke         # each word lights up as it is spoken
+sonisub render clip.capt -t adr --fps 29.97  # a DaVinci Resolve Fairlight ADR cue list
 sonisub clip.MP4 -t srt,capt              # also clip.capt, the whole transcript as small text
 sonisub clip.MP4 -t ass,vtt --vertical    # Reels, Shorts, TikTok: short lines, clear of the app's buttons
 sonisub render clip.capt -t srt --sdh     # for the deaf and hard of hearing: sounds and voices marked in clip.capt
@@ -131,7 +132,9 @@ orange, violet, red, then repeating), black outline, bottom centre. Every line n
 you restyle or rename a person in one place. Without diarization all lines use the `Default` style. `--karaoke` adds word-by-word
 highlight (`\k`).
 
-`-t adr` writes a DaVinci Resolve Fairlight ADR cue list (`clip.adr.csv`, ADR > List > Import Cue List): a row per breath of speech, joined per speaker, with the speaker's own sounds and voices as directions; `--fps 23.976|24|25|29.97|30|50|59.94|60` and `--timeline-start 01:00:00:00` (non-drop frame) match the timeline.
+`-t adr` writes a DaVinci Resolve Fairlight ADR cue list (`clip.adr.csv`; Fairlight page > ADR > List > Import Cue
+List): a row per breath of speech, joined per speaker, with the speaker's own sounds and voices as directions; `--fps 23.976|24|25|29.97|30|50|59.94|60` and `--timeline-start 01:00:00:00` (where the clip starts on the timeline, non-drop frame)
+match the timeline.
 
 `--sdh` makes `.srt`, `.vtt` and `.ass` subtitles for the deaf and hard of hearing from the sounds and voices
 marked in a CAPT file (`sound:phone`, `voice:whisper` → `[phone ringing]`, `[whispering]`; `--labels en|ru`).

@@ -30,7 +30,7 @@ pub enum Rate {
 }
 
 impl Rate {
-    /// Every rate, in the order of [`Rate::NAMES`].
+    /// Every rate.
     pub const ALL: [Rate; 8] = [
         Rate::Fps23_976,
         Rate::Fps24,
@@ -41,18 +41,29 @@ impl Rate {
         Rate::Fps59_94,
         Rate::Fps60,
     ];
-    /// The rates as they are written.
-    pub const NAMES: [&str; 8] = ["23.976", "24", "25", "29.97", "30", "50", "59.94", "60"];
 
-    /// `23.976` (or `23.98`), `24`, `25`, `29.97`, `30`, `50`, `59.94` or `60`.
+    /// The rate as it is written: `23.976`, `25`, `29.97`…
+    pub fn name(self) -> &'static str {
+        match self {
+            Rate::Fps23_976 => "23.976",
+            Rate::Fps24 => "24",
+            Rate::Fps25 => "25",
+            Rate::Fps29_97 => "29.97",
+            Rate::Fps30 => "30",
+            Rate::Fps50 => "50",
+            Rate::Fps59_94 => "59.94",
+            Rate::Fps60 => "60",
+        }
+    }
+
+    /// A rate as [`Rate::name`] writes it (`23.98` too).
     pub fn parse(s: &str) -> Result<Rate, String> {
         let s = s.trim();
         let s = if s == "23.98" { "23.976" } else { s };
-        Rate::NAMES
-            .iter()
-            .position(|n| *n == s)
-            .map(|i| Rate::ALL[i])
-            .ok_or_else(|| format!("frame rate {s:?}: use one of {}", Rate::NAMES.join(", ")))
+        Rate::ALL.into_iter().find(|r| r.name() == s).ok_or_else(|| {
+            let names: Vec<&str> = Rate::ALL.iter().map(|r| r.name()).collect();
+            format!("frame rate {s:?}: use one of {}", names.join(", "))
+        })
     }
 
     /// Frames a second the timecode counts: 24, 25, 30, 50 or 60.
@@ -121,10 +132,7 @@ impl Timecode {
     pub fn frames_at(self, rate: Rate) -> Result<u64, String> {
         let fps = rate.frames();
         if self.frames >= fps {
-            return Err(format!(
-                "timecode {self}: frames run 00 to {:02} at {fps} frames a second; pass --fps to match the timeline",
-                fps - 1
-            ));
+            return Err(format!("timecode {self}: frames run 00 to {:02} at {fps} frames a second", fps - 1));
         }
         Ok((self.hours as u64 * 3600 + self.minutes as u64 * 60 + self.seconds as u64) * fps as u64
             + self.frames as u64)
@@ -140,6 +148,12 @@ impl Timecode {
             seconds: (secs % 60) as u32,
             frames: (n % fps) as u32,
         })
+    }
+}
+
+impl std::fmt::Display for Rate {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(self.name())
     }
 }
 
@@ -191,12 +205,6 @@ struct Piece<'a> {
     heard: Vec<(u64, Heard<'a>)>,
     /// Whether it has speech: only speech of another speaker ends a row.
     speech: bool,
-}
-
-impl Piece<'_> {
-    fn chars(&self) -> usize {
-        self.heard.iter().map(|(_, h)| if let Heard::Word(w) = h { w.text.chars().count() + 1 } else { 10 }).sum()
-    }
 }
 
 /// The dialogue of a row: words, a sound's label where it is heard, a voice's where it starts.
@@ -264,7 +272,11 @@ pub fn build(doc: &Doc, layout: &Layout, o: &Options, lang: &str) -> Result<(Str
         let inside =
             pieces.iter_mut().find(|p| p.speech && p.speaker == Some(sp) && p.start <= b.start && b.start < p.end);
         match inside {
-            Some(p) => p.heard.push((b.start, Heard::Sound(code))),
+            Some(p) => {
+                // The actor goes on laughing past the last word: so does the cue.
+                p.end = p.end.max(b.end);
+                p.heard.push((b.start, Heard::Sound(code)));
+            }
             None => pieces.push(Piece {
                 start: b.start,
                 end: b.end,
@@ -290,7 +302,8 @@ pub fn build(doc: &Doc, layout: &Layout, o: &Options, lang: &str) -> Result<(Str
         if let Some(i) = open
             && piece.start.saturating_sub(rows[i].end) <= gap_ms
             && piece.end.max(rows[i].end) - rows[i].start <= max_ms
-            && rows[i].chars() + piece.chars() <= o.max_chars
+            && dialogue(&rows[i].heard, lang).chars().count() + 1 + dialogue(&piece.heard, lang).chars().count()
+                <= o.max_chars
         {
             let row = &mut rows[i];
             row.end = row.end.max(piece.end);
@@ -301,19 +314,24 @@ pub fn build(doc: &Doc, layout: &Layout, o: &Options, lang: &str) -> Result<(Str
         rows.push(piece);
     }
 
-    let tc = |ms: u64, up: bool| {
-        Timecode::from_frames(start + o.rate.frame(ms, up), o.rate).map(|t| t.to_string()).ok_or_else(|| {
+    let tc = |frame: u64| {
+        Timecode::from_frames(start + frame, o.rate).map(|t| t.to_string()).ok_or_else(|| {
             format!("the cue list runs past 23:59:59 of the timeline; start it earlier than {}", o.start)
         })
     };
     let mut out = String::from("\u{feff}");
     for (n, r) in rows.iter().enumerate() {
-        // A transcript without speakers still names the one voice, as the subtitles would.
+        // A transcript without speakers still names the one voice, as the subtitles would; a
+        // file with named speakers gives speech of no one a name of its own.
         let who = match r.speaker {
             Some(s) => speaker_name(doc, layout, s),
-            None => speaker_label("1", &layout.speaker_names),
+            None if doc.speakers.is_empty() => speaker_label("1", &layout.speaker_names),
+            None => "Unknown".to_string(),
         };
-        let row = [(n + 1).to_string(), tc(r.start, false)?, tc(r.end, true)?, who, dialogue(&r.heard, lang)];
+        // A cue is at least a frame long, so Resolve shows it.
+        let (from, to) =
+            (o.rate.frame(r.start, false), o.rate.frame(r.end, true).max(o.rate.frame(r.start, false) + 1));
+        let row = [(n + 1).to_string(), tc(from)?, tc(to)?, who, dialogue(&r.heard, lang)];
         out.push_str(&row.iter().map(|f| quote(f)).collect::<Vec<_>>().join(","));
         out.push_str("\r\n");
     }
@@ -344,7 +362,7 @@ mod tests {
         let at = |s: &str, rate| Timecode::parse(s).and_then(|t| t.frames_at(rate));
         assert_eq!(at("01:00:00:00", r25), Ok(90_000));
         assert_eq!(at("00:00:01:24", r25), Ok(49));
-        assert!(at("00:00:00:25", r25).unwrap_err().contains("pass --fps"));
+        assert!(at("00:00:00:25", r25).unwrap_err().contains("frames run 00 to 24"));
         assert!(Timecode::parse("00:61:00:00").is_err());
         assert!(Timecode::parse("24:00:00:00").is_err());
         assert!(Timecode::parse("+1:00:00:00").is_err());

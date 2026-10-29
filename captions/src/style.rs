@@ -174,6 +174,7 @@ pub(crate) fn speaker_name(doc: &Doc, layout: &Layout, speaker: &str) -> String 
         .iter()
         .find(|s| s.id == speaker)
         .and_then(|s| s.name.clone())
+        .filter(|n| !n.trim().is_empty())
         .unwrap_or_else(|| speaker_label(speaker, &layout.speaker_names))
 }
 

@@ -35,7 +35,7 @@ pub enum Format {
 }
 
 impl Format {
-    /// Subtitles: a file of them with no cue is empty, not written.
+    /// Subtitles and cue lists: a file of them with no cue is empty, not written.
     fn has_cues(self) -> bool {
         matches!(self, Format::Srt | Format::Vtt | Format::Ass | Format::Adr)
     }
@@ -337,6 +337,9 @@ pub fn write_outputs(
             }
             Format::Capt => (doc.write(), 0),
         };
+        if n == 0 && *format == Format::Adr {
+            bail!("nothing to write in {}: no speech and no sound of a speaker for an ADR cue list", path.display());
+        }
         if n == 0 && format.has_cues() {
             bail!(
                 "nothing to write in {}: no words, and --sdh adds sounds only to .srt, .vtt and .ass",
