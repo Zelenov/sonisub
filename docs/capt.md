@@ -2,7 +2,7 @@
 
 CAPT is a transcript as a small text file: pieces of words with their times, words, cut points,
 sentences, speakers, languages and confidence. sonisub writes it (`-t capt`) and can make the other
-formats from it (`sonisub render clip.capt -t srt,vtt,ass,sbv,lrc,transcript,premiere`). The `captions` crate reads and
+formats from it (`sonisub render clip.capt -t srt,vtt,ass,sbv,lrc,transcript,ttml,premiere`). The `captions` crate reads and
 writes it (`captions::capt`).
 
 ```
@@ -170,6 +170,7 @@ file it writes.
 | SBV | | | | | |
 | LRC | | | | | |
 | Transcript (`.txt`) | | | | `[whispering]` | the speaker's in their paragraph; another's or no one's after the sentence it falls in |
+| TTML / IMSC | `<span>` | `<span xml:lang>` | a region; a rectangle exactly (it grows if its text needs more lines) | | |
 | Premiere | | | | | |
 
 Only the transcript shows sounds and voices; `alt` is kept in the file but no output shows it.

@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<tt xmlns="http://www.w3.org/ns/ttml" xmlns:tts="http://www.w3.org/ns/ttml#styling" xmlns:ttm="http://www.w3.org/ns/ttml#metadata" xmlns:ttp="http://www.w3.org/ns/ttml#parameter" ttp:timeBase="media" ttp:contentProfiles="http://www.w3.org/ns/ttml/profile/imsc1.1/text" ttp:cellResolution="36 20" tts:extent="1920px 1080px" xml:lang="en">
+  <head>
+    <metadata>
+      <ttm:title>Marks</ttm:title>
+      <ttm:agent xml:id="speaker_1" type="person"><ttm:name type="full">Anna</ttm:name></ttm:agent>
+      <ttm:agent xml:id="speaker_2" type="person"><ttm:name type="full">Boris</ttm:name></ttm:agent>
+    </metadata>
+    <layout>
+      <region xml:id="bottom" tts:origin="10% 75%" tts:extent="80% 20%" tts:displayAlign="after" tts:textAlign="center"/>
+      <region xml:id="top" tts:origin="10% 5%" tts:extent="80% 20%" tts:displayAlign="before" tts:textAlign="center"/>
+      <region xml:id="middle" tts:origin="10% 40%" tts:extent="80% 20%" tts:displayAlign="center" tts:textAlign="center"/>
+      <region xml:id="r1" tts:origin="5% 5%" tts:extent="40% 20%" tts:displayAlign="before" tts:textAlign="center"/>
+    </layout>
+  </head>
+  <body tts:color="white" tts:textOutline="black 0.05c" tts:fontFamily="proportionalSansSerif" tts:lineHeight="125%">
+    <div>
+      <p begin="00:00:01.000" end="00:00:03.000" region="bottom" ttm:agent="speaker_1">Anna: So I read <span tts:fontStyle="italic">War and Peace</span> twice.</p>
+      <p begin="00:00:05.500" end="00:00:08.600" region="bottom" ttm:agent="speaker_2">Boris: <span xml:lang="ru">Короче, этот</span> deployment <span xml:lang="ru">упал и мы сделали</span> rollback.</p>
+      <p begin="00:00:10.000" end="00:00:11.800" region="top" ttm:agent="speaker_1">Anna: Listen to me, please Dr.</p>
+      <p begin="00:00:11.900" end="00:00:12.400" region="top" ttm:agent="speaker_1">Who.</p>
+      <p begin="00:00:15.000" end="00:00:16.200" region="r1" ttm:agent="speaker_2">Boris: This sits in a box.</p>
+    </div>
+  </body>
+</tt>

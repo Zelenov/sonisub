@@ -38,12 +38,14 @@ pub enum Format {
     /// `text`, `txt`).
     #[cfg_attr(feature = "cli", value(aliases = ["text", "txt"]))]
     Transcript,
+    /// TTML / IMSC 1.1 Text: speakers, places, italic and languages: `clip.ttml`.
+    Ttml,
 }
 
 impl Format {
     /// Subtitles: a file of them with no cue is empty, not written.
     fn has_cues(self) -> bool {
-        matches!(self, Format::Srt | Format::Vtt | Format::Ass | Format::Sbv | Format::Lrc)
+        matches!(self, Format::Srt | Format::Vtt | Format::Ass | Format::Sbv | Format::Lrc | Format::Ttml)
     }
 
     /// Where this format goes for the output base path (`clip.srt` -> `clip.premiere.json`).
@@ -57,6 +59,7 @@ impl Format {
             Format::Sbv => output.with_extension("sbv"),
             Format::Lrc => output.with_extension("lrc"),
             Format::Transcript => output.with_extension("txt"),
+            Format::Ttml => output.with_extension("ttml"),
         }
     }
 }
@@ -323,6 +326,7 @@ pub fn write_outputs(
             Format::Sbv => captions::sbv::build(cue_words, layout),
             Format::Lrc => captions::lrc::build(cue_words, layout),
             Format::Transcript => (captions::transcript::build(doc, layout, &labels), 0),
+            Format::Ttml => captions::ttml::build(doc, layout),
             Format::Premiere => {
                 let t = captions::premiere::build(words, layout, default_language, seed)
                     .ok_or_else(|| anyhow!("no words to write"))?;
@@ -483,6 +487,7 @@ pub fn output_base(path: &Path) -> PathBuf {
         ".sbv",
         ".lrc",
         ".txt",
+        ".ttml",
         ".json",
     ]
     .iter()

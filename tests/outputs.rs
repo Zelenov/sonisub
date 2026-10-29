@@ -8,7 +8,7 @@
 mod common;
 
 use sonisub::captions::capt::Doc;
-use sonisub::captions::{Layout, ass, lrc, sbv, srt, transcript, vtt};
+use sonisub::captions::{Layout, ass, lrc, sbv, srt, transcript, ttml, vtt};
 
 fn doc(name: &str) -> Doc {
     Doc::parse(&common::golden(&format!("{name}.capt"))).unwrap()
@@ -53,6 +53,14 @@ fn transcript_of_both_fixtures() {
     for name in ["dialog", "marks"] {
         let d = doc(name);
         check(name, "txt", &transcript::build(&d, &layout(&d), "en"));
+    }
+}
+
+#[test]
+fn ttml_of_both_fixtures() {
+    for name in ["dialog", "marks"] {
+        let d = doc(name);
+        check(name, "ttml", &ttml::build(&d, &layout(&d)).0);
     }
 }
 

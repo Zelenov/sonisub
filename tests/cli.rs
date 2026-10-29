@@ -271,3 +271,15 @@ fn a_transcript_takes_labels_and_a_file_of_sounds_only() {
 "
     );
 }
+#[test]
+fn render_writes_ttml() {
+    let dir = tempfile::tempdir().unwrap();
+    let capt = dir.path().join("marks.capt");
+    std::fs::copy(common::fixture("marks.capt"), &capt).unwrap();
+    let out = sonisub(&["render".as_ref(), capt.as_os_str(), "-t".as_ref(), "ttml".as_ref(), "-s".as_ref()])
+        .output()
+        .unwrap();
+    assert!(out.status.success(), "{}", plain(&out));
+    let written = std::fs::read_to_string(dir.path().join("marks.ttml")).unwrap();
+    assert_eq!(common::normalize(&written), common::golden("marks.ttml"));
+}

@@ -10,6 +10,7 @@
 //! - [`lrc`] writes Enhanced LRC, a time before every word of the same cues.
 //! - [`transcript`] writes a plain text transcript from a CAPT file, a paragraph per turn, sounds and
 //!   voices as labels from [`labels`].
+//! - [`ttml`] writes TTML / IMSC 1.1 Text from a CAPT file.
 
 use serde::{Deserialize, Serialize};
 
@@ -23,6 +24,7 @@ pub mod sbv;
 pub mod srt;
 mod style;
 pub mod transcript;
+pub mod ttml;
 pub mod vtt;
 
 pub use cues::{Cue, Layout};

@@ -4,7 +4,8 @@
 - `-t lrc` writes Enhanced LRC (`clip.lrc`): a line per cue, a time before every word, for karaoke players and music apps.
 - `-t transcript` (also `-t text`, `-t txt`) writes a plain text transcript (`clip.txt`): a paragraph per speaker turn with the name and the time, cut after a pause of over 5 s, at the first sentence end after a minute, or after two minutes without one; whole sentences, so cross-talk and other people's sounds, and sounds of no one, come after the sentence they fall in; the speaker's own sounds in their paragraph, voices as labels, in English or Russian (`--labels en|ru`). Sounds and voices come from a CAPT file (Soniox reports none); a file of sounds only works too.
 - Subtitles from a CAPT file follow what the file says: they cut at its cut points (a ` / ` moved by hand moves the cut), end sentences where `sentence:` says, show `style:italic` in italic (SRT, WebVTT, ASS), mark words in another language (WebVTT), and put a subtitle where `pos:` says (top, middle, a point or a rectangle).
-- Library: `captions::sbv`, `captions::lrc`, `captions::transcript::build`, `captions::labels` (sound and voice labels, en/ru), `Doc::sounds()`.
+- Library: `captions::sbv`, `captions::lrc`, `captions::transcript::build`, `captions::labels` (sound and voice labels, en/ru), `captions::ttml::build`, `Doc::sounds()`.
+- `-t ttml` writes TTML / IMSC 1.1 Text (`clip.ttml`): speakers, places (regions, a rectangle exactly), italic, languages.
 
 ## Changed
 - The message after a file counts the cues of the first subtitles written, not the most of any format.
