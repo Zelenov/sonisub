@@ -1,9 +1,8 @@
 # 0.9.1
 ## Changed
-- `-t ytt`: six or more lines at once each get a window of their own (four and more used to be drawn on top of each other); a line lasts until its last word shows; control characters XML forbids are left out, so YouTube does not refuse the file.
+- `-t ytt`: up to nine lines at once each get a window of their own (from four on they used to share one and be drawn on top of each other); a line lasts until its last word shows; control characters XML forbids are left out of `.ytt` and `.ttml`, so YouTube and strict importers do not refuse the file. The README now says `.ytt` has not yet been checked on YouTube itself (#21).
 - `-t adr`: when a long cue is cut, each row keeps its own Out (a speaker's sound no longer stretched the first row over the second); a sound heard alone stays within 8 s; a long sound and the same speaker's speech during it no longer overlap.
-- `--fps` and `--timeline-start` without `-t adr` are refused instead of ignored; the run says the rate and start an ADR list is written at (`ADR at 25 fps from 01:00:00:00`).
-- README: the YTT format is not yet checked on YouTube itself (#21); the ADR columns to check in Resolve's import preview.
+- `--fps` and `--timeline-start` without `-t adr` are now an error (they used to be ignored), so a script that passes them for every format must pass them only with `-t adr`. The run says the rate and start an ADR list is written at (`ADR at 25 fps from 01:00:00:00`).
 - captions 0.3.1.
 
 # 0.9.0

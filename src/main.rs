@@ -86,9 +86,11 @@ fn run(args: &RunArgs) -> Result<ExitCode> {
     }
 
     args.seg.check(&args.formats)?;
-    if args.formats.contains(&job::Format::Adr) && !args.quiet {
-        let o = args.seg.adr();
-        eprintln!("ADR cue lists at {} fps from {}", o.rate, o.start);
+    // Said once before the batch: every file's list is timed the same.
+    if let Some(timing) = args.seg.adr_timing(&args.formats)
+        && !args.quiet
+    {
+        eprintln!("{timing}");
     }
     let mut opts = args.job_options();
     let scanning = spinner(format!("reading {} file(s)...", items.len()), folder_mode && !args.quiet);
@@ -482,7 +484,11 @@ fn render(args: &RenderArgs) -> Result<()> {
         job::write_outputs(&targets, &cue_words, &words, &doc, &layout, &outputs, language.as_deref(), &seed)?;
     let what = if cues > 0 { format!("{cues} cues") } else { "transcript".into() };
     let paths: Vec<String> = files.iter().map(|f| f.display().to_string()).collect();
-    eprintln!("✓ {name} — {what} -> {}{}", paths.join(", "), args.seg.adr_note(&args.formats));
+    // Only when an ADR list was written: a skipped one keeps the timing it was made with.
+    let wrote_adr = files.iter().any(|f| f.to_string_lossy().ends_with(".adr.csv"));
+    let timing =
+        args.seg.adr_timing(&args.formats).filter(|_| wrote_adr).map(|t| format!(" ({t})")).unwrap_or_default();
+    eprintln!("✓ {name} — {what} -> {}{timing}", paths.join(", "));
     Ok(())
 }
 

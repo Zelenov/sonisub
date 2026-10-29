@@ -389,9 +389,12 @@ pub fn build(doc: &Doc, layout: &Layout, o: &Options, lang: &str) -> Result<(Str
             None if doc.speakers.is_empty() => speaker_label("1", &layout.speaker_names),
             None => labels::unknown_speaker(lang),
         };
-        // A cue is at least a frame long, so Resolve shows it.
+        // A cue is at least a frame long, so Resolve shows it, and ends by the frame the same
+        // actor's next row starts on (Out is rounded up, In down: a cut between them in
+        // milliseconds would still share a frame).
         let from = o.rate.frame(r.start, false);
-        let to = o.rate.frame(r.end, true).max(from + 1);
+        let next = rows[n + 1..].iter().find(|x| x.speaker == r.speaker).map(|x| o.rate.frame(x.start, false));
+        let to = o.rate.frame(r.end, true).min(next.unwrap_or(u64::MAX)).max(from + 1);
         let row = [(n + 1).to_string(), tc(from)?, tc(to)?, who, dialogue(&r.heard, lang)];
         out.push_str(&row.iter().map(|f| quote(f)).collect::<Vec<_>>().join(","));
         out.push_str("\r\n");

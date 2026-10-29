@@ -240,13 +240,13 @@ impl SegArgs {
     pub fn outputs(&self) -> job::Outputs {
         job::Outputs {
             ass: ass::Options { karaoke: self.karaoke, ..Default::default() },
-            adr: self.adr(),
+            adr: self.adr_options(),
             labels: self.labels.clone(),
         }
     }
 
     /// The ADR list's rate and start: the ones given, else 25 fps from 01:00:00:00.
-    pub fn adr(&self) -> captions::adr::Options {
+    pub fn adr_options(&self) -> captions::adr::Options {
         let default = captions::adr::Options::default();
         captions::adr::Options {
             rate: self.fps.unwrap_or(default.rate),
@@ -255,14 +255,12 @@ impl SegArgs {
         }
     }
 
-    /// What an ADR list is timed by, for the result line: ` (ADR at 25 fps from 01:00:00:00)`, or
-    /// nothing without `-t adr`.
-    pub fn adr_note(&self, formats: &[Format]) -> String {
-        if !formats.contains(&Format::Adr) {
-            return String::new();
-        }
-        let o = self.adr();
-        format!(" (ADR at {} fps from {})", o.rate, o.start)
+    /// What an ADR list is timed by, `ADR at 25 fps from 01:00:00:00`, with `-t adr`.
+    pub fn adr_timing(&self, formats: &[Format]) -> Option<String> {
+        formats.contains(&Format::Adr).then(|| {
+            let o = self.adr_options();
+            format!("ADR at {} fps from {}", o.rate, o.start)
+        })
     }
 
     /// Options that make no sense for `formats`, said instead of ignored.
@@ -275,7 +273,7 @@ impl SegArgs {
             anyhow::bail!("--fps and --timeline-start need -t adr: nothing else is timed by frames");
         }
         if adr {
-            let o = self.adr();
+            let o = self.adr_options();
             o.start
                 .frames_at(o.rate)
                 .map_err(|e| anyhow::anyhow!("--timeline-start: {e}; pass --fps to match the timeline"))?;

@@ -154,7 +154,7 @@ line, add `-w --max-line 42`.
 List): a row per breath of speech, joined per speaker, with the speaker's own sounds and voices as directions
 (`--labels en|ru`); `--fps 23.976|24|25|29.97|30|50|59.94|60` (default 25) and `--timeline-start 01:00:00:00`
 (where the clip starts on the timeline, non-drop frame) match the timeline. The rows are Cue ID, In, Out, Character,
-Dialogue, with no header: check that Resolve's import preview reads the columns so.
+Dialogue, with no header: in Resolve's import preview, check that the columns come in in that order.
 
 `-t ytt` writes YTT, YouTube's own timed text (`clip.ytt`, also called srv3): a time for every word, plus places and
 italic, written as YTSubConverter writes srv3 so YouTube can show the words one by one. Upload it in YouTube Studio as
