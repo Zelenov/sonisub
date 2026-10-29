@@ -185,3 +185,18 @@ fn a_word_with_a_space_keeps_the_marks_of_its_cue() {
         ass::build(&doc.to_words(), &Layout::default(), &ass::Options { karaoke: true, ..Default::default() }).0;
     assert!(karaoke.contains(r"{\i1}{\k40}love {\i0}{\k70}New York {\k20}a"), "{karaoke}");
 }
+
+#[test]
+fn lrc_glues_words_keeps_long_times_and_writes_nothing_for_nothing() {
+    let mut words = sentence("don’t stop.", 0, None);
+    words[1].glued = true;
+    words[1].text = "’t".into();
+    words[0].text = "don".into();
+    let (text, n) = captions::lrc::build(&words, &Layout::default());
+    assert_eq!(n, 1);
+    assert!(text.contains("<00:00.00>don<00:00.30>’t"), "{text}");
+    // Minutes past 99 keep their digits.
+    let late = vec![word("Late.", 6_000_000, 6_000_500, None)];
+    assert!(captions::lrc::build(&late, &Layout::default()).0.starts_with("[100:00.00]"));
+    assert_eq!(captions::lrc::build(&[], &Layout::default()), (String::new(), 0));
+}

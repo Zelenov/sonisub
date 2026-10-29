@@ -37,7 +37,7 @@ pub enum Format {
 impl Format {
     /// Subtitles: a file of them with no cue is empty, not written.
     fn has_cues(self) -> bool {
-        matches!(self, Format::Srt | Format::Vtt | Format::Ass)
+        matches!(self, Format::Srt | Format::Vtt | Format::Ass | Format::Lrc)
     }
 
     /// Where this format goes for the output base path (`clip.srt` -> `clip.premiere.json`).
