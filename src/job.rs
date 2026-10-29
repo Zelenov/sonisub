@@ -42,12 +42,24 @@ pub enum Format {
     Ttml,
     /// A DaVinci Resolve Fairlight ADR cue list: `clip.adr.csv`.
     Adr,
+    /// YTT, YouTube's own timed text (srv3): a time for every word, places, italic: `clip.ytt`.
+    Ytt,
 }
 
 impl Format {
     /// Subtitles and cue lists: a file of them with no cue is empty, not written.
     fn has_cues(self) -> bool {
-        matches!(self, Format::Srt | Format::Vtt | Format::Ass | Format::Sbv | Format::Lrc | Format::Ttml | Format::Adr)
+        matches!(
+            self,
+            Format::Srt
+                | Format::Vtt
+                | Format::Ass
+                | Format::Sbv
+                | Format::Lrc
+                | Format::Ttml
+                | Format::Adr
+                | Format::Ytt
+        )
     }
 
     /// Where this format goes for the output base path (`clip.srt` -> `clip.premiere.json`).
@@ -63,6 +75,7 @@ impl Format {
             Format::Transcript => output.with_extension("txt"),
             Format::Ttml => output.with_extension("ttml"),
             Format::Adr => output.with_extension("adr.csv"),
+            Format::Ytt => output.with_extension("ytt"),
         }
     }
 }
@@ -333,6 +346,7 @@ pub fn write_outputs(
             Format::Transcript => (captions::transcript::build(doc, layout, &labels), 0),
             Format::Ttml => captions::ttml::build(doc, layout),
             Format::Adr => captions::adr::build(doc, layout, &outputs.adr, &labels).map_err(|e| anyhow!(e))?,
+            Format::Ytt => captions::ytt::build(cue_words, layout),
             Format::Premiere => {
                 let t = captions::premiere::build(words, layout, default_language, seed)
                     .ok_or_else(|| anyhow!("no words to write"))?;
@@ -500,6 +514,7 @@ pub fn output_base(path: &Path) -> PathBuf {
         ".txt",
         ".ttml",
         ".adr.csv",
+        ".ytt",
         ".json",
     ]
     .iter()

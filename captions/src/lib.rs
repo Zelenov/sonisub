@@ -13,6 +13,7 @@
 //! - [`adr`] writes a DaVinci Resolve Fairlight ADR cue list from a CAPT file, sounds and voices as
 //!   directions from [`labels`].
 //! - [`ttml`] writes TTML / IMSC 1.1 Text from a CAPT file.
+//! - [`ytt`] writes YouTube's YTT (srv3), a time for every word.
 
 use serde::{Deserialize, Serialize};
 
@@ -29,6 +30,7 @@ mod style;
 pub mod transcript;
 pub mod ttml;
 pub mod vtt;
+pub mod ytt;
 
 pub use cues::{Cue, Layout};
 

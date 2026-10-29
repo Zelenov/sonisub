@@ -46,5 +46,6 @@ let (ass, _) = ass::build(&words, &layout, &ass::Options { karaoke: true, ..Defa
 - `ttml`: TTML / IMSC 1.1 Text from a CAPT file.
 - `adr`: a DaVinci Resolve Fairlight ADR cue list from a CAPT file (`adr::Rate`, `adr::Timecode`); `labels`
   writes its sound and voice directions in English or Russian.
+- `ytt`: YouTube's YTT (srv3), a time for every word.
 
 MIT licensed.

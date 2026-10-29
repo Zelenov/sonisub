@@ -100,6 +100,64 @@ pub(crate) fn word_pieces(w: &crate::Word, piece: &str) -> Option<usize> {
     (own.first().map(|p| p.0) == Some(piece)).then(|| own.len() - 1)
 }
 
+/// What a piece of a cue's line is, for the writers that time every word (ASS karaoke, YTT).
+pub(crate) enum StepKind<'a> {
+    /// Part of the speaker label in front.
+    Prefix,
+    /// The first piece of `cue.words[index]`.
+    Word { index: usize, word: &'a crate::Word },
+    /// A later piece of the same word (`York` of `New York`).
+    More,
+}
+
+/// What comes before a piece of a cue's line.
+#[derive(Clone, Copy)]
+pub(crate) enum Gap {
+    None,
+    Space,
+    Line,
+}
+
+/// A piece of a cue's line, in order: what comes before it, its text, and what it is.
+pub(crate) struct Step<'a> {
+    pub gap: Gap,
+    pub text: &'a str,
+    pub kind: StepKind<'a>,
+}
+
+/// The cue's lines as steps, every word found where it is shown; `None` if the lines do not split
+/// back into its words.
+pub(crate) fn steps(cue: &Cue) -> Option<Vec<Step<'_>>> {
+    let mut words = cue.words.iter().enumerate();
+    let mut prefix = if cue.prefix.is_empty() { 0 } else { pieces(cue.prefix.trim_end()).len() };
+    let mut rest = 0;
+    let mut out = Vec::new();
+    for (l, line) in cue.lines.iter().enumerate() {
+        for (i, (text, glued)) in pieces(line).into_iter().enumerate() {
+            let gap = if i == 0 && l > 0 {
+                Gap::Line
+            } else if i > 0 && !glued {
+                Gap::Space
+            } else {
+                Gap::None
+            };
+            let kind = if prefix > 0 {
+                prefix -= 1;
+                StepKind::Prefix
+            } else if rest > 0 {
+                rest -= 1;
+                StepKind::More
+            } else {
+                let (index, word) = words.next()?;
+                rest = word_pieces(word, text)?;
+                StepKind::Word { index, word }
+            };
+            out.push(Step { gap, text, kind });
+        }
+    }
+    words.next().is_none().then_some(out)
+}
+
 /// The place of a cue: the first word's (a cue never mixes places).
 pub(crate) fn place(cue: &Cue) -> Option<Pos> {
     cue.words.first().and_then(|w| w.marks.pos)

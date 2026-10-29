@@ -3,7 +3,7 @@
 
 use std::collections::BTreeMap;
 
-use captions::{Layout, Word, ass, cues, sbv, srt, vtt};
+use captions::{Layout, Word, ass, cues, sbv, srt, vtt, ytt};
 
 fn word(text: &str, start: u64, end: u64, speaker: Option<&str>) -> Word {
     Word {
@@ -61,6 +61,7 @@ fn every_format_has_the_same_cues() {
     assert_eq!(vtt::build(&words, &layout).1, n);
     assert_eq!(ass::build(&words, &layout, &ass::Options::default()).1, n);
     assert_eq!(sbv::build(&words, &layout).1, n);
+    assert_eq!(ytt::build(&words, &layout).1, n);
 }
 
 #[test]
@@ -712,4 +713,80 @@ fn a_sound_belongs_to_the_cue_whose_words_it_is_heard_among() {
     let rows = adr(&file);
     let first_row = rows.iter().find(|r| r.contains("w0")).unwrap();
     assert!(!first_row.contains("[coughs]"), "{rows:?}");
+}
+fn ytt_of(file: &str) -> String {
+    let doc = captions::capt::Doc::parse(file).unwrap();
+    let layout = Layout { speaker_labels: true, by_speaker: true, ..Layout::default() };
+    ytt::build(&doc.to_words(), &layout).0
+}
+
+#[test]
+fn ytt_escapes_text_and_keeps_a_word_with_a_space_in_one_section() {
+    let ytt = ytt_of(
+        "CAPT 1\n\n00:00:01.000 --> 00:00:03.000\n{0}Tom{20} {30}&{40} {50}<Jerry>{80} {90}in{100} {110}New\\ York.{150}\n",
+    );
+    assert!(ytt.contains("<s>Tom</s>\u{200b}<s t=\"300\"> &amp;</s><s t=\"500\"> &lt;Jerry&gt;</s>"), "{ytt}");
+    assert!(ytt.contains(r#"<s t="1100"> New York.</s>"#), "{ytt}");
+}
+
+#[test]
+fn ytt_times_a_dashed_word_and_puts_the_speaker_on_the_first_word() {
+    let ytt = ytt_of(
+        "CAPT 1\n\n00:00:01.000 --> 00:00:02.000 speaker:1\n{0}Well{20} {30}finally—and{100}\n\n\
+                      00:00:02.500 --> 00:00:03.000 speaker:2\n{0}Yes.{50}\n",
+    );
+    // The dash splits the word: its two parts, each with its own time (by characters), the second
+    // glued on.
+    assert!(
+        ytt.contains("<s>Speaker 1:</s>\u{200b}<s t=\"1\"> Well</s><s t=\"300\"> finally—</s><s t=\"809\">and</s>"),
+        "{ytt}"
+    );
+}
+
+#[test]
+fn a_ytt_line_starts_with_an_empty_section_and_never_at_zero() {
+    let ytt =
+        ytt_of("CAPT 1\n\n00:00:00.000 --> 00:00:01.000\n{0}Sing{20} {30}a{40} {50}song.{80}\n{0..80} style:italic\n");
+    // The server drops the first section's pen: the italic words come after an empty one.
+    assert!(
+        ytt.contains("<p t=\"1\" d=\"799\" wp=\"1\" ws=\"1\"><s p=\"2\">Sing</s>\u{200b}<s p=\"2\" t=\"299\"> a</s>"),
+        "{ytt}"
+    );
+    // A line of one italic word: the pen on the line.
+    let one = ytt_of("CAPT 1\n\n00:00:01.000 --> 00:00:01.500\n{0}Who?{50}\n{0..50} style:italic\n");
+    assert!(one.contains("<p t=\"1000\" d=\"500\" wp=\"1\" ws=\"1\" p=\"2\">Who?</p>"), "{one}");
+}
+
+#[test]
+fn a_ytt_line_during_speech_at_the_bottom_goes_to_the_top() {
+    let file = "CAPT 1\n\n00:00:01.000 --> 00:00:04.000 speaker:1\n{0}Hello{100} {110}there{200} {210}friend.{300}\n\n\
+                00:00:02.000 --> 00:00:03.000 speaker:2\n{0}Hi.{50}\n\n00:00:05.000 --> 00:00:06.000 speaker:2\n{0}Bye.{50}\n";
+    let ytt = ytt_of(file);
+    let top = ytt.lines().find(|l| l.contains(r#"ap="1""#)).unwrap();
+    let top_id = top.split("id=\"").nth(1).unwrap().split('"').next().unwrap();
+    assert!(ytt.contains(&format!("wp=\"{top_id}\" ws=\"1\"><s>Speaker 2:</s>")), "{ytt}");
+    // A line alone stays at the bottom.
+    assert!(ytt.contains(r#"wp="1" ws="1">Bye."#), "{ytt}");
+}
+
+#[test]
+fn ytt_lines_at_the_same_time_never_share_a_window() {
+    let file = "CAPT 1\n\n00:00:01.000 --> 00:00:04.000 speaker:1\n{0}Hello{100} {110}there{200} {210}friend.{300}\n\n\
+                00:00:01.500 --> 00:00:03.000 speaker:2\n{0}Hi.{50}\n\n00:00:02.000 --> 00:00:03.500 speaker:3\n{0}Hey.{50}\n";
+    let ytt = ytt_of(file);
+    let ps: Vec<(u64, u64, String)> = ytt
+        .lines()
+        .filter(|l| l.starts_with("<p "))
+        .map(|l| {
+            let attr = |n: &str| l.split(&format!("{n}=\"")).nth(1).unwrap().split('"').next().unwrap().to_string();
+            let t: u64 = attr("t").parse().unwrap();
+            (t, t + attr("d").parse::<u64>().unwrap(), attr("wp"))
+        })
+        .collect();
+    assert_eq!(ps.len(), 3, "{ytt}");
+    for (i, a) in ps.iter().enumerate() {
+        for b in &ps[i + 1..] {
+            assert!(!(a.2 == b.2 && a.0 < b.1 && b.0 < a.1), "{a:?} and {b:?} share a window\n{ytt}");
+        }
+    }
 }

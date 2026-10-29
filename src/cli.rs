@@ -87,8 +87,8 @@ pub struct RunArgs {
     /// clip.premiere.json), capt (the whole transcript as small text, clip.capt; `sonisub render` makes the other
     /// formats from it), sbv (YouTube's SBV, clip.sbv), lrc (Enhanced LRC, a time before every word, clip.lrc),
     /// transcript (plain text, a paragraph per speaker turn, clip.txt), ttml (TTML / IMSC 1.1 Text, clip.ttml), adr (a
-    /// DaVinci Resolve Fairlight ADR cue list, clip.adr.csv). Only missing files are written, so adding a format later
-    /// reuses the saved transcript for free.
+    /// DaVinci Resolve Fairlight ADR cue list, clip.adr.csv), ytt (YouTube's srv3, a time for every word, clip.ytt).
+    /// Only missing files are written, so adding a format later reuses the saved transcript for free.
     #[arg(short = 't', long = "format", value_enum, value_delimiter = ',', default_value = "srt")]
     pub formats: Vec<Format>,
 
@@ -266,7 +266,7 @@ pub struct RenderArgs {
     /// (start and end in milliseconds; speaker and language optional).
     pub input: PathBuf,
 
-    /// What to write, comma separated: srt, vtt, ass, premiere, capt, sbv, lrc, transcript, ttml, adr.
+    /// What to write, comma separated: srt, vtt, ass, premiere, capt, sbv, lrc, transcript, ttml, adr, ytt.
     #[arg(short = 't', long = "format", value_enum, value_delimiter = ',', default_value = "srt")]
     pub formats: Vec<Format>,
 

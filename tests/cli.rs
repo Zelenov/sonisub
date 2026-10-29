@@ -336,3 +336,14 @@ fn an_adr_list_takes_labels() {
     let csv = std::fs::read_to_string(dir.path().join("marks.adr.csv")).unwrap();
     assert!(csv.contains("(смеётся)"), "{csv}");
 }
+#[test]
+fn render_writes_ytt() {
+    let dir = tempfile::tempdir().unwrap();
+    let capt = dir.path().join("marks.capt");
+    std::fs::copy(common::fixture("marks.capt"), &capt).unwrap();
+    let out =
+        sonisub(&["render".as_ref(), capt.as_os_str(), "-t".as_ref(), "ytt".as_ref(), "-s".as_ref()]).output().unwrap();
+    assert!(out.status.success(), "{}", plain(&out));
+    let written = std::fs::read_to_string(dir.path().join("marks.ytt")).unwrap();
+    assert_eq!(common::normalize(&written), common::golden("marks.ytt"));
+}

@@ -2,7 +2,8 @@
 
 <img src="https://raw.githubusercontent.com/Zelenov/sonisub/main/docs/icon/sonisub-256.png" align="left" width="128" height="128" alt="sonisub icon">
 
-Generate subtitles (`.srt`, WebVTT, ASS, YouTube's SBV, LRC) and Premiere Pro transcripts for video and audio files with
+Generate subtitles (`.srt`, WebVTT, ASS, TTML, YouTube's SBV and YTT, LRC), plain text transcripts, Fairlight ADR cue lists and
+Premiere Pro transcripts for video and audio files with
 [Soniox](https://soniox.com) speech-to-text.
 One self-contained binary: no Python, no ffmpeg required.
 
@@ -67,6 +68,7 @@ sonisub clip.MP4 -t lrc                   # clip.lrc for karaoke players and mus
 sonisub clip.MP4 -t srt,transcript        # also clip.txt, a plain text transcript to read and search
 sonisub render clip.capt -t adr --fps 29.97  # a DaVinci Resolve Fairlight ADR cue list
 sonisub clip.MP4 -t srt,capt              # also clip.capt, the whole transcript as small text
+sonisub render clip.capt -t ytt           # YouTube: word by word, like its own captions
 sonisub render clip.capt -t vtt,premiere  # other formats from a CAPT file or saved words, no Soniox
 sonisub clip.MP4 --no-json                # don't keep clip.soniox.json
 sonisub clip.MP4 -u                       # no length limit: one cue per sentence
@@ -133,21 +135,29 @@ orange, violet, red, then repeating), black outline, bottom centre. Every line n
 you restyle or rename a person in one place. Without diarization all lines use the `Default` style. `--karaoke` adds word-by-word
 highlight (`\k`).
 
+## Other formats
+
 `-t sbv` writes YouTube's SBV (`clip.sbv`), the same cues as the `.srt`, for YouTube Studio's subtitle upload.
+
 `-t lrc` writes Enhanced LRC (`clip.lrc`): a line per cue with a time before every word, for karaoke players and music apps.
-## Plain text transcript
 
 `-t transcript` (or `-t text`, `-t txt`) writes a plain text transcript (`clip.txt`): a paragraph per speaker turn, headed by
 the name and the time, a new paragraph after a pause of over 5 s, at the first sentence end after a minute, or after two minutes
 without one; sounds and voices a CAPT file marks as labels in
 English or Russian (`--labels en|ru`; by default the transcript's language).
+
 `-t ttml` writes TTML / IMSC 1.1 Text (`clip.ttml`), what broadcasters and streaming services ask for: speakers as
 agents, places as regions (a rectangle exactly), italic and languages. For a delivery spec that counts characters a
 line, add `-w --max-line 42`.
+
 `-t adr` writes a DaVinci Resolve Fairlight ADR cue list (`clip.adr.csv`; Fairlight page > ADR > List > Import Cue
 List): a row per breath of speech, joined per speaker, with the speaker's own sounds and voices as directions
 (`--labels en|ru`); `--fps 23.976|24|25|29.97|30|50|59.94|60` and `--timeline-start 01:00:00:00` (where the clip
 starts on the timeline, non-drop frame) match the timeline.
+
+`-t ytt` writes YTT, YouTube's own timed text (`clip.ytt`, also called srv3): a time for every word, so YouTube can
+show an uploaded subtitle word by word like its own captions, plus places and italic. Upload it in YouTube Studio as
+a subtitle file.
 
 `sonisub render` makes the same files without Soniox: from a CAPT file (`-t capt` writes `clip.capt`, the whole
 transcript as small text you can read and edit, see [docs/capt.md](docs/capt.md)), or from words saved as JSON
@@ -208,7 +218,7 @@ Exit codes: `0` ok, `1` some files failed, `2` fatal (key/balance/usage), `130` 
 ### As a library
 
 ```toml
-sonisub = { version = "0.8", default-features = false }
+sonisub = { version = "0.9", default-features = false }
 ```
 
 Subtitle formats live in the [`captions`](captions/README.md) crate, re-exported as `sonisub::captions`:
