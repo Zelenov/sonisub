@@ -198,7 +198,7 @@ fn ytt_escapes_text_and_keeps_a_word_with_a_space_in_one_section() {
     let ytt = ytt_of(
         "CAPT 1\n\n00:00:01.000 --> 00:00:03.000\n{0}Tom{20} {30}&{40} {50}<Jerry>{80} {90}in{100} {110}New\\ York.{150}\n",
     );
-    assert!(ytt.contains(r#"<s t="0">Tom</s><s t="300"> &amp;</s><s t="500"> &lt;Jerry&gt;</s>"#), "{ytt}");
+    assert!(ytt.contains("<s>Tom</s>\u{200b}<s t=\"300\"> &amp;</s><s t=\"500\"> &lt;Jerry&gt;</s>"), "{ytt}");
     assert!(ytt.contains(r#"<s t="1100"> New York.</s>"#), "{ytt}");
 }
 
@@ -210,7 +210,10 @@ fn ytt_times_a_dashed_word_and_puts_the_speaker_on_the_first_word() {
     );
     // The dash splits the word: its two parts, each with its own time (by characters), the second
     // glued on.
-    assert!(ytt.contains(r#"<s t="0">Speaker 1: Well</s><s t="300"> finally—</s><s t="809">and</s>"#), "{ytt}");
+    assert!(
+        ytt.contains("<s>Speaker 1:</s>\u{200b}<s t=\"0\"> Well</s><s t=\"300\"> finally—</s><s t=\"809\">and</s>"),
+        "{ytt}"
+    );
 }
 
 #[test]
@@ -218,5 +221,11 @@ fn a_ytt_line_starts_with_an_empty_section_and_never_at_zero() {
     let ytt =
         ytt_of("CAPT 1\n\n00:00:00.000 --> 00:00:01.000\n{0}Sing{20} {30}a{40} {50}song.{80}\n{0..80} style:italic\n");
     // The server drops the first section's pen: the italic words come after an empty one.
-    assert!(ytt.contains("<p t=\"1\" d=\"799\" wp=\"0\" ws=\"0\"><s>\u{200b}</s><s p=\"2\" t=\"0\">Sing</s>"), "{ytt}");
+    assert!(
+        ytt.contains("<p t=\"1\" d=\"799\" wp=\"0\" ws=\"0\"><s p=\"2\">Sing</s>\u{200b}<s p=\"2\" t=\"299\"> a</s>"),
+        "{ytt}"
+    );
+    // A line of one italic word: the pen on the line.
+    let one = ytt_of("CAPT 1\n\n00:00:01.000 --> 00:00:01.500\n{0}Who?{50}\n{0..50} style:italic\n");
+    assert!(one.contains("<p t=\"1000\" d=\"500\" wp=\"0\" ws=\"0\" p=\"2\">Who?</p>"), "{one}");
 }

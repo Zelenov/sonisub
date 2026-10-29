@@ -1,4 +1,4 @@
-//! A CAPT file -> subtitles for the deaf and hard of hearing (SDH), in SRT, WebVTT and ASS: the
+//! A CAPT file -> subtitles for the deaf and hard of hearing (SDH), in SRT, WebVTT, ASS and YTT: the
 //! same cues as [`crate::srt`], [`crate::vtt`] and [`crate::ass`], with a label before words said
 //! in a voice of their own (`[whispering]`) and a subtitle for every sound (`[phone ringing]`;
 //! `Anna: [laughs]` when the layout labels speakers); YTT too. Labels come from [`crate::labels`]

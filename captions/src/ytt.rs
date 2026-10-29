@@ -12,7 +12,8 @@
 //!   least 1: the Android app drops the place of, or the whole, subtitle at 0) and an `<s t>` per
 //!   word, `t` in milliseconds after the subtitle's start, so YouTube shows the words one by one
 //!   as they are said; a line break is a newline in the text. The server takes the pen off a
-//!   line's first section, so a line of several starts with an empty one (a zero-width space).
+//!   line's first section unless the line has text outside any section, so a zero-width space
+//!   follows the first section; a line of one section has its pen on the `<p>`.
 //!
 //! Places follow the CAPT file; on a vertical frame the bottom and the top stay clear of the
 //! Shorts buttons, as in the other writers. [`crate::sdh::ytt`] adds sounds and voices.
@@ -51,38 +52,34 @@ struct Run {
     text: String,
 }
 
-/// The cue as runs, a run per word (the speaker label and a voice label go with the word after
-/// them); `None` if the lines do not split back into the cue's words.
-fn runs(cue: &Cue, voice: Option<&dyn Fn(&str) -> String>) -> Option<Vec<Run>> {
+/// The cue as runs from `t0`: a run per word, the speaker label and a voice label each a run of
+/// their own (never italic, as in the other formats); `None` if the lines do not split back into
+/// the cue's words.
+fn runs(cue: &Cue, voice: Option<&dyn Fn(&str) -> String>, t0: u64) -> Option<Vec<Run>> {
     let mut out: Vec<Run> = Vec::new();
-    let mut pending = String::new();
+    let mut prefix = String::new();
     for step in style::steps(cue)? {
-        let gap = if step.new_line {
-            "\n"
-        } else if step.space {
-            " "
-        } else {
-            ""
-        };
         match step.kind {
             StepKind::Prefix => {
-                pending.push_str(gap);
-                pending.push_str(step.text);
+                prefix.push_str(step.gap);
+                prefix.push_str(step.text);
             }
             StepKind::More => {
                 let run = out.last_mut()?;
-                run.text.push_str(gap);
+                run.text.push_str(step.gap);
                 run.text.push_str(step.text);
             }
             StepKind::Word { word, voice: starts, .. } => {
-                let mut text = std::mem::take(&mut pending);
-                text.push_str(gap);
-                if let (Some(f), Some(v)) = (voice, starts) {
-                    text.push_str(&f(v));
-                    text.push(' ');
+                let t = word.start.saturating_sub(t0);
+                let mut gap = step.gap;
+                if !prefix.is_empty() {
+                    out.push(Run { t, italic: false, text: std::mem::take(&mut prefix) });
                 }
-                text.push_str(step.text);
-                out.push(Run { t: word.start.saturating_sub(cue.start), italic: word.marks.italic, text });
+                if let (Some(f), Some(v)) = (voice, starts) {
+                    out.push(Run { t, italic: false, text: format!("{gap}{} ", f(v)) });
+                    gap = "";
+                }
+                out.push(Run { t, italic: word.marks.italic, text: format!("{gap}{}", step.text) });
             }
         }
     }
@@ -110,36 +107,39 @@ pub(crate) fn write(
             windows.len() - 1
         }
     };
-    // `<p>` from `start` to `end`: at 1 ms at the earliest, as the Android app needs.
-    let p = |start: u64, end: u64, wp: usize, body: &str| {
-        let t = start.max(1);
-        format!("<p t=\"{t}\" d=\"{}\" wp=\"{wp}\" ws=\"0\">{body}</p>\n", end.saturating_sub(t).max(1))
+    // `<p>` from `t0` (the start, at 1 ms at the earliest, as the Android app needs) to `end`, with
+    // a pen for the whole line or none.
+    let p = |t0: u64, end: u64, wp: usize, pen: &str, body: &str| {
+        format!("<p t=\"{t0}\" d=\"{}\" wp=\"{wp}\" ws=\"0\"{pen}>{body}</p>\n", end.saturating_sub(t0).max(1))
     };
+    let pen = |italic: bool| if italic { " p=\"2\"" } else { "" };
     let mut items: Vec<(u64, String)> = Vec::new();
     for c in cues {
         let id = wp(window(style::place(c), layout));
-        let body: String = match runs(c, voice) {
-            Some(runs) if runs.len() > 1 => {
-                // The server drops the pen of a line's first section: let that be an empty one.
-                let first = "<s>\u{200b}</s>".to_string();
-                let shift = c.start.max(1) - c.start;
-                std::iter::once(first)
-                    .chain(runs.iter().map(|r| {
-                        let pen = if r.italic { " p=\"2\"" } else { "" };
-                        format!("<s{pen} t=\"{}\">{}</s>", r.t.saturating_sub(shift), xml(&r.text))
-                    }))
-                    .collect()
+        let t0 = c.start.max(1);
+        let line = match runs(c, voice, t0) {
+            // One section: its pen on the line, as YTSubConverter writes it.
+            Some(runs) if runs.len() == 1 => p(t0, c.end, id, pen(runs[0].italic), &xml(&runs[0].text)),
+            // The server drops the first section's pen unless the line has text outside any
+            // section: a zero-width space after the first one.
+            Some(runs) => {
+                let body: String = runs
+                    .iter()
+                    .enumerate()
+                    .map(|(i, r)| {
+                        let t = if i == 0 { String::new() } else { format!(" t=\"{}\"", r.t) };
+                        let after = if i == 0 { "\u{200b}" } else { "" };
+                        format!("<s{}{t}>{}</s>{after}", pen(r.italic), xml(&r.text))
+                    })
+                    .collect();
+                p(t0, c.end, id, "", &body)
             }
-            Some(runs) => runs
-                .iter()
-                .map(|r| format!("<s{}>{}</s>", if r.italic { " p=\"2\"" } else { "" }, xml(&r.text)))
-                .collect(),
-            None => xml(&c.text()),
+            None => p(t0, c.end, id, "", &xml(&c.text())),
         };
-        items.push((c.start, p(c.start, c.end, id, &body)));
+        items.push((c.start, line));
     }
     for s in sounds {
-        items.push((s.start, p(s.start, s.end, 0, &xml(&s.text))));
+        items.push((s.start, p(s.start.max(1), s.end, 0, "", &xml(&s.text))));
     }
     items.sort_by_key(|(start, _)| *start);
 

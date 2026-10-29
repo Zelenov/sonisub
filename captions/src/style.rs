@@ -121,11 +121,10 @@ pub(crate) enum StepKind<'a> {
     More,
 }
 
-/// A piece of a cue's line, in order: what comes before it (a line break or a space), its text,
-/// and what it is.
+/// A piece of a cue's line, in order: what comes before it (`"\n"` for a line break, `" "` or
+/// nothing), its text, and what it is.
 pub(crate) struct Step<'a> {
-    pub new_line: bool,
-    pub space: bool,
+    pub gap: &'static str,
     pub text: &'a str,
     pub kind: StepKind<'a>,
 }
@@ -140,7 +139,13 @@ pub(crate) fn steps(cue: &Cue) -> Option<Vec<Step<'_>>> {
     let mut out = Vec::new();
     for (l, line) in cue.lines.iter().enumerate() {
         for (i, (text, glued)) in pieces(line).into_iter().enumerate() {
-            let (new_line, space) = (i == 0 && l > 0, i > 0 && !glued);
+            let gap = if i == 0 && l > 0 {
+                "\n"
+            } else if i > 0 && !glued {
+                " "
+            } else {
+                ""
+            };
             let kind = if prefix > 0 {
                 prefix -= 1;
                 StepKind::Prefix
@@ -157,7 +162,7 @@ pub(crate) fn steps(cue: &Cue) -> Option<Vec<Step<'_>>> {
                 }
                 StepKind::Word { index, word, voice }
             };
-            out.push(Step { new_line, space, text, kind });
+            out.push(Step { gap, text, kind });
         }
     }
     words.next().is_none().then_some(out)

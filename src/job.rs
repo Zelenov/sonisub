@@ -338,7 +338,7 @@ pub fn write_outputs(
         };
         if n == 0 && format.has_cues() {
             bail!(
-                "nothing to write in {}: no words, and --sdh adds sounds only to .srt, .vtt and .ass",
+                "nothing to write in {}: no words, and --sdh adds sounds only to .srt, .vtt, .ass and .ytt",
                 path.display()
             );
         }

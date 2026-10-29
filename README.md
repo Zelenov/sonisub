@@ -62,7 +62,7 @@ sonisub clip.MP4 -t srt,premiere          # also clip.premiere.json for Premiere
 sonisub . -t premiere                     # only the Premiere transcript; saved .soniox.json files are reused
 sonisub clip.MP4 -t srt,vtt,ass           # also clip.vtt (WebVTT) and clip.ass (a style per speaker)
 sonisub clip.MP4 -t ass --karaoke         # each word lights up as it is spoken
-sonisub render clip.capt -t ytt --vertical  # YouTube Shorts: word by word, clear of the buttons
+sonisub render clip.capt -t ytt --vertical # YouTube Shorts: word by word, clear of the buttons
 sonisub clip.MP4 -t srt,capt              # also clip.capt, the whole transcript as small text
 sonisub clip.MP4 -t ass,vtt --vertical    # Reels, Shorts, TikTok: short lines, clear of the app's buttons
 sonisub render clip.capt -t srt --sdh     # for the deaf and hard of hearing: sounds and voices marked in clip.capt

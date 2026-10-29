@@ -80,11 +80,7 @@ fn karaoke(cue: &Cue, voice: Option<&dyn Fn(&str) -> String>) -> Option<String> 
     let mut out = String::new();
     let mut italic = false;
     for step in style::steps(cue)? {
-        if step.new_line {
-            out.push_str("\\N");
-        } else if step.space {
-            out.push(' ');
-        }
+        out.push_str(if step.gap == "\n" { "\\N" } else { step.gap });
         let style::StepKind::Word { index, word: w, voice: starts } = step.kind else {
             // The speaker label, or the rest of a word with a space in it, lit with its first piece.
             out.push_str(&escape(step.text));
