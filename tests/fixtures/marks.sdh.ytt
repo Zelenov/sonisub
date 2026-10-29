@@ -8,12 +8,12 @@
 <wp id="2" ap="1" ah="24" av="3"/>
 </head>
 <body>
-<p t="1000" d="2000" wp="0" ws="0"><s>Anna:</s>​<s t="0"> So</s><s t="180"> I</s><s t="300"> read</s><s p="2" t="600"> War</s><s p="2" t="860"> and</s><s p="2" t="1060"> Peace</s><s t="1500"> twice.</s></p>
+<p t="1000" d="2000" wp="0" ws="0"><s>Anna:</s>​<s> So</s><s t="180"> I</s><s t="300"> read</s><s p="2" t="600"> War</s><s p="2" t="860"> and</s><s p="2" t="1060"> Peace</s><s t="1500"> twice.</s></p>
 <p t="4200" d="800" wp="0" ws="0">Anna: [laughs]</p>
-<p t="5500" d="3100" wp="0" ws="0"><s>Boris:</s>​<s t="0"> Короче,</s><s t="520"> этот</s><s t="760"> deployment</s><s t="1260"> упал</s><s t="1800"> и</s><s t="1920"> мы</s><s t="2100"> сделали</s><s t="2560"> rollback.</s></p>
-<p t="10000" d="1800" wp="1" ws="0"><s>Anna:</s>​<s t="0"> Listen</s><s t="400"> to</s><s t="560"> me,</s><s t="1000"> [whispering] </s><s t="1000">please</s><s t="1560"> Dr.</s></p>
+<p t="5500" d="3100" wp="0" ws="0"><s>Boris:</s>​<s> Короче,</s><s t="520"> этот</s><s t="760"> deployment</s><s t="1260"> упал</s><s t="1800"> и</s><s t="1920"> мы</s><s t="2100"> сделали</s><s t="2560"> rollback.</s></p>
+<p t="10000" d="1800" wp="1" ws="0"><s>Anna:</s>​<s> Listen</s><s t="400"> to</s><s t="560"> me,</s><s t="1000"> [whispering] </s><s t="1000">please</s><s t="1560"> Dr.</s></p>
 <p t="11900" d="500" wp="1" ws="0">Who.</p>
-<p t="15000" d="1200" wp="2" ws="0"><s>Boris:</s>​<s t="0"> This</s><s t="260"> sits</s><s t="560"> in</s><s t="700"> a</s><s t="800"> box.</s></p>
+<p t="15000" d="1200" wp="2" ws="0"><s>Boris:</s>​<s> This</s><s t="260"> sits</s><s t="560"> in</s><s t="700"> a</s><s t="800"> box.</s></p>
 <p t="15500" d="1000" wp="0" ws="0">[phone ringing]</p>
 </body>
 </timedtext>

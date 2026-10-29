@@ -211,7 +211,7 @@ fn ytt_times_a_dashed_word_and_puts_the_speaker_on_the_first_word() {
     // The dash splits the word: its two parts, each with its own time (by characters), the second
     // glued on.
     assert!(
-        ytt.contains("<s>Speaker 1:</s>\u{200b}<s t=\"0\"> Well</s><s t=\"300\"> finally—</s><s t=\"809\">and</s>"),
+        ytt.contains("<s>Speaker 1:</s>\u{200b}<s> Well</s><s t=\"300\"> finally—</s><s t=\"809\">and</s>"),
         "{ytt}"
     );
 }
@@ -228,4 +228,17 @@ fn a_ytt_line_starts_with_an_empty_section_and_never_at_zero() {
     // A line of one italic word: the pen on the line.
     let one = ytt_of("CAPT 1\n\n00:00:01.000 --> 00:00:01.500\n{0}Who?{50}\n{0..50} style:italic\n");
     assert!(one.contains("<p t=\"1000\" d=\"500\" wp=\"0\" ws=\"0\" p=\"2\">Who?</p>"), "{one}");
+}
+
+#[test]
+fn a_ytt_sound_during_speech_at_the_bottom_goes_to_the_top() {
+    let file = "CAPT 1\n\n00:00:01.000 --> 00:00:04.000\n{0}Hello{100} {110}there{200} {210}friend.{300}\n\n\
+                00:00:02.000 --> 00:00:03.000 sound:phone\n\n00:00:05.000 --> 00:00:06.000 sound:music\n";
+    let doc = captions::capt::Doc::parse(file).unwrap();
+    let ytt = captions::sdh::ytt(&doc, &Layout::default(), "en").0;
+    let top = ytt.lines().find(|l| l.contains(r#"ap="1""#)).unwrap();
+    let top_id = top.split("id=\"").nth(1).unwrap().split('"').next().unwrap();
+    assert!(ytt.contains(&format!("wp=\"{top_id}\" ws=\"0\">[phone ringing]")), "{ytt}");
+    // A sound alone stays at the bottom.
+    assert!(ytt.contains(r#"wp="0" ws="0">[music]"#), "{ytt}");
 }

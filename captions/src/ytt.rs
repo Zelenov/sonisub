@@ -21,10 +21,11 @@
 use crate::Word;
 use crate::capt::Pos;
 use crate::cues::{Cue, Layout, cues};
-use crate::style::{self, Sound, StepKind};
+use crate::style::{self, Gap, Sound, StepKind};
 
+/// Text goes only into element content: `&` and `<` start markup, `>` is escaped as well.
 fn xml(s: &str) -> String {
-    s.replace('&', "&amp;").replace('<', "&lt;").replace('>', "&gt;").replace('"', "&quot;")
+    s.replace('&', "&amp;").replace('<', "&lt;").replace('>', "&gt;")
 }
 
 /// A window position: anchor point (0 top left … 4 centre … 7 bottom centre … 8 bottom right),
@@ -34,14 +35,14 @@ type Window = (u8, u32, u32);
 /// Where a place goes on YouTube's player.
 fn window(place: Option<Pos>, layout: &Layout) -> Window {
     // YouTube draws a place of `v` percent at `2 + 0.96 × v`.
-    let pct = |v: f64| ((v * 100.0 - 2.0) / 0.96).round().clamp(0.0, 100.0) as u32;
+    let yt_place = |v: f64| ((v * 100.0 - 2.0) / 0.96).round().clamp(0.0, 100.0) as u32;
     match place {
-        None | Some(Pos::Bottom) => (7, 50, pct(1.0 - style::bottom_clear(layout))),
-        Some(Pos::Top) => (1, 50, pct(style::top_clear(layout))),
+        None | Some(Pos::Bottom) => (7, 50, yt_place(1.0 - style::bottom_clear(layout))),
+        Some(Pos::Top) => (1, 50, yt_place(style::top_clear(layout))),
         Some(Pos::Middle) => (4, 50, 50),
-        Some(Pos::Point { x, y }) => (4, pct(x), pct(y)),
+        Some(Pos::Point { x, y }) => (4, yt_place(x), yt_place(y)),
         // The rectangle's top edge, centred on its width; YouTube has no box to wrap in.
-        Some(Pos::Rect { x, y, w, .. }) => (1, pct(x + w / 2.0), pct(y)),
+        Some(Pos::Rect { x, y, w, .. }) => (1, yt_place(x + w / 2.0), yt_place(y)),
     }
 }
 
@@ -59,19 +60,24 @@ fn runs(cue: &Cue, voice: Option<&dyn Fn(&str) -> String>, t0: u64) -> Option<Ve
     let mut out: Vec<Run> = Vec::new();
     let mut prefix = String::new();
     for step in style::steps(cue)? {
+        let gap = match step.gap {
+            Gap::Line => "\n",
+            Gap::Space => " ",
+            Gap::None => "",
+        };
         match step.kind {
             StepKind::Prefix => {
-                prefix.push_str(step.gap);
+                prefix.push_str(gap);
                 prefix.push_str(step.text);
             }
             StepKind::More => {
                 let run = out.last_mut()?;
-                run.text.push_str(step.gap);
+                run.text.push_str(gap);
                 run.text.push_str(step.text);
             }
             StepKind::Word { word, voice: starts, .. } => {
                 let t = word.start.saturating_sub(t0);
-                let mut gap = step.gap;
+                let mut gap = gap;
                 if !prefix.is_empty() {
                     out.push(Run { t, italic: false, text: std::mem::take(&mut prefix) });
                 }
@@ -114,8 +120,12 @@ pub(crate) fn write(
     };
     let pen = |italic: bool| if italic { " p=\"2\"" } else { "" };
     let mut items: Vec<(u64, String)> = Vec::new();
+    // Where each cue was put, so a sound is not drawn over one: YouTube gives every `<p>` its own
+    // window, and windows in one place are drawn on top of each other.
+    let mut shown: Vec<(u64, u64, usize)> = Vec::new();
     for c in cues {
         let id = wp(window(style::place(c), layout));
+        shown.push((c.start, c.end, id));
         let t0 = c.start.max(1);
         let line = match runs(c, voice, t0) {
             // One section: its pen on the line, as YTSubConverter writes it.
@@ -127,7 +137,8 @@ pub(crate) fn write(
                     .iter()
                     .enumerate()
                     .map(|(i, r)| {
-                        let t = if i == 0 { String::new() } else { format!(" t=\"{}\"", r.t) };
+                        // As YTSubConverter writes it: no `t` at the line's start.
+                        let t = if r.t == 0 { String::new() } else { format!(" t=\"{}\"", r.t) };
                         let after = if i == 0 { "\u{200b}" } else { "" };
                         format!("<s{}{t}>{}</s>{after}", pen(r.italic), xml(&r.text))
                     })
@@ -138,8 +149,12 @@ pub(crate) fn write(
         };
         items.push((c.start, line));
     }
+    let top = wp(window(Some(Pos::Top), layout));
+    let busy = |id: usize, s: &Sound| shown.iter().any(|&(a, b, w)| w == id && a < s.end && s.start < b);
     for s in sounds {
-        items.push((s.start, p(s.start.max(1), s.end, 0, "", &xml(&s.text))));
+        // At the bottom, or at the top while speech is at the bottom.
+        let id = if busy(0, s) && !busy(top, s) { top } else { 0 };
+        items.push((s.start, p(s.start.max(1), s.end, id, "", &xml(&s.text))));
     }
     items.sort_by_key(|(start, _)| *start);
 

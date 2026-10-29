@@ -121,10 +121,17 @@ pub(crate) enum StepKind<'a> {
     More,
 }
 
-/// A piece of a cue's line, in order: what comes before it (`"\n"` for a line break, `" "` or
-/// nothing), its text, and what it is.
+/// What comes before a piece of a cue's line.
+#[derive(Clone, Copy, PartialEq)]
+pub(crate) enum Gap {
+    None,
+    Space,
+    Line,
+}
+
+/// A piece of a cue's line, in order: what comes before it, its text, and what it is.
 pub(crate) struct Step<'a> {
-    pub gap: &'static str,
+    pub gap: Gap,
     pub text: &'a str,
     pub kind: StepKind<'a>,
 }
@@ -140,11 +147,11 @@ pub(crate) fn steps(cue: &Cue) -> Option<Vec<Step<'_>>> {
     for (l, line) in cue.lines.iter().enumerate() {
         for (i, (text, glued)) in pieces(line).into_iter().enumerate() {
             let gap = if i == 0 && l > 0 {
-                "\n"
+                Gap::Line
             } else if i > 0 && !glued {
-                " "
+                Gap::Space
             } else {
-                ""
+                Gap::None
             };
             let kind = if prefix > 0 {
                 prefix -= 1;

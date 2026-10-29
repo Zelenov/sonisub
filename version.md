@@ -1,10 +1,10 @@
 # NEXT
 ## Added
-- `-t ytt` writes YTT, YouTube's timed text (`clip.ytt`, srv3): a time for every word (word-by-word captions on YouTube), places and italic; with `--sdh` sounds and voices; on a vertical frame clear of the Shorts buttons.
+- `-t ytt` writes YTT, YouTube's timed text (`clip.ytt`, srv3): a time for every word, so YouTube can show the words one by one, places and italic; with `--sdh` sounds and voices; on a vertical frame clear of the Shorts buttons.
 - Subtitles from a CAPT file follow what the file says: they cut at its cut points (a ` / ` moved by hand moves the cut), end sentences where `sentence:` says, show `style:italic` in italic (SRT, WebVTT, ASS), mark words in another language (WebVTT), and put a subtitle where `pos:` says (top, middle, a point or a rectangle).
 - `--sdh`: `.srt`, `.vtt`, `.ass` and `.ytt` become subtitles for the deaf and hard of hearing, with a subtitle for every sound (`[phone ringing]`, `Anna: [laughs]` with `-s`) and a label before words said in a voice of their own (`[whispering]`); English or Russian labels with `--labels` (which needs `--sdh`). Sounds and voices come from a CAPT file (Soniox reports none): mark them in `clip.capt` and `render` it; a file of sounds only works too.
 - `--vertical` (or `--frame 1080x1920`) for Reels, Shorts and TikTok: short two-line subtitles cut where they read well (not after "the" or "and", not too fast to read), and in `.ass`, `.vtt` and `.ytt` the text kept clear of the phone app's caption and buttons. The frame goes into the `clip.capt` written, so the next `render` of it remembers it; `render clip.capt --vertical` leaves an existing `clip.capt` alone unless `-t capt -f` rewrites it (or put `frame:1080,1920` in its header).
-- Library: `captions::sdh::{srt, vtt, ass}` (subtitles for the deaf and hard of hearing from a CAPT file), `captions::labels` (sound and voice labels, en/ru), `Layout::vertical()` and `Layout::for_frame`, `Doc::sounds()`.
+- Library: `captions::ytt::build`, `captions::sdh::{srt, vtt, ass, ytt}` (subtitles for the deaf and hard of hearing from a CAPT file), `captions::labels` (sound and voice labels, en/ru), `Layout::vertical()` and `Layout::for_frame`, `Doc::sounds()`.
 
 ## Changed
 - `--max-line`, `--max-lines` and `--max-duration` keep their defaults (50, 2, 8) for a horizontal video; a vertical one gets 22, 2 and 4 unless they are given.
