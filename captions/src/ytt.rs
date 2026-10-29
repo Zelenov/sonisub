@@ -34,11 +34,13 @@ type Window = (u8, u32, u32);
 
 /// Where a place goes on YouTube's player.
 fn window(place: Option<Pos>, layout: &Layout) -> Window {
-    // YouTube draws a place of `v` percent at `2 + 0.96 × v`.
-    let yt_place = |v: f64| ((v * 100.0 - 2.0) / 0.96).round().clamp(0.0, 100.0) as u32;
+    // YouTube draws a place of `v` percent at `2 + 0.96 × v`; a top edge is rounded down the
+    // frame and a bottom edge up it, so text stays clear of what it must keep clear of.
+    let yt = |v: f64| (v * 100.0 - 2.0) / 0.96;
+    let yt_place = |v: f64| yt(v).round().clamp(0.0, 100.0) as u32;
     match place {
-        None | Some(Pos::Bottom) => (7, 50, yt_place(1.0 - style::bottom_clear(layout))),
-        Some(Pos::Top) => (1, 50, yt_place(style::top_clear(layout))),
+        None | Some(Pos::Bottom) => (7, 50, yt(1.0 - style::bottom_clear(layout)).floor().clamp(0.0, 100.0) as u32),
+        Some(Pos::Top) => (1, 50, yt(style::top_clear(layout)).ceil().clamp(0.0, 100.0) as u32),
         Some(Pos::Middle) => (4, 50, 50),
         Some(Pos::Point { x, y }) => (4, yt_place(x), yt_place(y)),
         // The rectangle's top edge, centred on its width; YouTube has no box to wrap in.
@@ -89,6 +91,13 @@ fn runs(cue: &Cue, voice: Option<&dyn Fn(&str) -> String>, t0: u64) -> Option<Ve
             }
         }
     }
+    // A section that starts with the one before is broken by the upload (YTSubConverter's
+    // AvoidZeroDurationKaraoke): each starts a millisecond after the one before at least.
+    for i in 1..out.len() {
+        if out[i].t <= out[i - 1].t {
+            out[i].t = out[i - 1].t + 1;
+        }
+    }
     Some(out)
 }
 
@@ -104,10 +113,11 @@ pub(crate) fn write(
     layout: &Layout,
     voice: Option<&dyn Fn(&str) -> String>,
 ) -> (String, usize) {
-    // A window position per place, in order of first use; the bottom is always the first.
-    let mut windows: Vec<Window> = vec![window(None, layout)];
-    let mut wp = |w: Window| match windows.iter().position(|x| *x == w) {
-        Some(i) => i,
+    // Window positions in order of first use, after an unused one: YTSubConverter leaves item 0 of
+    // each list unused, as the iOS app mishandles the first.
+    let mut windows: Vec<Window> = vec![(7, 50, 100)];
+    let mut wp = |w: Window| match windows.iter().skip(1).position(|x| *x == w) {
+        Some(i) => i + 1,
         None => {
             windows.push(w);
             windows.len() - 1
@@ -116,55 +126,65 @@ pub(crate) fn write(
     // `<p>` from `t0` (the start, at 1 ms at the earliest, as the Android app needs) to `end`, with
     // a pen for the whole line or none.
     let p = |t0: u64, end: u64, wp: usize, pen: &str, body: &str| {
-        format!("<p t=\"{t0}\" d=\"{}\" wp=\"{wp}\" ws=\"0\"{pen}>{body}</p>\n", end.saturating_sub(t0).max(1))
+        format!("<p t=\"{t0}\" d=\"{}\" wp=\"{wp}\" ws=\"1\"{pen}>{body}</p>\n", end.saturating_sub(t0).max(1))
     };
     let pen = |italic: bool| if italic { " p=\"2\"" } else { "" };
-    let mut items: Vec<(u64, String)> = Vec::new();
-    // Where each cue was put, so a sound is not drawn over one: YouTube gives every `<p>` its own
-    // window, and windows in one place are drawn on top of each other.
-    let mut shown: Vec<(u64, u64, usize)> = Vec::new();
-    for c in cues {
-        let id = wp(window(style::place(c), layout));
-        shown.push((c.start, c.end, id));
-        let t0 = c.start.max(1);
-        let line = match runs(c, voice, t0) {
-            // One section: its pen on the line, as YTSubConverter writes it.
-            Some(runs) if runs.len() == 1 => p(t0, c.end, id, pen(runs[0].italic), &xml(&runs[0].text)),
-            // The server drops the first section's pen unless the line has text outside any
-            // section: a zero-width space after the first one.
-            Some(runs) => {
-                let body: String = runs
-                    .iter()
-                    .enumerate()
-                    .map(|(i, r)| {
-                        // As YTSubConverter writes it: no `t` at the line's start.
-                        let t = if r.t == 0 { String::new() } else { format!(" t=\"{}\"", r.t) };
-                        let after = if i == 0 { "\u{200b}" } else { "" };
-                        format!("<s{}{t}>{}</s>{after}", pen(r.italic), xml(&r.text))
-                    })
-                    .collect();
-                p(t0, c.end, id, "", &body)
-            }
-            None => p(t0, c.end, id, "", &xml(&c.text())),
-        };
-        items.push((c.start, line));
+
+    // Every line in order of start, each with the window it wants.
+    enum Line<'a> {
+        Cue(&'a Cue),
+        Sound(&'a Sound),
     }
-    let top = wp(window(Some(Pos::Top), layout));
-    let busy = |id: usize, s: &Sound| shown.iter().any(|&(a, b, w)| w == id && a < s.end && s.start < b);
-    for s in sounds {
-        // At the bottom, or at the top while speech is at the bottom.
-        let id = if busy(0, s) && !busy(top, s) { top } else { 0 };
-        items.push((s.start, p(s.start.max(1), s.end, id, "", &xml(&s.text))));
+    let mut lines: Vec<(u64, u64, Window, Line)> = cues
+        .iter()
+        .map(|c| (c.start, c.end, window(style::place(c), layout), Line::Cue(c)))
+        .chain(sounds.iter().map(|s| (s.start, s.end, window(None, layout), Line::Sound(s))))
+        .collect();
+    lines.sort_by_key(|(start, ..)| *start);
+    // YouTube gives every `<p>` its own window, and windows in one place are drawn on top of each
+    // other: a line goes where it wants if that is free at the time, else to the bottom, the top
+    // or the middle, whichever is free first.
+    let free_order = [window(None, layout), window(Some(Pos::Top), layout), window(Some(Pos::Middle), layout)];
+    let mut placed: Vec<(u64, u64, Window)> = Vec::new();
+    let mut items: Vec<String> = Vec::new();
+    for (start, end, wants, line) in &lines {
+        let free = |w: &Window| !placed.iter().any(|(a, b, pw)| pw == w && *a < *end && *start < *b);
+        let at = std::iter::once(*wants).chain(free_order).find(|w| free(w)).unwrap_or(*wants);
+        placed.push((*start, *end, at));
+        let id = wp(at);
+        let t0 = start.max(&1).to_owned();
+        items.push(match line {
+            Line::Sound(s) => p(t0, s.end, id, "", &xml(&s.text)),
+            Line::Cue(c) => match runs(c, voice, t0) {
+                // One section: its pen on the line, as YTSubConverter writes it.
+                Some(runs) if runs.len() == 1 => p(t0, c.end, id, pen(runs[0].italic), &xml(&runs[0].text)),
+                // The server drops the first section's pen unless the line has text outside any
+                // section: a zero-width space after the first one.
+                Some(runs) => {
+                    let body: String = runs
+                        .iter()
+                        .enumerate()
+                        .map(|(i, r)| {
+                            // As YTSubConverter writes it: no `t` at the line's start.
+                            let t = if r.t == 0 { String::new() } else { format!(" t=\"{}\"", r.t) };
+                            let after = if i == 0 { "\u{200b}" } else { "" };
+                            format!("<s{}{t}>{}</s>{after}", pen(r.italic), xml(&r.text))
+                        })
+                        .collect();
+                    p(t0, c.end, id, "", &body)
+                }
+                None => p(t0, c.end, id, "", &xml(&c.text())),
+            },
+        });
     }
-    items.sort_by_key(|(start, _)| *start);
 
     let mut out = String::from("<?xml version=\"1.0\" encoding=\"utf-8\"?>\n<timedtext format=\"3\">\n<head>\n");
-    out.push_str("<pen id=\"2\" i=\"1\"/>\n<ws id=\"0\" ju=\"2\"/>\n");
+    out.push_str("<pen id=\"2\" i=\"1\"/>\n<ws id=\"0\"/>\n<ws id=\"1\" ju=\"2\"/>\n");
     for (i, (ap, ah, av)) in windows.iter().enumerate() {
         out.push_str(&format!("<wp id=\"{i}\" ap=\"{ap}\" ah=\"{ah}\" av=\"{av}\"/>\n"));
     }
     out.push_str("</head>\n<body>\n");
-    for (_, p) in &items {
+    for p in &items {
         out.push_str(p);
     }
     out.push_str("</body>\n</timedtext>\n");

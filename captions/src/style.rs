@@ -122,7 +122,7 @@ pub(crate) enum StepKind<'a> {
 }
 
 /// What comes before a piece of a cue's line.
-#[derive(Clone, Copy, PartialEq)]
+#[derive(Clone, Copy)]
 pub(crate) enum Gap {
     None,
     Space,
