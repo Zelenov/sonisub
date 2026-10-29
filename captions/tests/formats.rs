@@ -547,3 +547,169 @@ fn ttml_shows_at_most_four_regions_and_none_overlap() {
     let ttml = captions::ttml::build(&doc, &Layout::unlimited()).0;
     assert_eq!(imsc_problems(&ttml), Vec::<String>::new(), "{ttml}");
 }
+#[test]
+fn an_adr_row_names_a_voice_once_where_it_starts() {
+    let file = "CAPT 1\nspeaker:1 name:Anna\n\n\
+                00:00:01.000 --> 00:00:02.000 speaker:1 voice:whisper\n{0}Come{30} {40}here.{90}\n\n\
+                00:00:02.500 --> 00:00:03.500 speaker:1 voice:whisper\n{0}Quietly{40} {50}now.{90}\n";
+    let doc = captions::capt::Doc::parse(file).unwrap();
+    // Two subtitles, joined into one row.
+    assert_eq!(srt::build(&doc.to_words(), &Layout::default()).1, 2);
+    let (csv, rows) = captions::adr::build(&doc, &Layout::default(), &Default::default(), "en").unwrap();
+    assert_eq!(rows, 1, "{csv}");
+    assert_eq!(csv.matches("[whispering]").count(), 1, "{csv}");
+}
+
+fn adr(file: &str) -> Vec<String> {
+    let doc = captions::capt::Doc::parse(file).unwrap();
+    let (csv, _) = captions::adr::build(&doc, &Layout::default(), &Default::default(), "en").unwrap();
+    csv.trim_start_matches('\u{feff}').split("\r\n").filter(|l| !l.is_empty()).map(str::to_string).collect()
+}
+
+#[test]
+fn an_adr_row_puts_the_speakers_sound_where_it_is_heard() {
+    let rows = adr("CAPT 1\nspeaker:1 name:Anna\n\n\
+                    00:00:00.000 --> 00:00:06.000 speaker:1\n{0}One{50} {100}two{150} {200}three{250} {300}four.{350}\n\n\
+                    00:00:01.200 --> 00:00:01.600 speaker:1 sound:laughter\n");
+    assert_eq!(rows, [r#""1","01:00:00:00","01:00:03:13","Anna","One two [laughs] three four.""#]);
+}
+
+#[test]
+fn adr_rows_join_across_another_speakers_sound_but_not_their_speech() {
+    let file = "CAPT 1\nspeaker:1 name:Anna\nspeaker:2 name:Boris\n\n\
+                00:00:00.000 --> 00:00:03.000 speaker:1\n{0}First{100} {150}part.{300}\n\n\
+                00:00:01.000 --> 00:00:02.000 speaker:2 sound:laughter\n\n\
+                00:00:03.200 --> 00:00:05.000 speaker:1\n{0}Second{100} {120}part.{180}\n";
+    let rows = adr(file);
+    assert_eq!(rows.len(), 2, "{rows:?}");
+    assert!(rows[0].ends_with(r#""Anna","First part. Second part.""#), "{rows:?}");
+    assert!(rows[1].ends_with(r#""Boris","[laughs]""#), "{rows:?}");
+    // Boris speaking between them ends Anna's row.
+    let rows = adr(&file.replace("speaker:2 sound:laughter\n", "speaker:2\n{0}Ha.{50}\n"));
+    assert_eq!(rows.len(), 3, "{rows:?}");
+}
+
+#[test]
+fn adr_rows_end_at_a_long_pause_and_at_eight_seconds() {
+    let file = "CAPT 1\n\n00:00:00.000 --> 00:00:01.000 speaker:1\n{0}One.{100}\n\n\
+                00:00:02.600 --> 00:00:03.000 speaker:1\n{0}Two.{40}\n";
+    assert_eq!(adr(file).len(), 2, "a pause over 1.5 s");
+    let mut long = String::from("CAPT 1\n");
+    for i in 0..5u64 {
+        long.push_str(&format!(
+            "\n00:00:{:02}.000 --> 00:00:{:02}.900 speaker:1\n{{0}}Word{i}.{{90}}\n",
+            i * 2,
+            i * 2 + 1
+        ));
+    }
+    let rows = adr(&long);
+    assert_eq!(rows.len(), 2, "{rows:?}");
+}
+
+#[test]
+fn an_adr_row_without_a_speaker_names_speaker_1_and_the_list_ends_with_the_day() {
+    let file = "CAPT 1\n\n00:00:01.000 --> 00:00:02.000\n{0}Hi.{50}\n";
+    assert!(adr(file)[0].contains(r#""Speaker 1","Hi.""#));
+    let doc = captions::capt::Doc::parse(file).unwrap();
+    let late = captions::adr::Timecode::parse("23:59:59:00").unwrap();
+    let o = captions::adr::Options { start: late, ..Default::default() };
+    let err = captions::adr::build(&doc, &Layout::default(), &o, "en").unwrap_err();
+    assert!(err.contains("23:59:59"), "{err}");
+}
+
+#[test]
+fn an_adr_cue_lasts_as_long_as_the_speakers_sound_in_it() {
+    let rows = adr("CAPT 1\nspeaker:1 name:Anna\n\n\
+                    00:00:00.000 --> 00:00:02.000 speaker:1\n{0}So{50} {100}funny.{200}\n\n\
+                    00:00:01.800 --> 00:00:04.000 speaker:1 sound:laughter\n");
+    assert_eq!(rows, [r#""1","01:00:00:00","01:00:04:00","Anna","So funny. [laughs]""#]);
+    // A sound of no length is still a frame long.
+    let rows = adr("CAPT 1\n\n00:00:01.000 --> 00:00:01.000 speaker:1 sound:laughter\n");
+    assert!(rows[0].starts_with(r#""1","01:00:01:00","01:00:01:01""#), "{rows:?}");
+}
+
+#[test]
+fn an_adr_row_counts_its_labels_in_its_length() {
+    let mut file = String::from("CAPT 1\n");
+    for i in 0..6u64 {
+        let voice = if i % 2 == 0 { "whisper" } else { "shout" };
+        file.push_str(&format!(
+            "\n00:00:{:02}.000 --> 00:00:{:02}.900 speaker:1 voice:{voice}\n{{0}}aaaaaaaaaaaaaaaaaaaa{{20}} {{30}}bbbbbbbbbbbbbbbbbbbb.{{50}}\n",
+            i, i
+        ));
+    }
+    for row in adr(&file) {
+        let dialogue = row.rsplit("\",\"").next().unwrap().trim_end_matches('"');
+        assert!(dialogue.chars().count() <= 200, "{row}");
+    }
+}
+
+#[test]
+fn another_speakers_speech_in_between_ends_an_adr_row_whatever_the_order_of_rows() {
+    let rows = adr("CAPT 1\nspeaker:1 name:Anna\nspeaker:2 name:Boris\n\n\
+                    00:00:00.000 --> 00:00:01.000 speaker:1\n{0}One.{100}\n\n\
+                    00:00:00.200 --> 00:00:00.800 speaker:2 sound:laughter\n\n\
+                    00:00:01.200 --> 00:00:02.000 speaker:1\n{0}Two.{80}\n\n\
+                    00:00:02.100 --> 00:00:03.000 speaker:2\n{0}Hey.{90}\n");
+    assert_eq!(rows.len(), 3, "{rows:?}");
+    assert!(rows[2].ends_with(r#""Boris","Hey.""#), "{rows:?}");
+}
+
+#[test]
+fn an_adr_row_keeps_room_for_its_voice_label_and_a_sound_stops_at_eight_seconds() {
+    let words: Vec<String> = (0..40).map(|i| format!("{{{}}}word{{{}}}", i * 10, i * 10 + 8)).collect();
+    let file = format!("CAPT 1\n\n00:00:00.000 --> 00:00:05.000 speaker:1 voice:whisper\n{}\n", words.join(" "));
+    for row in adr(&file) {
+        let dialogue = row.rsplit("\",\"").next().unwrap().trim_end_matches('"');
+        assert!(dialogue.chars().count() <= 200, "{row}");
+    }
+    let rows = adr("CAPT 1\n\n00:00:00.000 --> 00:00:07.500 speaker:1\n{0}Long{700} {710}one.{750}\n\n\
+                    00:00:07.000 --> 00:00:12.000 speaker:1 sound:laughter\n");
+    assert!(rows[0].contains(r#""01:00:00:00","01:00:08:00""#), "{rows:?}");
+}
+
+#[test]
+fn speech_of_no_one_among_named_speakers_is_unknown_in_the_labels_language() {
+    let file = "CAPT 1\nspeaker:1 name:Anna\n\n00:00:00.000 --> 00:00:01.000\n{0}Hm.{50}\n";
+    let doc = captions::capt::Doc::parse(file).unwrap();
+    let (csv, _) = captions::adr::build(&doc, &Layout::default(), &Default::default(), "ru").unwrap();
+    assert!(csv.contains(r#""Неизвестный","Hm.""#), "{csv}");
+}
+
+fn max_dialogue(rows: &[String]) -> usize {
+    rows.iter().map(|r| r.rsplit("\",\"").next().unwrap().trim_end_matches('"').chars().count()).max().unwrap_or(0)
+}
+
+#[test]
+fn an_adr_row_stays_within_200_characters_with_its_sounds_and_repeated_voices() {
+    let word = "abcdefghijklmnopqrst";
+    let words: Vec<String> = (0..9).map(|i| format!("{{{}}}{word}{{{}}}", i * 50, i * 50 + 40)).collect();
+    let file = format!(
+        "CAPT 1\n\n00:00:00.000 --> 00:00:05.000 speaker:1\n{}\n\n\
+         00:00:01.000 --> 00:00:01.400 speaker:1 sound:laughter\n\n00:00:03.000 --> 00:00:03.400 speaker:1 sound:laughter\n",
+        words.join(" ")
+    );
+    assert!(max_dialogue(&adr(&file)) <= 200, "{:?}", adr(&file));
+    let words: Vec<String> = (0..31).map(|i| format!("{{{}}}abcde{{{}}}", i * 13, i * 13 + 10)).collect();
+    let file = format!(
+        "CAPT 1\n\n00:00:00.000 --> 00:00:05.000 speaker:1\n{}\n{{0..101}} voice:whisper\n{{299..400}} voice:whisper\n",
+        words.join(" ")
+    );
+    assert!(max_dialogue(&adr(&file)) <= 200, "{:?}", adr(&file));
+}
+
+#[test]
+fn a_sound_belongs_to_the_cue_whose_words_it_is_heard_among() {
+    // Words cut at 8 s, the next cue at 7.95 s; a laugh from 7.4 s runs into it, a cough is in it.
+    let first: Vec<String> = (0..16).map(|i| format!("{{{}}}w{i}{{{}}}", i * 49, i * 49 + 40)).collect();
+    let file = format!(
+        "CAPT 1\n\n00:00:00.000 --> 00:00:08.000 speaker:1\n{}\n\n\
+         00:00:07.400 --> 00:00:09.000 speaker:1 sound:laughter\n\n\
+         00:00:07.950 --> 00:00:10.000 speaker:1\n{{0}}v0{{40}} {{50}}v1{{90}}\n\n\
+         00:00:07.970 --> 00:00:08.100 speaker:1 sound:cough\n",
+        first.join(" ")
+    );
+    let rows = adr(&file);
+    let first_row = rows.iter().find(|r| r.contains("w0")).unwrap();
+    assert!(!first_row.contains("[coughs]"), "{rows:?}");
+}

@@ -65,6 +65,7 @@ sonisub clip.MP4 -t ass --karaoke         # each word lights up as it is spoken
 sonisub clip.MP4 -t srt,sbv               # also clip.sbv for YouTube Studio
 sonisub clip.MP4 -t lrc                   # clip.lrc for karaoke players and music apps
 sonisub clip.MP4 -t srt,transcript        # also clip.txt, a plain text transcript to read and search
+sonisub render clip.capt -t adr --fps 29.97  # a DaVinci Resolve Fairlight ADR cue list
 sonisub clip.MP4 -t srt,capt              # also clip.capt, the whole transcript as small text
 sonisub render clip.capt -t vtt,premiere  # other formats from a CAPT file or saved words, no Soniox
 sonisub clip.MP4 --no-json                # don't keep clip.soniox.json
@@ -143,6 +144,10 @@ English or Russian (`--labels en|ru`; by default the transcript's language).
 `-t ttml` writes TTML / IMSC 1.1 Text (`clip.ttml`), what broadcasters and streaming services ask for: speakers as
 agents, places as regions (a rectangle exactly), italic and languages. For a delivery spec that counts characters a
 line, add `-w --max-line 42`.
+`-t adr` writes a DaVinci Resolve Fairlight ADR cue list (`clip.adr.csv`; Fairlight page > ADR > List > Import Cue
+List): a row per breath of speech, joined per speaker, with the speaker's own sounds and voices as directions
+(`--labels en|ru`); `--fps 23.976|24|25|29.97|30|50|59.94|60` and `--timeline-start 01:00:00:00` (where the clip
+starts on the timeline, non-drop frame) match the timeline.
 
 `sonisub render` makes the same files without Soniox: from a CAPT file (`-t capt` writes `clip.capt`, the whole
 transcript as small text you can read and edit, see [docs/capt.md](docs/capt.md)), or from words saved as JSON

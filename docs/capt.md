@@ -2,7 +2,7 @@
 
 CAPT is a transcript as a small text file: pieces of words with their times, words, cut points,
 sentences, speakers, languages and confidence. sonisub writes it (`-t capt`) and can make the other
-formats from it (`sonisub render clip.capt -t srt,vtt,ass,sbv,lrc,transcript,ttml,premiere`). The `captions` crate reads and
+formats from it (`sonisub render clip.capt -t srt,vtt,ass,sbv,lrc,transcript,ttml,adr,premiere`). The `captions` crate reads and
 writes it (`captions::capt`).
 
 ```
@@ -158,7 +158,7 @@ whole-word option on part of a word. Problems are listed in order of line.
 
 `sonisub render clip.capt -t …` reads everything above. Every subtitle output cuts at the file's
 cut points (a ` / ` moved by hand moves the cut), ends sentences as `sentence:` says, and never lets
-one subtitle span two places. Speaker names go to ASS styles and transcript headings for any id, and to `-s` labels and
+one subtitle span two places. Speaker names go to ASS styles, transcript headings, TTML agents and ADR characters for any id, and to `-s` labels and
 Premiere only for numbered speakers (`speaker:1`); `--speaker-names` replaces them, also in a CAPT
 file it writes.
 
@@ -171,6 +171,7 @@ file it writes.
 | LRC | | | | | |
 | Transcript (`.txt`) | | | | `[whispering]` | the speaker's in their paragraph; another's or no one's after the sentence it falls in |
 | TTML / IMSC | `<span>` | `<span xml:lang>` | a region; a rectangle exactly (it grows if its text needs more lines) | | |
+| Fairlight ADR (`.adr.csv`) | | | | `[whispering]`, once a row | the speaker's own, in their cue |
 | Premiere | | | | | |
 
-Only the transcript shows sounds and voices; `alt` is kept in the file but no output shows it.
+Only the transcript and the ADR cue list show sounds and voices; `alt` is kept in the file but no output shows it.

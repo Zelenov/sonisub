@@ -40,12 +40,14 @@ pub enum Format {
     Transcript,
     /// TTML / IMSC 1.1 Text: speakers, places, italic and languages: `clip.ttml`.
     Ttml,
+    /// A DaVinci Resolve Fairlight ADR cue list: `clip.adr.csv`.
+    Adr,
 }
 
 impl Format {
-    /// Subtitles: a file of them with no cue is empty, not written.
+    /// Subtitles and cue lists: a file of them with no cue is empty, not written.
     fn has_cues(self) -> bool {
-        matches!(self, Format::Srt | Format::Vtt | Format::Ass | Format::Sbv | Format::Lrc | Format::Ttml)
+        matches!(self, Format::Srt | Format::Vtt | Format::Ass | Format::Sbv | Format::Lrc | Format::Ttml | Format::Adr)
     }
 
     /// Where this format goes for the output base path (`clip.srt` -> `clip.premiere.json`).
@@ -60,6 +62,7 @@ impl Format {
             Format::Lrc => output.with_extension("lrc"),
             Format::Transcript => output.with_extension("txt"),
             Format::Ttml => output.with_extension("ttml"),
+            Format::Adr => output.with_extension("adr.csv"),
         }
     }
 }
@@ -69,8 +72,10 @@ impl Format {
 pub struct Outputs {
     /// Speaker names and word highlight for [`Format::Ass`].
     pub ass: ass::Options,
-    /// The language of the transcript's sound and voice labels (`en`, `ru`); `None`: Russian for a
-    /// Russian transcript, else English.
+    /// Frame rate, timeline start and cue limits for [`Format::Adr`].
+    pub adr: captions::adr::Options,
+    /// The language of the sound and voice labels of the transcript and the ADR list (`en`, `ru`);
+    /// `None`: Russian for a Russian transcript, else English.
     pub labels: Option<String>,
 }
 
@@ -327,6 +332,7 @@ pub fn write_outputs(
             Format::Lrc => captions::lrc::build(cue_words, layout),
             Format::Transcript => (captions::transcript::build(doc, layout, &labels), 0),
             Format::Ttml => captions::ttml::build(doc, layout),
+            Format::Adr => captions::adr::build(doc, layout, &outputs.adr, &labels).map_err(|e| anyhow!(e))?,
             Format::Premiere => {
                 let t = captions::premiere::build(words, layout, default_language, seed)
                     .ok_or_else(|| anyhow!("no words to write"))?;
@@ -335,7 +341,12 @@ pub fn write_outputs(
             Format::Capt => (doc.write(), 0),
         };
         if n == 0 && format.has_cues() {
-            bail!("nothing to write in {}: no words", path.display());
+            let why = if *format == Format::Adr {
+                "no speech and no sound of a speaker for an ADR cue list"
+            } else {
+                "no words"
+            };
+            bail!("nothing to write in {}: {why}", path.display());
         }
         if cues == 0 {
             cues = n;
@@ -488,6 +499,7 @@ pub fn output_base(path: &Path) -> PathBuf {
         ".lrc",
         ".txt",
         ".ttml",
+        ".adr.csv",
         ".json",
     ]
     .iter()

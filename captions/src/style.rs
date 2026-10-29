@@ -110,7 +110,8 @@ pub(crate) fn plain(text: &str) -> String {
     text.to_string()
 }
 
-/// The name a speaker is shown by where no subtitle shows it next to speech (transcript turns):
+/// The name a speaker is shown by where no subtitle shows it next to speech (transcript turns, TTML
+/// agents, ADR characters):
 /// the file's name, else the layout's, else "Speaker N". The command line puts `--speaker-names`
 /// into the file first, so both agree; a library caller should do the same (`job::name_speakers`).
 pub(crate) fn speaker_name(doc: &Doc, layout: &Layout, speaker: &str) -> String {
@@ -118,6 +119,7 @@ pub(crate) fn speaker_name(doc: &Doc, layout: &Layout, speaker: &str) -> String 
         .iter()
         .find(|s| s.id == speaker)
         .and_then(|s| s.name.clone())
+        .filter(|n| !n.trim().is_empty())
         .unwrap_or_else(|| speaker_label(speaker, &layout.speaker_names))
 }
 

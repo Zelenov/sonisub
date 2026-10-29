@@ -1,4 +1,4 @@
-//! Labels for sounds and voices, as the plain text transcript writes them.
+//! Labels for sounds and voices, as the plain text transcript and the ADR cue list write them.
 //!
 //! CAPT keeps a sound or a voice as a code (`sound:laughter`, `voice:whisper`), the same in every
 //! language; an output writes its label: `[laughs]` in English, `(смеётся)` in Russian. The codes
@@ -54,6 +54,11 @@ fn label(table: &[(&str, &str, &str)], code: &str, lang: &str) -> String {
 /// The label of a sound (`laughter` -> `[laughs]`, `(смеётся)`).
 pub fn sound(code: &str, lang: &str) -> String {
     label(&SOUNDS, code, lang)
+}
+
+/// The name of a speaker no one is: `Unknown`, `Неизвестный`.
+pub fn unknown_speaker(lang: &str) -> String {
+    if for_language(Some(lang)) == "ru" { "Неизвестный" } else { "Unknown" }.to_string()
 }
 
 /// The label of a voice, put before the words said so (`whisper` -> `[whispering]`, `(шёпотом)`).

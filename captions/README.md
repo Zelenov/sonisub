@@ -44,5 +44,7 @@ let (ass, _) = ass::build(&words, &layout, &ass::Options { karaoke: true, ..Defa
 - `transcript`: a plain text transcript from a CAPT file, a paragraph per speaker turn; `labels` writes its
   sounds and voices in English or Russian.
 - `ttml`: TTML / IMSC 1.1 Text from a CAPT file.
+- `adr`: a DaVinci Resolve Fairlight ADR cue list from a CAPT file (`adr::Rate`, `adr::Timecode`); `labels`
+  writes its sound and voice directions in English or Russian.
 
 MIT licensed.

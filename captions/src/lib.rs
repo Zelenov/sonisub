@@ -10,10 +10,13 @@
 //! - [`lrc`] writes Enhanced LRC, a time before every word of the same cues.
 //! - [`transcript`] writes a plain text transcript from a CAPT file, a paragraph per turn, sounds and
 //!   voices as labels from [`labels`].
+//! - [`adr`] writes a DaVinci Resolve Fairlight ADR cue list from a CAPT file, sounds and voices as
+//!   directions from [`labels`].
 //! - [`ttml`] writes TTML / IMSC 1.1 Text from a CAPT file.
 
 use serde::{Deserialize, Serialize};
 
+pub mod adr;
 pub mod ass;
 pub mod capt;
 pub mod cues;

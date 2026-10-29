@@ -8,7 +8,7 @@
 mod common;
 
 use sonisub::captions::capt::Doc;
-use sonisub::captions::{Layout, ass, lrc, sbv, srt, transcript, ttml, vtt};
+use sonisub::captions::{Layout, adr, ass, lrc, sbv, srt, transcript, ttml, vtt};
 
 fn doc(name: &str) -> Doc {
     Doc::parse(&common::golden(&format!("{name}.capt"))).unwrap()
@@ -61,6 +61,23 @@ fn ttml_of_both_fixtures() {
     for name in ["dialog", "marks"] {
         let d = doc(name);
         check(name, "ttml", &ttml::build(&d, &layout(&d)).0);
+    }
+}
+
+/// Compared as written, not normalised: CRLF is what Fairlight reads.
+fn check_raw(file: &str, text: &str) {
+    if bless() {
+        std::fs::write(common::fixture(file), text).unwrap();
+    }
+    let expected = String::from_utf8(std::fs::read(common::fixture(file)).unwrap()).unwrap();
+    assert_eq!(text, expected, "{file}");
+}
+
+#[test]
+fn adr_of_both_fixtures() {
+    for name in ["dialog", "marks"] {
+        let d = doc(name);
+        check_raw(&format!("{name}.adr.csv"), &adr::build(&d, &layout(&d), &adr::Options::default(), "en").unwrap().0);
     }
 }
 
