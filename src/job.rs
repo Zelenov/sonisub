@@ -30,7 +30,8 @@ pub enum Format {
     Premiere,
     /// CAPT, the whole transcript as small text, every other format can be made from: `clip.capt`.
     Capt,
-    /// A plain text transcript, a paragraph per speaker turn, sounds and voices as labels: `clip.txt`.
+    /// A plain text transcript, a paragraph per speaker turn, sounds and voices as labels: `clip.txt` (also
+    /// `text`, `txt`).
     #[cfg_attr(feature = "cli", value(aliases = ["text", "txt"]))]
     Transcript,
 }

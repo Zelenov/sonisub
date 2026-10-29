@@ -5,10 +5,11 @@
 //! A turn is the same speaker heard in a row, their own sounds included. It is built from whole
 //! blocks (a block is a sentence or part of one), in order of start, with two exceptions so a
 //! sentence is never cut in two: another speaker's block or sound that starts while a sentence
-//! is still being said comes after that sentence, and a sound of no one comes after the
-//! paragraph it falls in. A sentence left unfinished ends where the next block of someone else
-//! starts after it. A long turn is cut into paragraphs after a pause, or after a minute at a
-//! sentence end, each with its own time, so a quote can be found in a monologue.
+//! is still being said comes after that sentence, and so does a sound of no one, which ends
+//! the paragraph there (the speaker goes on under a new heading). A sentence left unfinished
+//! ends where the next block of someone else starts after it. A long turn is cut into
+//! paragraphs after a pause, after a minute at a sentence end, or after two minutes anywhere,
+//! each with its own time, so a quote can be found in a monologue.
 
 use std::collections::VecDeque;
 
@@ -20,8 +21,10 @@ use crate::style::speaker_name;
 
 /// A pause longer than this starts a new paragraph of the same speaker.
 const PAUSE_MS: u64 = 5_000;
-/// A paragraph longer than this starts a new one at its next sentence end.
+/// A paragraph longer than this starts a new one at its next sentence end…
 const PARAGRAPH_MS: u64 = 60_000;
+/// …and one longer than this at its next block, sentence end or not (speech without punctuation).
+const LONG_MS: u64 = 120_000;
 
 fn timestamp(ms: u64) -> String {
     format!("{:02}:{:02}:{:02}", ms / 3_600_000, ms / 60_000 % 60, ms / 1000 % 60)
@@ -54,10 +57,12 @@ struct Paragraph<'a> {
 }
 
 impl<'a> Paragraph<'a> {
-    /// Whether `u` of the same speaker starts a new paragraph: after a pause, or past a minute
-    /// once a sentence has ended.
+    /// Whether `u` of the same speaker starts a new paragraph: after a pause, past a minute once a
+    /// sentence has ended, or past two minutes.
     fn cut_before(&self, u: &Unit) -> bool {
-        u.start.saturating_sub(self.end) > PAUSE_MS || self.done && u.start.saturating_sub(self.start) > PARAGRAPH_MS
+        let pause = u.start.saturating_sub(self.end) > PAUSE_MS;
+        let long = u.start.saturating_sub(self.start);
+        pause || (self.done && long > PARAGRAPH_MS) || long > LONG_MS
     }
 
     fn push(&mut self, u: &Unit<'a>, lang: &str) {
@@ -124,19 +129,13 @@ pub fn build(doc: &Doc, layout: &Layout, lang: &str) -> String {
         out.push_str(&format!("{t}\n\n"));
     }
     let mut paragraph: Option<Paragraph> = None;
-    // Others' blocks that started while the paragraph's sentence was being said.
+    // Blocks of others, and sounds of no one, that started while the paragraph's sentence was
+    // being said: they come once it has ended, in order of start.
     let mut waiting: Vec<Unit> = Vec::new();
-    // Sounds of no one that fell in the paragraph: each a paragraph of its own after it.
-    let mut after: Vec<Unit> = Vec::new();
-    let flush = |p: &mut Option<Paragraph>, after: &mut Vec<Unit>, out: &mut String| {
+    let flush = |p: &mut Option<Paragraph>, out: &mut String| {
         if let Some(p) = p.take() {
             let who = p.speaker.map(|s| format!("{}  ", speaker_name(doc, layout, s))).unwrap_or_default();
             out.push_str(&format!("{who}[{}]\n{}\n\n", timestamp(p.start), p.text));
-        }
-        for u in after.drain(..) {
-            if let Body::Sound(code) = u.body {
-                out.push_str(&format!("[{}]\n{}\n\n", timestamp(u.start), labels::sound(code, lang)));
-            }
         }
     };
     loop {
@@ -151,20 +150,15 @@ pub fn build(doc: &Doc, layout: &Layout, lang: &str) -> String {
             queue.extend(waiting.drain(..));
             continue;
         };
-        if u.speaker.is_none() && matches!(u.body, Body::Sound(_)) {
-            after.push(u);
-            if paragraph.is_none() {
-                flush(&mut paragraph, &mut after, &mut out);
-            }
-            continue;
-        }
-        let own = paragraph.as_ref().is_some_and(|p| p.speaker == u.speaker);
+        // A sound of no one is a paragraph of its own.
+        let nobody = u.speaker.is_none() && matches!(u.body, Body::Sound(_));
+        let own = !nobody && paragraph.as_ref().is_some_and(|p| p.speaker == u.speaker);
         if let Some(p) = paragraph.as_mut()
             && !p.done
             && !own
         {
             if u.start < p.end {
-                // Said while the sentence was being said: after it.
+                // Said or heard while the sentence was being said: after it.
                 waiting.push(u);
                 continue;
             }
@@ -184,8 +178,13 @@ pub fn build(doc: &Doc, layout: &Layout, lang: &str) -> String {
             }
             continue;
         }
+        if let (true, Body::Sound(code)) = (nobody, &u.body) {
+            flush(&mut paragraph, &mut out);
+            out.push_str(&format!("[{}]\n{}\n\n", timestamp(u.start), labels::sound(code, lang)));
+            continue;
+        }
         if cut {
-            flush(&mut paragraph, &mut after, &mut out);
+            flush(&mut paragraph, &mut out);
             paragraph = Some(Paragraph {
                 speaker: u.speaker,
                 start: u.start,
@@ -197,6 +196,6 @@ pub fn build(doc: &Doc, layout: &Layout, lang: &str) -> String {
         }
         paragraph.as_mut().expect("a paragraph is open").push(&u, lang);
     }
-    flush(&mut paragraph, &mut after, &mut out);
+    flush(&mut paragraph, &mut out);
     out
 }

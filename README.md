@@ -133,7 +133,7 @@ you restyle or rename a person in one place. Without diarization all lines use t
 highlight (`\k`).
 
 `-t transcript` (or `-t text`, `-t txt`) writes a plain text transcript (`clip.txt`): a paragraph per speaker turn, headed by
-the name and the time, a new paragraph after a pause or a minute; sounds and voices a CAPT file marks as labels in
+the name and the time, a new paragraph after a pause, a minute at a sentence end, or two minutes; sounds and voices a CAPT file marks as labels in
 English or Russian (`--labels en|ru`; by default the transcript's language).
 
 `--sdh` makes `.srt`, `.vtt` and `.ass` subtitles for the deaf and hard of hearing from the sounds and voices
