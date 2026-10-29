@@ -284,6 +284,26 @@ fn labels_without_sdh_are_refused() {
 }
 
 #[test]
+fn subtitles_with_nothing_to_show_are_not_written() {
+    let dir = tempfile::tempdir().unwrap();
+    let capt = dir.path().join("intro.capt");
+    std::fs::write(
+        &capt,
+        "CAPT 1
+
+00:00:00.000 --> 00:00:04.000 sound:music
+",
+    )
+    .unwrap();
+    // A file of sounds only, --sdh: the .srt has the sound, the .premiere.json has no words.
+    let out = sonisub(&["render".as_ref(), capt.as_os_str(), "-t".as_ref(), "srt,premiere".as_ref(), "--sdh".as_ref()])
+        .output()
+        .unwrap();
+    assert!(!out.status.success());
+    assert!(!dir.path().join("intro.srt").exists(), "nothing is written when one output fails");
+}
+
+#[test]
 fn render_writes_ytt() {
     let dir = tempfile::tempdir().unwrap();
     let capt = dir.path().join("marks.capt");
