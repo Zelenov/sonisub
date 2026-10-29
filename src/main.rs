@@ -85,6 +85,7 @@ fn run(args: &RunArgs) -> Result<ExitCode> {
         items[0].output = job::output_base(o);
     }
 
+    args.seg.check(&args.formats)?;
     let mut opts = args.job_options();
     let scanning = spinner(format!("reading {} file(s)...", items.len()), folder_mode && !args.quiet);
     let plan = batch::plan(&items, &opts);
@@ -428,6 +429,7 @@ fn show_usage(api: &ApiArgs, days: u64) -> Result<()> {
 /// `sonisub render`: subtitles from a CAPT file or saved words, no Soniox.
 fn render(args: &RenderArgs) -> Result<()> {
     use sonisub::captions::capt::Doc;
+    args.seg.check(&args.formats)?;
     let input = &args.input;
     let text = std::fs::read_to_string(input).with_context(|| format!("cannot read {}", input.display()))?;
     let text = text.strip_prefix('\u{feff}').unwrap_or(&text);
@@ -444,7 +446,9 @@ fn render(args: &RenderArgs) -> Result<()> {
             .with_context(|| format!("{} is neither a CAPT file nor a JSON list of words", input.display()))?;
         (words, None)
     };
-    if words.is_empty() {
+    // A file of sounds only still has a transcript.
+    let sounds = doc.as_ref().is_some_and(|d| d.sounds().next().is_some());
+    if words.is_empty() && !(args.formats.contains(&job::Format::Transcript) && sounds) {
         bail!("{} has no words", input.display());
     }
     let output = job::output_base(args.output.as_deref().unwrap_or(input));
@@ -454,23 +458,24 @@ fn render(args: &RenderArgs) -> Result<()> {
         return Ok(());
     }
     let mut layout = args.seg.layout(true);
-    let mut ass = args.seg.ass();
+    let mut outputs = args.seg.outputs();
     let given = !layout.speaker_names.is_empty();
-    // Saved words become a CAPT file without an id: the input's name only seeds the Premiere ids.
-    let mut doc =
-        doc.or_else(|| targets.iter().any(|(f, _)| *f == job::Format::Capt).then(|| Doc::from_words(&words, None)));
-    if let Some(doc) = &mut doc {
-        if given {
-            // --speaker-names win over a CAPT file's names, and go into the CAPT written.
-            job::name_speakers(doc, &layout, &ass);
-        } else {
-            layout.speaker_names = job::speaker_names(doc);
-        }
-        ass.names = doc.speakers.iter().filter_map(|s| Some((s.id.clone(), s.name.clone()?))).collect();
+    // Saved words are laid out as they are; they become a CAPT file without an id (the input's
+    // name only seeds the Premiere ids) for `-t capt`.
+    let cue_words = if is_capt { None } else { Some(words.clone()) };
+    let mut doc = doc.unwrap_or_else(|| Doc::from_words(&words, None));
+    if given {
+        // --speaker-names win over a CAPT file's names, and go into the CAPT written.
+        job::name_speakers(&mut doc, &layout, &outputs.ass);
+    } else {
+        layout.speaker_names = job::speaker_names(&doc);
     }
-    let seed = doc.as_ref().and_then(|d| d.id.clone()).unwrap_or_else(|| name.clone());
-    let language = if is_capt { doc.as_ref().and_then(|d| d.lang.clone()) } else { None };
-    let (files, cues) = job::write_outputs(&targets, &words, doc.as_ref(), &layout, &ass, language.as_deref(), &seed)?;
+    outputs.ass.names = doc.speakers.iter().filter_map(|s| Some((s.id.clone(), s.name.clone()?))).collect();
+    let seed = doc.id.clone().unwrap_or_else(|| name.clone());
+    let language = if is_capt { doc.lang.clone() } else { None };
+    let cue_words = cue_words.unwrap_or_else(|| words.clone());
+    let (files, cues) =
+        job::write_outputs(&targets, &cue_words, &words, &doc, &layout, &outputs, language.as_deref(), &seed)?;
     let what = if cues > 0 { format!("{cues} cues") } else { "transcript".into() };
     let paths: Vec<String> = files.iter().map(|f| f.display().to_string()).collect();
     eprintln!("✓ {name} — {what} -> {}", paths.join(", "));

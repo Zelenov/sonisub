@@ -2,7 +2,7 @@ use std::path::PathBuf;
 use std::time::Duration;
 
 use clap::{Args, Parser, Subcommand};
-use sonisub::captions::ass;
+use sonisub::captions::{self, ass};
 use sonisub::job::Format;
 use sonisub::{audio, job, soniox, srt};
 
@@ -37,7 +37,7 @@ pub enum Command {
         api: ApiArgs,
     },
     /// Write subtitles from a CAPT file or saved words (a JSON list of words with timing), without transcribing again.
-    Render(RenderArgs),
+    Render(Box<RenderArgs>),
     /// List (and with --yes delete) all files and transcriptions stored in the Soniox account.
     Purge {
         /// Actually delete. Without it only prints what would be deleted.
@@ -83,10 +83,12 @@ pub struct RunArgs {
     #[command(flatten)]
     pub api: ApiArgs,
 
-    /// What to write, comma separated: srt, vtt (WebVTT), ass (a style per speaker), premiere (Premiere Pro
-    /// transcript, clip.premiere.json), capt (the whole transcript as small text, clip.capt; `sonisub render`
-    /// makes the other formats from it). Only missing files are written, so adding a format later reuses the
-    /// saved transcript for free.
+    /// What to write, comma separated: srt, vtt (WebVTT), ass (a style per speaker), premiere (Premiere Pro transcript,
+    /// clip.premiere.json), capt (the whole transcript as small text, clip.capt; `sonisub render` makes the other
+    /// formats from it), sbv (YouTube's SBV, clip.sbv), lrc (Enhanced LRC, a time before every word, clip.lrc),
+    /// transcript (plain text, a paragraph per speaker turn, clip.txt), ttml (TTML / IMSC 1.1 Text, clip.ttml), adr (a
+    /// DaVinci Resolve Fairlight ADR cue list, clip.adr.csv), ytt (YouTube's srv3, a time for every word, clip.ytt).
+    /// Only missing files are written, so adding a format later reuses the saved transcript for free.
     #[arg(short = 't', long = "format", value_enum, value_delimiter = ',', default_value = "srt")]
     pub formats: Vec<Format>,
 
@@ -201,6 +203,21 @@ pub struct SegArgs {
     /// In .ass, light up each word as it is spoken (\k karaoke).
     #[arg(long)]
     pub karaoke: bool,
+
+    /// The language of sound and voice labels in -t transcript and -t adr: en ([laughs]) or ru ((смеётся)).
+    /// Default: ru for a Russian transcript, else en.
+    #[arg(long, value_parser = captions::labels::LANGUAGES, help_heading = "Outputs")]
+    pub labels: Option<String>,
+
+    /// Frame rate of the Fairlight timeline (-t adr): 23.976, 24, 25, 29.97, 30, 50, 59.94 or 60; in Resolve, Project
+    /// Settings > Master Settings > Timeline frame rate.
+    #[arg(long, default_value = "25", value_parser = captions::adr::Rate::parse, help_heading = "Fairlight ADR")]
+    pub fps: captions::adr::Rate,
+
+    /// Where the clip starts on the Fairlight timeline (-t adr), HH:MM:SS:FF, non-drop frame; usually the
+    /// timeline's own start (Timeline > Starting Timecode, 01:00:00:00 unless changed).
+    #[arg(long, default_value = "01:00:00:00", value_parser = captions::adr::Timecode::parse, help_heading = "Fairlight ADR")]
+    pub timeline_start: captions::adr::Timecode,
 }
 
 impl SegArgs {
@@ -219,8 +236,26 @@ impl SegArgs {
         }
     }
 
-    pub fn ass(&self) -> ass::Options {
-        ass::Options { karaoke: self.karaoke, ..Default::default() }
+    /// How the formats are written beyond the layout.
+    pub fn outputs(&self) -> job::Outputs {
+        job::Outputs {
+            ass: ass::Options { karaoke: self.karaoke, ..Default::default() },
+            adr: captions::adr::Options { rate: self.fps, start: self.timeline_start, ..Default::default() },
+            labels: self.labels.clone(),
+        }
+    }
+
+    /// Options that make no sense for `formats`, said instead of ignored.
+    pub fn check(&self, formats: &[Format]) -> anyhow::Result<()> {
+        if self.labels.is_some() && !formats.contains(&Format::Transcript) && !formats.contains(&Format::Adr) {
+            anyhow::bail!("--labels needs -t transcript or -t adr: nothing else writes a label");
+        }
+        if formats.contains(&Format::Adr) {
+            self.timeline_start
+                .frames_at(self.fps)
+                .map_err(|e| anyhow::anyhow!("--timeline-start: {e}; pass --fps to match the timeline"))?;
+        }
+        Ok(())
     }
 }
 
@@ -231,7 +266,7 @@ pub struct RenderArgs {
     /// (start and end in milliseconds; speaker and language optional).
     pub input: PathBuf,
 
-    /// What to write, comma separated: srt, vtt, ass, premiere, capt.
+    /// What to write, comma separated: srt, vtt, ass, premiere, capt, sbv, lrc, transcript, ttml, adr, ytt.
     #[arg(short = 't', long = "format", value_enum, value_delimiter = ',', default_value = "srt")]
     pub formats: Vec<Format>,
 
@@ -263,7 +298,7 @@ impl RunArgs {
             formats: self.formats.clone(),
             force: self.force,
             layout: self.seg.layout(!self.no_diarization),
-            ass: self.seg.ass(),
+            outputs: self.seg.outputs(),
             poll: Duration::from_secs_f64(self.poll.max(0.2)),
             prefix: String::new(),
             reference: "sonisub".into(),

@@ -90,10 +90,27 @@ fn render_writes_subtitles_from_saved_words() {
     let err = plain(&out);
     assert!(out.status.success(), "{err}");
     assert!(err.starts_with("✓ dialog.words.json — 10 cues -> "), "{err}");
-    for (file, golden) in [("dialog.srt", "dialog.srt"), ("dialog.vtt", "dialog.vtt"), ("dialog.ass", "dialog.ass")] {
+    for (file, golden) in [("dialog.srt", "dialog.srt"), ("dialog.ass", "dialog.ass")] {
         let written = std::fs::read_to_string(dir.path().join(file)).unwrap();
         assert_eq!(common::normalize(&written), common::golden(golden), "{file}");
     }
+    // Saved words are laid out as they are: no CAPT marks, so no <lang> in WebVTT.
+    let vtt = std::fs::read_to_string(dir.path().join("dialog.vtt")).unwrap();
+    let layout = sonisub::captions::Layout::default();
+    assert_eq!(common::normalize(&vtt), sonisub::captions::vtt::build(&words, &layout).0);
+
+    // A glued word and times off the 10 ms grid come out as given.
+    let glued = dir.path().join("glued.words.json");
+    std::fs::write(
+        &glued,
+        r#"[{"text":"Well,","start":1234,"end":1567},{"text":"finally—","start":1601,"end":1999},
+            {"text":"and","start":2003,"end":2111,"glued":true},{"text":"here.","start":3005,"end":3333}]"#,
+    )
+    .unwrap();
+    let out = sonisub(&["render".as_ref(), glued.as_os_str(), "-t".as_ref(), "srt".as_ref()]).output().unwrap();
+    assert!(out.status.success(), "{}", plain(&out));
+    let srt = std::fs::read_to_string(dir.path().join("glued.srt")).unwrap();
+    assert_eq!(srt, "1\n00:00:01,234 --> 00:00:03,333\nWell, finally—and here.\n\n");
 
     let again = render(&[]);
     assert!(plain(&again).contains("skipped, .srt, .vtt, .ass exist (--force to redo)"));
@@ -177,4 +194,156 @@ fn speaker_names_go_into_capt_and_come_back_out_of_it() {
     assert!(srt.contains("Anna: Hi, today"), "{srt}");
     let ass = std::fs::read_to_string(dir.path().join("dialog.ass")).unwrap();
     assert!(ass.contains("Style: Anna,") && ass.contains(",Boris,"), "{ass}");
+}
+
+#[test]
+fn a_capt_file_of_sounds_only_has_nothing_to_write() {
+    let dir = tempfile::tempdir().unwrap();
+    let capt = dir.path().join("intro.capt");
+    std::fs::write(
+        &capt,
+        "CAPT 1
+
+00:00:00.000 --> 00:00:04.000 sound:music
+",
+    )
+    .unwrap();
+    let out = sonisub(&["render".as_ref(), capt.as_os_str(), "-t".as_ref(), "srt".as_ref()]).output().unwrap();
+    assert!(!out.status.success());
+    assert!(!dir.path().join("intro.srt").exists());
+}
+
+#[test]
+fn render_writes_sbv() {
+    let dir = tempfile::tempdir().unwrap();
+    let capt = dir.path().join("dialog.capt");
+    std::fs::copy(common::fixture("dialog.capt"), &capt).unwrap();
+    let out =
+        sonisub(&["render".as_ref(), capt.as_os_str(), "-t".as_ref(), "sbv".as_ref(), "-s".as_ref()]).output().unwrap();
+    assert!(out.status.success(), "{}", plain(&out));
+    let written = std::fs::read_to_string(dir.path().join("dialog.sbv")).unwrap();
+    assert_eq!(common::normalize(&written), common::golden("dialog.sbv"));
+}
+
+#[test]
+fn render_writes_lrc() {
+    let dir = tempfile::tempdir().unwrap();
+    let capt = dir.path().join("dialog.capt");
+    std::fs::copy(common::fixture("dialog.capt"), &capt).unwrap();
+    let out =
+        sonisub(&["render".as_ref(), capt.as_os_str(), "-t".as_ref(), "lrc".as_ref(), "-s".as_ref()]).output().unwrap();
+    assert!(out.status.success(), "{}", plain(&out));
+    let written = std::fs::read_to_string(dir.path().join("dialog.lrc")).unwrap();
+    assert_eq!(common::normalize(&written), common::golden("dialog.lrc"));
+}
+#[test]
+fn render_writes_transcript() {
+    let dir = tempfile::tempdir().unwrap();
+    let capt = dir.path().join("marks.capt");
+    std::fs::copy(common::fixture("marks.capt"), &capt).unwrap();
+    let out = sonisub(&["render".as_ref(), capt.as_os_str(), "-t".as_ref(), "transcript".as_ref()]).output().unwrap();
+    assert!(out.status.success(), "{}", plain(&out));
+    let written = std::fs::read_to_string(dir.path().join("marks.txt")).unwrap();
+    assert_eq!(common::normalize(&written), common::golden("marks.txt"));
+}
+
+#[test]
+fn a_transcript_takes_labels_and_a_file_of_sounds_only() {
+    let dir = tempfile::tempdir().unwrap();
+    let capt = dir.path().join("intro.capt");
+    std::fs::write(
+        &capt,
+        "CAPT 1
+
+00:00:00.000 --> 00:00:04.000 sound:laughter
+",
+    )
+    .unwrap();
+    let args = ["render".as_ref(), capt.as_os_str(), "-t".as_ref(), "transcript".as_ref()];
+    let out = sonisub(&[&args[..], &["--labels".as_ref(), "ru".as_ref()]].concat()).output().unwrap();
+    assert!(out.status.success(), "{}", plain(&out));
+    let txt = std::fs::read_to_string(dir.path().join("intro.txt")).unwrap();
+    assert_eq!(
+        txt,
+        "[00:00:00]
+(смеётся)
+
+"
+    );
+}
+#[test]
+fn render_writes_ttml() {
+    let dir = tempfile::tempdir().unwrap();
+    let capt = dir.path().join("marks.capt");
+    std::fs::copy(common::fixture("marks.capt"), &capt).unwrap();
+    let out = sonisub(&["render".as_ref(), capt.as_os_str(), "-t".as_ref(), "ttml".as_ref(), "-s".as_ref()])
+        .output()
+        .unwrap();
+    assert!(out.status.success(), "{}", plain(&out));
+    let written = std::fs::read_to_string(dir.path().join("marks.ttml")).unwrap();
+    assert_eq!(common::normalize(&written), common::golden("marks.ttml"));
+}
+#[test]
+fn render_writes_adr() {
+    let dir = tempfile::tempdir().unwrap();
+    let capt = dir.path().join("marks.capt");
+    std::fs::copy(common::fixture("marks.capt"), &capt).unwrap();
+    let out = sonisub(&["render".as_ref(), capt.as_os_str(), "-t".as_ref(), "adr".as_ref()]).output().unwrap();
+    assert!(out.status.success(), "{}", plain(&out));
+    let written = std::fs::read_to_string(dir.path().join("marks.adr.csv")).unwrap();
+    assert_eq!(common::normalize(&written), common::golden("marks.adr.csv"));
+}
+
+#[test]
+fn a_timeline_start_past_the_frame_rate_is_refused_only_for_adr() {
+    let dir = tempfile::tempdir().unwrap();
+    let capt = dir.path().join("marks.capt");
+    std::fs::copy(common::fixture("marks.capt"), &capt).unwrap();
+    let args = ["render".as_ref(), capt.as_os_str(), "-t".as_ref(), "adr".as_ref(), "--timeline-start".as_ref()];
+    let out = sonisub(&[&args[..], &["01:00:00:25".as_ref()]].concat()).output().unwrap();
+    assert!(!out.status.success());
+    assert!(plain(&out).contains("--timeline-start"), "{}", plain(&out));
+    let rate = ["01:00:00:29".as_ref(), "--fps".as_ref(), "29.97".as_ref(), "-f".as_ref()];
+    let out = sonisub(&[&args[..], &rate[..]].concat()).output().unwrap();
+    assert!(out.status.success(), "{}", plain(&out));
+    // Drop-frame timecode is refused with what to do.
+    let out = sonisub(&[&args[..], &["01:00:00;00".as_ref()]].concat()).output().unwrap();
+    assert!(plain(&out).contains("non-drop frame"), "{}", plain(&out));
+    // Other formats do not care about the timeline.
+    let srt = ["render".as_ref(), capt.as_os_str(), "-t".as_ref(), "srt".as_ref(), "--timeline-start".as_ref()];
+    let out = sonisub(&[&srt[..], &["01:00:00:25".as_ref()]].concat()).output().unwrap();
+    assert!(out.status.success(), "{}", plain(&out));
+}
+
+#[test]
+fn an_adr_list_with_no_rows_is_not_written() {
+    let dir = tempfile::tempdir().unwrap();
+    let capt = dir.path().join("nospk.capt");
+    std::fs::write(&capt, "CAPT 1\n\n00:00:00.000 --> 00:00:04.000 sound:phone\n").unwrap();
+    let out = sonisub(&["render".as_ref(), capt.as_os_str(), "-t".as_ref(), "adr".as_ref()]).output().unwrap();
+    assert!(!out.status.success(), "{}", plain(&out));
+    assert!(!dir.path().join("nospk.adr.csv").exists());
+}
+
+#[test]
+fn an_adr_list_takes_labels() {
+    let dir = tempfile::tempdir().unwrap();
+    let capt = dir.path().join("marks.capt");
+    std::fs::copy(common::fixture("marks.capt"), &capt).unwrap();
+    let args = ["render".as_ref(), capt.as_os_str(), "-t".as_ref(), "adr".as_ref(), "--labels".as_ref(), "ru".as_ref()];
+    let out = sonisub(&args).output().unwrap();
+    assert!(out.status.success(), "{}", plain(&out));
+    let csv = std::fs::read_to_string(dir.path().join("marks.adr.csv")).unwrap();
+    assert!(csv.contains("(смеётся)"), "{csv}");
+}
+#[test]
+fn render_writes_ytt() {
+    let dir = tempfile::tempdir().unwrap();
+    let capt = dir.path().join("marks.capt");
+    std::fs::copy(common::fixture("marks.capt"), &capt).unwrap();
+    let out =
+        sonisub(&["render".as_ref(), capt.as_os_str(), "-t".as_ref(), "ytt".as_ref(), "-s".as_ref()]).output().unwrap();
+    assert!(out.status.success(), "{}", plain(&out));
+    let written = std::fs::read_to_string(dir.path().join("marks.ytt")).unwrap();
+    assert_eq!(common::normalize(&written), common::golden("marks.ytt"));
 }

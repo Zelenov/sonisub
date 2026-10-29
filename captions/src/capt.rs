@@ -54,7 +54,8 @@ pub struct Speaker {
 }
 
 /// Where on screen.
-#[derive(Debug, Clone, Copy, PartialEq)]
+#[derive(Debug, Clone, Copy, PartialEq, serde::Serialize, serde::Deserialize)]
+#[serde(rename_all = "lowercase")]
 pub enum Pos {
     /// Bottom centre, the default.
     Bottom,
@@ -211,6 +212,7 @@ impl From<&Spoken> for crate::Word {
             language: s.language.clone(),
             confidence,
             glued: false,
+            marks: Default::default(),
         }
     }
 }
@@ -1020,10 +1022,54 @@ impl Doc {
                     language,
                     confidence: confs.iter().sum::<f64>() / confs.len().max(1) as f64,
                     glued: false,
+                    marks: Default::default(),
                 });
+            }
+            // What the file says about each word, for the layout and the writers.
+            let words: Vec<&Word> = b.words().collect();
+            let first = out.len() - words.len();
+            let ends: Vec<usize> = b
+                .phrases
+                .iter()
+                .scan(0, |n, p| {
+                    *n += p.len();
+                    Some(*n - 1)
+                })
+                .collect();
+            for (k, w) in words.iter().enumerate() {
+                let m = &mut out[first + k].marks;
+                // A cut point follows the last word of a phrase; a block ends at one too.
+                m.cut = Some(ends.contains(&k));
+                m.sentence = b
+                    .spans
+                    .iter()
+                    .filter(|s| s.to == w.end && s.from <= w.start())
+                    .find_map(|s| s.options.iter().find(|(key, _)| key == "sentence"))
+                    .and_then(|(_, v)| match v.first().map(String::as_str) {
+                        Some("end") => Some(true),
+                        Some("continues") => Some(false),
+                        _ => None,
+                    });
+                m.italic = b.span_option(w.start(), "style").is_some_and(|v| v.iter().any(|s| s == "italic"));
+                m.pos = b
+                    .span_option(w.start(), "pos")
+                    .and_then(|v| parse_pos(v).ok())
+                    .or(b.pos)
+                    .filter(|p| *p != Pos::Bottom);
+                m.voice =
+                    b.span_option(w.start(), "voice").and_then(|v| v.first().cloned()).or_else(|| b.voice.clone());
+                // Marked against the file's language: a Russian block in an English file is Russian
+                // all through, an English word inside it is not marked.
+                let language = out[first + k].language.clone();
+                out[first + k].marks.lang = language.filter(|l| Some(l) != self.lang.as_ref());
             }
         }
         out
+    }
+
+    /// The sound blocks (`sound` is set), in order.
+    pub fn sounds(&self) -> impl Iterator<Item = &Block> {
+        self.blocks.iter().filter(|b| b.sound.is_some())
     }
 }
 

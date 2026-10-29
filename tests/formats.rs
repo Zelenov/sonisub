@@ -20,7 +20,8 @@ fn cues(text: &str) -> Vec<(String, String, String)> {
 
 #[test]
 fn golden_vtt_and_ass_for_the_dialog() {
-    let words = soniox::words(&common::transcript());
+    // As `job::process` makes them: from the CAPT document, which marks the Russian and Spanish lines.
+    let words = soniox::capt(&common::transcript()).to_words();
     let layout = Layout::default();
     assert_eq!(vtt::build(&words, &layout).0, common::golden("dialog.vtt"));
     assert_eq!(ass::build(&words, &layout, &ass::Options::default()).0, common::golden("dialog.ass"));

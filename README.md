@@ -2,7 +2,8 @@
 
 <img src="https://raw.githubusercontent.com/Zelenov/sonisub/main/docs/icon/sonisub-256.png" align="left" width="128" height="128" alt="sonisub icon">
 
-Generate subtitles (`.srt`, WebVTT, ASS) and Premiere Pro transcripts for video and audio files with
+Generate subtitles (`.srt`, WebVTT, ASS, TTML, YouTube's SBV and YTT, LRC), plain text transcripts, Fairlight ADR cue lists and
+Premiere Pro transcripts for video and audio files with
 [Soniox](https://soniox.com) speech-to-text.
 One self-contained binary: no Python, no ffmpeg required.
 
@@ -43,11 +44,7 @@ Pipeline per file:
 
 ## Build from source
 
-```
-cargo install --path .
-```
-
-or copy `target/release/sonisub(.exe)` anywhere on `PATH`.
+`cargo install --path .`, or copy `target/release/sonisub(.exe)` anywhere on `PATH`.
 
 ## API key
 
@@ -66,7 +63,12 @@ sonisub clip.MP4 -t srt,premiere          # also clip.premiere.json for Premiere
 sonisub . -t premiere                     # only the Premiere transcript; saved .soniox.json files are reused
 sonisub clip.MP4 -t srt,vtt,ass           # also clip.vtt (WebVTT) and clip.ass (a style per speaker)
 sonisub clip.MP4 -t ass --karaoke         # each word lights up as it is spoken
+sonisub clip.MP4 -t srt,sbv               # also clip.sbv for YouTube Studio
+sonisub clip.MP4 -t lrc                   # clip.lrc for karaoke players and music apps
+sonisub clip.MP4 -t srt,transcript        # also clip.txt, a plain text transcript to read and search
+sonisub render clip.capt -t adr --fps 29.97  # a DaVinci Resolve Fairlight ADR cue list
 sonisub clip.MP4 -t srt,capt              # also clip.capt, the whole transcript as small text
+sonisub render clip.capt -t ytt           # YouTube: word by word, like its own captions
 sonisub render clip.capt -t vtt,premiere  # other formats from a CAPT file or saved words, no Soniox
 sonisub clip.MP4 --no-json                # don't keep clip.soniox.json
 sonisub clip.MP4 -u                       # no length limit: one cue per sentence
@@ -94,11 +96,9 @@ Before anything is uploaded, sonisub reads the headers and shows the plan:
      4  .srt exists, skipped (--force to redo)
 ```
 
-`-n` / `--dry-run` also lists every file and stops there. While running, one bar tracks the whole batch (a
-single file too) by audio length: files sent, minutes done, cost so far and `eta ~4 min`, with the current
-file's stages under it. The bar moves while a file is extracted, uploaded and transcribed, so it does not stand
-still on a long file; Soniox gives no percentage, so transcribing shows `~60% (est.)` and stays under 95% until
-it is done. The ETA is hidden until a file is done or 30 s have passed. Each finished file leaves one line:
+`-n` / `--dry-run` also lists every file and stops there. While running, one bar tracks the whole batch by
+audio length (files sent, minutes done, cost so far, `eta ~4 min`), with the current file's stages under it;
+Soniox gives no percentage, so transcribing shows `~60% (est.)` below 95% until done. Each finished file leaves one line:
 `✓` subtitled, `·` skipped, `∅` no speech, `–` no audio, `✗` error; several files end with a summary. After
 Ctrl+C the summary says what finished, what did not, and what was removed (the temp audio and the Soniox uploads).
 
@@ -134,6 +134,30 @@ or bins, press **Import transcripts**.
 orange, violet, red, then repeating), black outline, bottom centre. Every line names its speaker, so in Aegisub
 you restyle or rename a person in one place. Without diarization all lines use the `Default` style. `--karaoke` adds word-by-word
 highlight (`\k`).
+
+## Other formats
+
+`-t sbv` writes YouTube's SBV (`clip.sbv`), the same cues as the `.srt`, for YouTube Studio's subtitle upload.
+
+`-t lrc` writes Enhanced LRC (`clip.lrc`): a line per cue with a time before every word, for karaoke players and music apps.
+
+`-t transcript` (or `-t text`, `-t txt`) writes a plain text transcript (`clip.txt`): a paragraph per speaker turn, headed by
+the name and the time, a new paragraph after a pause of over 5 s, at the first sentence end after a minute, or after two minutes
+without one; sounds and voices a CAPT file marks as labels in
+English or Russian (`--labels en|ru`; by default the transcript's language).
+
+`-t ttml` writes TTML / IMSC 1.1 Text (`clip.ttml`), what broadcasters and streaming services ask for: speakers as
+agents, places as regions (a rectangle exactly), italic and languages. For a delivery spec that counts characters a
+line, add `-w --max-line 42`.
+
+`-t adr` writes a DaVinci Resolve Fairlight ADR cue list (`clip.adr.csv`; Fairlight page > ADR > List > Import Cue
+List): a row per breath of speech, joined per speaker, with the speaker's own sounds and voices as directions
+(`--labels en|ru`); `--fps 23.976|24|25|29.97|30|50|59.94|60` and `--timeline-start 01:00:00:00` (where the clip
+starts on the timeline, non-drop frame) match the timeline.
+
+`-t ytt` writes YTT, YouTube's own timed text (`clip.ytt`, also called srv3): a time for every word, so YouTube can
+show an uploaded subtitle word by word like its own captions, plus places and italic. Upload it in YouTube Studio as
+a subtitle file.
 
 `sonisub render` makes the same files without Soniox: from a CAPT file (`-t capt` writes `clip.capt`, the whole
 transcript as small text you can read and edit, see [docs/capt.md](docs/capt.md)), or from words saved as JSON
@@ -182,11 +206,11 @@ Exit codes: `0` ok, `1` some files failed, `2` fatal (key/balance/usage), `130` 
 
 | Module | Does |
 |---|---|
-| `src/job.rs` | **one file**: media → audio → Soniox → `.srt` / `.vtt` / `.ass` / `.premiere.json`, cleanup. `job::process(input, output, &Options, client)` |
+| `src/job.rs` | **one file**: media → audio → Soniox → every output, cleanup. `job::process(input, output, &Options, client)` |
 | `src/audio.rs` | audio track → 16 kHz mono FLAC (built-in decoder or ffmpeg) |
 | `src/soniox.rs` | Soniox REST client, error types, remote cleanup guard; `soniox::words` reads a transcript as words |
 | `src/languages.rs` | language codes `-l` takes, from Soniox (`languages::fetch(client)`) |
-| `captions/` | the [`captions`](captions/README.md) crate: words → cues → SRT, WebVTT, ASS, Premiere Pro transcript, and the CAPT format; no Soniox |
+| `captions/` | the [`captions`](captions/README.md) crate: words → cues → every subtitle format, and the CAPT format; no Soniox |
 | `src/srt.rs`, `src/premiere.rs` | a Soniox transcript straight to SRT / Premiere Pro transcript, through `captions` |
 | `src/cancel.rs` | Ctrl+C flag and per-job `CancelToken` |
 | `src/main.rs`, `src/cli.rs`, `src/ui.rs` | command line only: arguments, the list of files, log, stopping on fatal errors, the batch bar and its ETA |
@@ -194,7 +218,7 @@ Exit codes: `0` ok, `1` some files failed, `2` fatal (key/balance/usage), `130` 
 ### As a library
 
 ```toml
-sonisub = { version = "0.8", default-features = false }
+sonisub = { version = "0.9", default-features = false }
 ```
 
 Subtitle formats live in the [`captions`](captions/README.md) crate, re-exported as `sonisub::captions`:
@@ -215,14 +239,11 @@ thread, so create the `Client` where the job runs. On Windows, ffmpeg and ffprob
 
 To show progress without a console, set `Options::on_progress` to `progress::Callback::new(|p| ..)`. Each
 `Progress` names the stage (extracting, uploading, transcribing, downloading, writing), how far it is, and
-`overall` for one bar (extract 15 %, upload 15 %, transcribe 60 %, download 5 %, write 5 %). Extraction and
-upload are real fractions. Soniox only reports `queued` / `processing`, so while it transcribes the fraction is
-an estimate from the audio length and the speed of earlier jobs in the process; it stops at 95 % until Soniox is
-done, and nothing ever goes backwards.
-`fraction` is `None` while the length of the media is not known yet: show a busy bar. While transcribing,
-`detail` is the Soniox status (from the second report on) and `remaining` the estimated time left; `remaining: None`
-there means the estimate has run out and Soniox is still working (the bar sits at 95 % of the stage): say "finishing". The callback runs on the job's threads: send the value
-over a channel to your UI instead of touching it there.
+`overall` for one bar (extract 15 %, upload 15 %, transcribe 60 %, download 5 %, write 5 %). While Soniox
+transcribes, the fraction is an estimate from the audio length that stops at 95 % until Soniox is done; nothing
+goes backwards. `fraction: None`: the media's length is not known yet, show a busy bar. `remaining: None` while
+transcribing: the estimate has run out, say "finishing". The callback runs on the job's threads: send the value
+over a channel to your UI.
 
 ## Tests
 
@@ -235,7 +256,9 @@ cargo test --test live -- --ignored   # real Soniox round trip (needs SONIOX_API
 `dialog` (English voices plus a Russian and a Spanish line), `punctuation` (dense punctuation, abbreviations,
 numbers, a sentence without commas), `nospeech` (noise and music: Soniox's empty transcript), plus `noaudio.mp4`
 and `silence.m4a`. Each has the video, the transcript and expected subtitles for the default, `-u` and `-s`
-layouts, and `dialog`/`punctuation` the expected Premiere transcript; `dialog` also `.vtt`, `.ass` and `.karaoke.ass`. Review the `.srt` diff before committing regenerated fixtures.
+layouts, and `dialog`/`punctuation` the expected Premiere transcript. `dialog.capt` and the hand-written
+`marks.capt` have every other output; `BLESS=1 cargo test --test outputs` rewrites those. Review the diff before
+committing regenerated fixtures.
 
 ## Building for other platforms
 

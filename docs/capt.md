@@ -2,7 +2,7 @@
 
 CAPT is a transcript as a small text file: pieces of words with their times, words, cut points,
 sentences, speakers, languages and confidence. sonisub writes it (`-t capt`) and can make the other
-formats from it (`sonisub render clip.capt -t srt,vtt,ass,premiere`). The `captions` crate reads and
+formats from it (`sonisub render clip.capt -t srt,vtt,ass,sbv,lrc,transcript,ttml,adr,ytt,premiere`). The `captions` crate reads and
 writes it (`captions::capt`).
 
 ```
@@ -154,11 +154,25 @@ block above it; a block line with no blank line before it; a `{` never closed or
 block with text; a line after the text that is not a span; a span that does not start where a piece starts, ends at no later mark, or puts a
 whole-word option on part of a word. Problems are listed in order of line.
 
-## What sonisub reads today
+## What the outputs do with it
 
-`sonisub render clip.capt` reads the words, their times, speakers, speaker names, languages and
-confidence. Speaker names go to ASS styles for any id, and to `-s` labels and Premiere only for
-numbered speakers (`speaker:1`). `--speaker-names` replaces them, also in a CAPT file it writes. It lays out subtitles by the text's punctuation and pauses, as it does for a Soniox
-transcript, so it does not yet follow a ` / ` moved by hand, `sentence:`, `pos`, `voice`, `style`,
-sound blocks or `alt`: that is the next step of
-[#19](https://github.com/Zelenov/sonisub/issues/19). A file you edit keeps all of them.
+`sonisub render clip.capt -t …` reads everything above. Every subtitle output cuts at the file's
+cut points (a ` / ` moved by hand moves the cut), ends sentences as `sentence:` says, and never lets
+one subtitle span two places. Speaker names go to ASS styles, transcript headings, TTML agents and ADR characters for any id, and to `-s` labels and
+Premiere only for numbered speakers (`speaker:1`); `--speaker-names` replaces them, also in a CAPT
+file it writes.
+
+| Output | Italic | Language | Place | Voice | Sounds |
+|---|---|---|---|---|---|
+| SRT | `<i>` | | `{\anN}`, the nearest of nine | | |
+| WebVTT | `<i>` | `<lang xx>` | cue settings; a rectangle's width and top | | |
+| ASS | `{\i1}` | | alignment and margins; a rectangle's width and top | | |
+| SBV | | | | | |
+| LRC | | | | | |
+| Transcript (`.txt`) | | | | `[whispering]` | the speaker's in their paragraph; another's or no one's after the sentence it falls in |
+| TTML / IMSC | `<span>` | `<span xml:lang>` | a region; a rectangle exactly (it grows if its text needs more lines) | | |
+| Fairlight ADR (`.adr.csv`) | | | | `[whispering]`, once a row | the speaker's own, in their cue |
+| YTT (`.ytt`, srv3) | pen `i="1"` | | a window position; a rectangle's top and centre | | |
+| Premiere | | | | | |
+
+Only the transcript and the ADR cue list show sounds and voices; `alt` is kept in the file but no output shows it.
