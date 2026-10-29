@@ -9,7 +9,7 @@
 - `--max-line`, `--max-lines` and `--max-duration` keep their defaults (50, 2, 8) for a horizontal video; a vertical one gets 22, 2 and 4 unless they are given.
 - The message after a file counts the cues of the first subtitles written, not the most of any format.
 - Subtitles are always made from the transcript as CAPT reads it, so `-t srt`, `-t srt,capt` and `render clip.capt` give the same cues; WebVTT now marks a sentence in another language than the file's (`<lang ru>…</lang>`). The Premiere transcript keeps Soniox's words as they are.
-- Library: `captions::Word` has `marks` and `Default` (build words with `..Word::default()`); `captions::Layout` has `frame` and `readable`, and `Layout::for_frame`; `job::Options::ass` is now `job::Options::outputs` (`job::Outputs`: `ass`, `sdh`, `labels`); `job::write_outputs` takes the words to lay out, the words for Premiere, the CAPT document and `&job::Outputs` instead of `&ass::Options`; `job::frame_into` writes the layout's frame into a CAPT document. captions 0.3.0.
+- Library: `captions::Word` has `marks` and `Default` (build words with `..Word::default()`); `captions::Layout` has `frame` and `readable`, and `Layout::for_frame`; `job::Options::ass` is now `job::Options::outputs` (`job::Outputs`: `ass`, `sdh`, `labels`); `job::write_outputs` takes the words to lay out, the words for Premiere, the CAPT document and `&job::Outputs` instead of `&ass::Options`; `job::frame_into` writes the layout's frame into a CAPT document; `job::Format` is `#[non_exhaustive]` (a `match` needs a `_` arm). captions 0.3.0.
 
 # 0.8.0
 ## Added
