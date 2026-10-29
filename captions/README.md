@@ -50,6 +50,7 @@ let (ass, _) = ass::build(&words, &layout, &ass::Options { karaoke: true, ..Defa
 - For a preview: `Cue::shown` gives where each word of a cue is shown (line by line, after the speaker label),
   `capt::Doc::pieces` the pieces (syllables, tokens) of every word of the cues with their times, `ass::styles`
   the ASS styles with their colours, and `adr::rows` the ADR cue list's rows with the moments they are heard.
-  `Doc::speaker_names` and `Doc::name_speakers` read and set the header's names as `sonisub render` does.
+  `Doc::speaker_names` and `Doc::name_speakers` read and set the header's names as `sonisub render` does;
+  `Doc::merge_speakers` makes speakers recognition split one (`{3: 1}`), the others keeping their numbers.
 
 MIT licensed.

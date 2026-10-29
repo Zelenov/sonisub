@@ -14,7 +14,7 @@ npm i https://github.com/Zelenov/sonisub/releases/download/v0.9.1/captions-wasm-
 ```
 
 ```js
-import init, { parse, formats, render, layout } from "captions-wasm";
+import init, { parse, formats, render, layout, mergeSpeakers } from "captions-wasm";
 
 await init(); // in Node: await init({ module_or_path: fs.readFileSync(wasmPath) })
 const capt = await (await fetch("/clip.capt")).text();
@@ -24,6 +24,7 @@ formats();                          // [{ name: "srt", extension, contentType, l
 render(capt, "srt", {});            // { text, fileName: "clip.srt", contentType, count }
 render(capt, "ass", { karaoke: true, speakerLabels: true });
 layout(capt, "ass", { karaoke: true }); // { kind: "cues", cues: [{ start, end, speaker, lines, position, style, words: [{ …, pieces }] }] }
+mergeSpeakers(capt, { 3: 1 });     // the CAPT text with speaker 3 made speaker 1
 ```
 
 - `parse(capt)`: the file's id, title, language, media, duration (ms), speakers, the languages of its
@@ -47,5 +48,13 @@ layout(capt, "ass", { karaoke: true }); // { kind: "cues", cues: [{ start, end, 
   - `transcript`, `capt`: `{ kind: "text", text }`.
 
   Every kind has `speakers`: `[{ id, name }]`.
+- `mergeSpeakers(capt, map)`: the CAPT text with speakers made one, for when recognition split a
+  person in two: `{ 3: 1 }` makes every block and header line of speaker 3 speaker 1, so every format
+  sees one speaker (their neighbouring lines join into cues, ASS has one style, ADR one character).
+  Chains resolve (`{ 3: 2, 2: 1 }` makes both speaker 1). The other speakers keep their numbers
+  (1, 2, 4 after merging 3, not 1, 2, 3), so their labels and names stay; colours go by order of
+  appearance. The merged speaker keeps its name, else takes the source's. Throws for a broken file
+  (with `errors`, as `parse`), a speaker mapped onto itself, or a number the file has no speaker for.
+  Pass the result to `render` and `layout`.
 
 MIT licensed.

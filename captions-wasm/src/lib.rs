@@ -5,6 +5,7 @@
 //! - [`formats`]: each format with its options as `captions` takes them: types, defaults, limits.
 //! - [`render`]: the file's text, as `sonisub render clip.capt -t <format>` writes it.
 //! - [`layout`]: the cues (or ADR rows, or the Premiere transcript) with per-word and per-piece times.
+//! - [`merge_speakers`] (`mergeSpeakers`): the file with speakers made one, as CAPT text.
 //!
 //! Values go in and out as plain JavaScript objects (through JSON); the TypeScript types are below.
 
@@ -585,6 +586,33 @@ pub fn parse(capt: &str) -> Result<JsValue, JsValue> {
         "words": words.len(),
         "sounds": doc.sounds().count(),
     })))
+}
+
+/// The file with speakers made one, as CAPT text: `{3: 1}` makes every block and header line of
+/// speaker 3 speaker 1 (`captions::capt::Doc::merge_speakers`). Chains resolve (`{3: 2, 2: 1}`), the
+/// other speakers keep their numbers, the merged speaker keeps its name, else takes the source's.
+/// Throws for a broken file (with `errors`, as `parse`), a speaker mapped onto itself, or a number
+/// the file has no speaker for.
+#[wasm_bindgen(js_name = mergeSpeakers)]
+pub fn merge_speakers(
+    capt: &str,
+    #[wasm_bindgen(unchecked_param_type = "Record<number, number>")] map: JsValue,
+) -> Result<String, JsValue> {
+    let mut doc = read(capt)?;
+    let entries = if map.is_object() { from_js(&map)? } else { Value::Null };
+    let Value::Object(entries) = entries else {
+        return Err(error("the map must be an object of speaker numbers: { 3: 1 }"));
+    };
+    let mut pairs = std::collections::BTreeMap::new();
+    for (from, to) in entries {
+        let to = to.as_u64().and_then(|n| u32::try_from(n).ok());
+        match (from.parse::<u32>(), to) {
+            (Ok(from), Some(to)) => pairs.insert(from, to),
+            _ => return Err(error(&format!("speaker {from}: speakers are numbers (`{{ 3: 1 }}`)"))),
+        };
+    }
+    doc.merge_speakers(&pairs).map_err(|e| error(&e))?;
+    Ok(doc.write())
 }
 
 fn speakers(doc: &Doc) -> Value {

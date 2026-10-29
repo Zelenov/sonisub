@@ -1143,6 +1143,94 @@ impl Doc {
             }
         }
     }
+
+    /// Makes speakers one: every block and header line of speaker `from` becomes speaker `to`, for
+    /// each `from -> to` of `map` (`{3: 1}`: "Speaker 3 is Speaker 1", recognition split one person
+    /// in two). Chains resolve (`{3: 2, 2: 1}` makes both 3 and 2 speaker 1). The writers then see
+    /// one speaker: neighbouring lines join into cues as the layout rules say, ASS has one style,
+    /// ADR one character, Premiere one speaker.
+    ///
+    /// The remaining speakers keep their numbers (merging 3 into 1 leaves 1, 2, 4, not 1, 2, 3), so
+    /// their "Speaker N" labels, names and ids stay what the person saw; the outputs colour speakers
+    /// in order of appearance, so the merged speaker has the colour of whichever of them is heard
+    /// first, and nobody heard before the merged ones changes colour.
+    ///
+    /// The merged speaker keeps its header line and its name; without a name it takes the first
+    /// named source's (in header order), and the sources' other options it does not have. When only
+    /// a source has a header line, that line becomes the target's.
+    ///
+    /// An error, and nothing changes, for a speaker mapped onto itself (also through a chain:
+    /// `{1: 2, 2: 1}`), or a number no block or header line has.
+    pub fn merge_speakers(&mut self, map: &std::collections::BTreeMap<u32, u32>) -> Result<(), String> {
+        let number = |id: &str| id.parse::<u32>().ok();
+        let known = |n: u32| {
+            self.speakers.iter().any(|s| number(&s.id) == Some(n))
+                || self.blocks.iter().any(|b| b.speaker.as_deref().and_then(number) == Some(n))
+        };
+        let mut target = std::collections::BTreeMap::new();
+        for (&from, &to) in map {
+            if let Some(n) = [from, to].into_iter().find(|&n| !known(n)) {
+                return Err(format!("the file has no speaker {n}"));
+            }
+            let (mut end, mut seen) = (to, vec![from]);
+            loop {
+                if seen.contains(&end) {
+                    return Err(format!("speaker {end} is mapped onto itself"));
+                }
+                match map.get(&end) {
+                    Some(&next) => {
+                        seen.push(end);
+                        end = next;
+                    }
+                    None => break,
+                }
+            }
+            target.insert(from, end);
+        }
+        // The id the merged speaker is written with: its header line's, else its blocks'.
+        let id_of = |n: u32| {
+            self.speakers
+                .iter()
+                .map(|s| &s.id)
+                .chain(self.blocks.iter().filter_map(|b| b.speaker.as_ref()))
+                .find(|id| number(id) == Some(n))
+                .cloned()
+                .unwrap_or_else(|| n.to_string())
+        };
+        let ids: std::collections::BTreeMap<u32, String> = target.values().map(|&to| (to, id_of(to))).collect();
+        let merged = |id: &str| number(id).and_then(|n| target.get(&n)).map(|to| ids[to].clone());
+
+        for b in &mut self.blocks {
+            if let Some(id) = b.speaker.as_deref().and_then(merged) {
+                b.speaker = Some(id);
+            }
+        }
+        // A source's header line folds into the target's, which keeps its place; when the target
+        // has none, the first source's line becomes it.
+        let had: Vec<String> = self.speakers.iter().map(|s| s.id.clone()).collect();
+        let mut lines: Vec<Speaker> = Vec::new();
+        let mut folded: Vec<(String, Speaker)> = Vec::new();
+        for s in std::mem::take(&mut self.speakers) {
+            match merged(&s.id) {
+                Some(to) if had.contains(&to) || lines.iter().any(|l| l.id == to) => folded.push((to, s)),
+                Some(to) => lines.push(Speaker { id: to, ..s }),
+                None => lines.push(s),
+            }
+        }
+        for (to, s) in folded {
+            let line = lines.iter_mut().find(|l| l.id == to).expect("the target has a line");
+            if line.name.is_none() {
+                line.name = s.name;
+            }
+            for (k, v) in s.other {
+                if !line.other.iter().any(|(key, _)| *key == k) {
+                    line.other.push((k, v));
+                }
+            }
+        }
+        self.speakers = lines;
+        Ok(())
+    }
 }
 
 /// One sentence's block: words on the grid (`plain`) with their pieces (`spoken`).

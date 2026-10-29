@@ -265,7 +265,8 @@ const { text, fileName } = render(capt, "srt", {}); // the .srt sonisub writes, 
 
 `parse(capt)` sums a file up or lists its problems by line; `formats()` lists every format with the options
 `captions` takes for it (types, defaults, limits); `layout(capt, format, options)` gives the cues with every word
-and piece (syllable) timed and placed, the ADR rows, or the Premiere transcript. See
+and piece (syllable) timed and placed, the ADR rows, or the Premiere transcript; `mergeSpeakers(capt, { 3: 1 })`
+gives the file with speaker 3 made speaker 1. See
 [captions-wasm/README.md](captions-wasm/README.md). To build it: `wasm-pack build --release --target web` in
 `captions-wasm/` (needs [wasm-pack](https://github.com/drager/wasm-pack) and the `wasm32-unknown-unknown` target).
 

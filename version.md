@@ -1,7 +1,7 @@
 # NEXT
 ## Added
-- `captions-wasm`: the subtitle formats in the browser. Every release carries `captions-wasm-<version>.tgz`, an npm package (ES module with TypeScript types, WebAssembly) that makes every format from a CAPT file, byte for byte what `sonisub render` writes, lists each format's options with their defaults, and gives a preview the cues with every word and piece timed (`npm i https://github.com/Zelenov/sonisub/releases/download/v0.9.1/captions-wasm-0.3.1.tgz`).
-- Library (captions 0.3.1): `Cue::shown` (where each word of a cue is shown), `capt::Doc::pieces` (the pieces of every word of the cues, with their times), `ass::styles`, `adr::rows`, `Doc::speaker_names`, `Doc::name_speakers`. Nothing changes for callers.
+- `captions-wasm`: the subtitle formats in the browser. Every release carries `captions-wasm-<version>.tgz`, an npm package (ES module with TypeScript types, WebAssembly) that makes every format from a CAPT file, byte for byte what `sonisub render` writes, lists each format's options with their defaults, gives a preview the cues with every word and piece timed, and merges speakers recognition split (`mergeSpeakers(capt, { 3: 1 })` gives the CAPT text with speaker 3 made speaker 1). `npm i https://github.com/Zelenov/sonisub/releases/download/v0.9.1/captions-wasm-0.3.1.tgz`.
+- Library (captions 0.3.1): `Cue::shown` (where each word of a cue is shown), `capt::Doc::pieces` (the pieces of every word of the cues, with their times), `ass::styles`, `adr::rows`, `Doc::speaker_names`, `Doc::name_speakers`, `Doc::merge_speakers` (speakers recognition split made one: `{3: 1}`, the others keep their numbers). Nothing changes for callers.
 
 # 0.9.0
 ## Added

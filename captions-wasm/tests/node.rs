@@ -1,10 +1,11 @@
 //! `wasm-pack test --node`: `render` gives byte for byte what `sonisub render` writes for every
 //! case of `tests/cases` (checked against the command line by sonisub's `tests/wasm_render.rs`),
-//! and `parse`, `formats` and `layout` give what a preview needs.
+//! and `parse`, `formats` and `layout` give what a preview needs; `mergeSpeakers` makes speakers one.
 
 mod cases;
 
-use captions_wasm::{formats, layout, parse, render};
+use captions::capt::Doc;
+use captions_wasm::{formats, layout, merge_speakers, parse, render};
 use js_sys::{JSON, Reflect};
 use wasm_bindgen::prelude::*;
 use wasm_bindgen_test::wasm_bindgen_test;
@@ -140,4 +141,106 @@ fn layout_gives_adr_rows_premiere_segments_and_text() {
     assert!(premiere["transcript"]["segments"].as_array().unwrap().len() > 1);
     let text = json(&layout(&capt, "txt", None).unwrap());
     assert_eq!(text["kind"], "text");
+}
+
+/// Anna is heard as speakers 1 and 3, her sentence split between them around Boris (2).
+const SPLIT: &str = "CAPT 1
+lang:en
+speaker:1
+speaker:2 name:Boris
+speaker:3 name:Anna
+speaker:4
+
+00:00:01.000 --> 00:00:02.000 id:aaaaaa speaker:1
+{0}So{30} {40}we{60} {70}went{100}
+
+00:00:02.200 --> 00:00:03.000 id:bbbbbb speaker:3
+{0}home{40} {50}early.{80}
+
+00:00:04.000 --> 00:00:05.000 id:cccccc speaker:2
+{0}Really?{100}
+
+00:00:06.000 --> 00:00:07.000 id:dddddd speaker:4
+{0}Yes.{100}
+";
+
+fn merged(map: &str) -> Result<String, JsValue> {
+    merge_speakers(SPLIT, JSON::parse(map).unwrap())
+}
+
+#[wasm_bindgen_test]
+fn merge_speakers_gives_capt_text_the_formats_see_as_one_speaker() {
+    let capt = merged(r#"{"3": 1}"#).unwrap();
+    assert!(
+        capt.contains(
+            "speaker:1 name:Anna
+speaker:2 name:Boris
+speaker:4
+
+"
+        ),
+        "{capt}"
+    );
+    assert!(!capt.contains("speaker:3"), "{capt}");
+    let s = json(&parse(&capt).unwrap());
+    assert_eq!(s["speakers"][0], serde_json::json!({"id": "1", "name": "Anna"}));
+
+    // SRT: her two lines join into one cue.
+    let text = |capt: &str, format: &str| get(&render(capt, format, None).unwrap(), "text").as_string().unwrap();
+    assert!(text(SPLIT, "srt").contains(
+        "So we went
+
+2
+"
+    ));
+    assert!(text(&capt, "srt").starts_with(
+        "1
+00:00:01,000 --> 00:00:03,000
+So we went home early.
+
+2
+"
+    ));
+    // ASS: one style for her (Default, Anna, Boris, Speaker 4); the layout gives her cue its colour.
+    let ass = text(&capt, "ass");
+    assert_eq!(ass.lines().filter(|l| l.starts_with("Style: ")).count(), 4, "{ass}");
+    assert_eq!(text(SPLIT, "ass").lines().filter(|l| l.starts_with("Style: ")).count(), 5);
+    let l = json(&layout(&capt, "ass", None).unwrap());
+    assert_eq!(l["cues"][0]["style"]["name"], "Anna");
+    // ADR: one character.
+    let rows = json(&layout(&capt, "adr", None).unwrap())["rows"].clone();
+    let characters: Vec<&str> = rows.as_array().unwrap().iter().map(|r| r["character"].as_str().unwrap()).collect();
+    assert_eq!(characters, ["Anna", "Boris", "Speaker 4"]);
+    assert_eq!(rows[0]["dialogue"], "So we went home early.");
+}
+
+#[wasm_bindgen_test]
+fn merge_speakers_resolves_chains_and_keeps_the_target_s_name() {
+    let s = json(&parse(&merged(r#"{"3": 2, "2": 1}"#).unwrap()).unwrap());
+    assert_eq!(s["speakers"], serde_json::json!([{"id": "1", "name": "Boris"}, {"id": "4", "name": null}]));
+    let s = json(&parse(&merged(r#"{"3": 2}"#).unwrap()).unwrap());
+    assert_eq!(s["speakers"][1], serde_json::json!({"id": "2", "name": "Boris"}));
+    assert_eq!(s["speakers"].as_array().unwrap().len(), 3);
+    assert_eq!(merged("{}").unwrap(), Doc::parse(SPLIT).unwrap().write());
+}
+
+#[wasm_bindgen_test]
+fn merge_speakers_throws_for_itself_an_unknown_speaker_or_a_broken_file() {
+    let message = |e: JsValue| get(&e, "message").as_string().unwrap();
+    assert_eq!(message(merged(r#"{"1": 1}"#).unwrap_err()), "speaker 1 is mapped onto itself");
+    assert_eq!(message(merged(r#"{"1": 2, "2": 1}"#).unwrap_err()), "speaker 1 is mapped onto itself");
+    assert_eq!(message(merged(r#"{"3": 9}"#).unwrap_err()), "the file has no speaker 9");
+    assert!(message(merged(r#"{"x": 1}"#).unwrap_err()).contains("numbers"));
+    assert!(message(merged(r#"{"3": "1"}"#).unwrap_err()).contains("numbers"));
+    assert!(message(merge_speakers(SPLIT, JsValue::NULL).unwrap_err()).contains("object"));
+    let e = merge_speakers(
+        "CAPT 1
+
+00:00:01.000 --> 00:00:02.000
+{0}a{x}
+",
+        JSON::parse("{}").unwrap(),
+    )
+    .unwrap_err();
+    assert!(get(&e, "errors").is_object());
 }
