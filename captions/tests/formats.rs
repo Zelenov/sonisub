@@ -422,3 +422,25 @@ fn ttml_shows_at_most_four_regions_and_none_overlap() {
     let ttml = captions::ttml::build(&doc, &Layout::unlimited()).0;
     assert_eq!(imsc_problems(&ttml), Vec::<String>::new(), "{ttml}");
 }
+
+#[test]
+fn a_ttml_voice_label_counts_in_the_lines_a_region_holds() {
+    let words: Vec<String> = (0..15).map(|i| format!("{{{}}}w{:03}{{{}}}", i * 9, i, i * 9 + 8)).collect();
+    let file = format!(
+        "CAPT 1\nlang:\n\n00:00:01.000 --> 00:00:03.000 voice:whisper\n{}\n\n00:00:02.000 --> 00:00:03.000 sound:phone\n",
+        words.join(" ")
+    );
+    let doc = captions::capt::Doc::parse(&file).unwrap();
+    let layout = Layout::unlimited();
+    let ttml = captions::sdh::ttml(&doc, &layout, "en").0;
+    assert_eq!(imsc_problems(&ttml), Vec::<String>::new(), "{ttml}");
+    // 15 rows, 38 characters a line in 80%: 74 characters are two lines, with the 13 of the label
+    // three, and the sound a fourth.
+    let bottom = ttml.lines().find(|l| l.contains(r#"xml:id="bottom""#)).unwrap();
+    let height: f64 = bottom.split("tts:extent=\"80% ").nth(1).unwrap().split('%').next().unwrap().parse().unwrap();
+    let rows: f64 =
+        ttml.split("ttp:cellResolution=\"").nth(1).unwrap().split(['"', ' ']).nth(1).unwrap().parse().unwrap();
+    assert!(height >= 4.0 * 1.25 / rows * 100.0, "{height}%\n{ttml}");
+    // An empty lang: is no language.
+    assert!(ttml.contains(r#"xml:lang="und">"#), "{ttml}");
+}

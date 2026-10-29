@@ -29,6 +29,11 @@ const MAX_SHOWN: usize = 4;
 const BOTTOM: usize = 0;
 const TOP: usize = 1;
 const MIDDLE: usize = 2;
+/// How many named regions come before the file's own places.
+const NAMED: usize = 3;
+/// A bound on the passes of placing and growing; each pass grows some region by a line, so it is
+/// never reached in practice, only kept so a mistake cannot loop for ever.
+const MAX_PASSES_PER_REGION: usize = 8;
 
 fn timestamp(ms: u64) -> String {
     format!("{:02}:{:02}:{:02}.{:03}", ms / 3_600_000, ms / 60_000 % 60, ms / 1000 % 60, ms % 1000)
@@ -36,6 +41,26 @@ fn timestamp(ms: u64) -> String {
 
 fn xml(s: &str) -> String {
     s.replace('&', "&amp;").replace('<', "&lt;").replace('>', "&gt;").replace('"', "&quot;")
+}
+
+/// The characters a player shows for TTML text: tags left out, an entity one character.
+fn shown_len(text: &str) -> usize {
+    let (mut n, mut tag, mut entity) = (0, false, false);
+    for c in text.chars() {
+        match c {
+            '<' => tag = true,
+            '>' if tag => tag = false,
+            _ if tag => {}
+            '&' => {
+                entity = true;
+                n += 1;
+            }
+            ';' if entity => entity = false,
+            _ if entity => {}
+            _ => n += 1,
+        }
+    }
+    n
 }
 
 fn lang_span(l: &str) -> (String, String) {
@@ -84,7 +109,7 @@ impl Region {
 
     /// The `<region>` element. Each edge is rounded inward to 0.1%, so a region inside the frame
     /// stays inside it.
-    fn line(&self) -> String {
+    fn element(&self) -> String {
         let (x, y, w, h) = self.rect;
         let from = |v: f64| ((v * 1000.0 - 1e-6).ceil() / 10.0).clamp(0.0, 100.0);
         let to = |v: f64| ((v * 1000.0 + 1e-6).floor() / 10.0).clamp(0.0, 100.0);
@@ -214,7 +239,8 @@ fn agent_ids(doc: &Doc) -> Vec<(String, String)> {
 fn doc_lang(doc: &Doc, cues: &[Cue]) -> String {
     doc.lang
         .clone()
-        .or_else(|| cues.iter().flat_map(|c| &c.words).find_map(|w| w.language.clone()))
+        .filter(|l| !l.is_empty())
+        .or_else(|| cues.iter().flat_map(|c| &c.words).find_map(|w| w.language.clone().filter(|l| !l.is_empty())))
         .unwrap_or_else(|| "und".into())
 }
 
@@ -241,7 +267,6 @@ fn place(items: &mut [Item], regions: &[Region]) {
             item.region = r;
         }
         let mut on_screen: Vec<usize> = shown.iter().map(|(_, r)| *r).collect();
-        on_screen.dedup();
         on_screen.sort_unstable();
         on_screen.dedup();
         if on_screen.len() >= MAX_SHOWN && !on_screen.contains(&item.region) {
@@ -260,7 +285,7 @@ fn place(items: &mut [Item], regions: &[Region]) {
 /// until no region grows (each pass grows a region at least a line, so this ends); a last pass
 /// places after the last growth.
 fn place_items(items: &mut [Item], regions: &mut [Region], grid: &Grid) {
-    for _ in 0..=regions.len() * 8 {
+    for _ in 0..=regions.len() * MAX_PASSES_PER_REGION {
         place(items, regions);
         let mut grown = false;
         for (r, region) in regions.iter_mut().enumerate() {
@@ -292,7 +317,8 @@ fn place_items(items: &mut [Item], regions: &mut [Region], grid: &Grid) {
     place(items, regions);
 }
 
-/// TTML text for `doc` laid out by `layout`, and the number of subtitles.
+/// TTML text for `doc` laid out by `layout`, and the number of subtitles. It takes the CAPT
+/// document, not words like [`crate::srt::build`], for its title, speakers and language.
 pub fn build(doc: &Doc, layout: &Layout) -> (String, usize) {
     write(doc, &cues(&doc.to_words(), layout), &[], layout, None, None)
 }
@@ -329,7 +355,7 @@ pub(crate) fn write(
         None | Some(Pos::Bottom) => BOTTOM,
         Some(Pos::Top) => TOP,
         Some(Pos::Middle) => MIDDLE,
-        Some(p) => 3 + places.iter().position(|q| *q == p).unwrap_or_default(),
+        Some(p) => NAMED + places.iter().position(|q| *q == p).expect("every place of the cues is listed"),
     };
 
     let agents = agent_ids(doc);
@@ -343,13 +369,17 @@ pub(crate) fn write(
     let lang = doc_lang(doc, cues);
     let mut items: Vec<Item> = cues
         .iter()
-        .map(|c| Item {
-            start: c.start,
-            end: c.end,
-            region: region_of(style::place(c)),
-            agent: agent(c.speaker.as_deref()),
-            text: style::lines(c, &markup).join("<br/>"),
-            widths: c.lines.iter().map(|l| l.chars().count()).collect(),
+        .map(|c| {
+            // Counted as shown: with a voice label, if SDH writes one.
+            let lines = style::lines(c, &markup);
+            Item {
+                start: c.start,
+                end: c.end,
+                region: region_of(style::place(c)),
+                agent: agent(c.speaker.as_deref()),
+                widths: lines.iter().map(|l| shown_len(l)).collect(),
+                text: lines.join("<br/>"),
+            }
         })
         .collect();
     // A sound label in another language than the document's says so.
@@ -387,7 +417,7 @@ pub(crate) fn write(
     }
     out.push_str("    </metadata>\n    <layout>\n");
     for r in &regions {
-        out.push_str(&r.line());
+        out.push_str(&r.element());
     }
     // White text with a black outline reads on any picture; the line height the regions are sized by.
     out.push_str(
