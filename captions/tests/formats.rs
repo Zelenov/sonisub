@@ -3,7 +3,7 @@
 
 use std::collections::BTreeMap;
 
-use captions::{Layout, Word, ass, cues, srt, vtt};
+use captions::{Layout, Word, ass, cues, sbv, srt, vtt};
 
 fn word(text: &str, start: u64, end: u64, speaker: Option<&str>) -> Word {
     Word {
@@ -60,6 +60,7 @@ fn every_format_has_the_same_cues() {
     assert_eq!(srt::build(&words, &layout).1, n);
     assert_eq!(vtt::build(&words, &layout).1, n);
     assert_eq!(ass::build(&words, &layout, &ass::Options::default()).1, n);
+    assert_eq!(sbv::build(&words, &layout).1, n);
 }
 
 #[test]
@@ -72,6 +73,8 @@ fn vtt_has_a_header_dotted_timestamps_and_escaped_markup() {
     let (text, n) = vtt::build(&words, &Layout::default());
     assert_eq!(n, 1);
     assert_eq!(text, "WEBVTT\n\n1\n01:02:03.004 --> 01:02:04.000\nTom &amp; &lt;Jerry&gt;.\n\n");
+    // SBV: hours unpadded, no markup to escape.
+    assert_eq!(sbv::build(&words, &Layout::default()).0, "1:02:03.004,1:02:04.000\nTom & <Jerry>.\n\n");
 }
 
 #[test]

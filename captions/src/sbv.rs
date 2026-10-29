@@ -16,6 +16,7 @@ pub(crate) fn write(cues: &[Cue], sounds: &[Sound], voice: Option<&dyn Fn(&str) 
     let mut items: Vec<(u64, u64, String)> =
         cues.iter().map(|c| (c.start, c.end, style::lines(c, &markup).join("\n"))).collect();
     items.extend(sounds.iter().map(|s| (s.start, s.end, s.text.clone())));
+    // Speech and sounds in order of start; speech first when both start together, as in SRT.
     items.sort_by_key(|(start, _, _)| *start);
     let out = items
         .iter()

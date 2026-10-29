@@ -150,7 +150,7 @@ fn a_new_format_is_made_from_the_saved_transcript_leaving_the_srt_alone() {
 }
 
 #[test]
-fn vtt_and_ass_are_written_next_to_the_srt() {
+fn vtt_ass_and_sbv_are_written_next_to_the_srt() {
     let s = setup();
     copy_fixture(&s, "dialog.soniox.json");
     let opts = Options { formats: vec![Format::Vtt, Format::Ass, Format::Sbv], ..options(&s.temp) };

@@ -40,7 +40,7 @@ let (ass, _) = ass::build(&words, &layout, &ass::Options { karaoke: true, ..Defa
   writers above; a CAPT file's cut points, sentence ends, places and italic reach every writer through
   `Word::marks`.
 - `sbv`: YouTube's SBV, the same cues as SRT.
-- From a CAPT file with its sounds and voices: `sdh::srt`, `sdh::vtt`, `sdh::ass` (subtitles for the deaf and
+- From a CAPT file with its sounds and voices: `sdh::srt`, `sdh::vtt`, `sdh::ass`, `sdh::sbv` (subtitles for the deaf and
   hard of hearing). `labels` writes sounds and voices in English or Russian.
 - `Layout::for_frame` and `Layout::vertical()`: short lines for a vertical video, cut where they read well, and
   text kept clear of a phone app.

@@ -1,7 +1,7 @@
 //! A CAPT file -> subtitles for the deaf and hard of hearing (SDH), in SRT, WebVTT and ASS: the
 //! same cues as [`crate::srt`], [`crate::vtt`] and [`crate::ass`], with a label before words said
 //! in a voice of their own (`[whispering]`) and a subtitle for every sound (`[phone ringing]`;
-//! `Anna: [laughs]` when the layout labels speakers); SBV too. Labels come from [`crate::labels`] in `lang`
+//! `Anna: [laughs]` when the layout labels speakers); and in SBV. Labels come from [`crate::labels`] in `lang`
 //! (`en`, `ru`).
 
 use crate::capt::Doc;
