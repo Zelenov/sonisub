@@ -64,6 +64,7 @@ sonisub clip.MP4 -t srt,vtt,ass           # also clip.vtt (WebVTT) and clip.ass 
 sonisub clip.MP4 -t ass --karaoke         # each word lights up as it is spoken
 sonisub clip.MP4 -t srt,sbv               # also clip.sbv for YouTube Studio
 sonisub clip.MP4 -t lrc                   # clip.lrc for karaoke players and music apps
+sonisub clip.MP4 -t srt,transcript        # also clip.txt, a plain text transcript to read and search
 sonisub clip.MP4 -t srt,capt              # also clip.capt, the whole transcript as small text
 sonisub render clip.capt -t vtt,premiere  # other formats from a CAPT file or saved words, no Soniox
 sonisub clip.MP4 --no-json                # don't keep clip.soniox.json
@@ -133,6 +134,12 @@ highlight (`\k`).
 
 `-t sbv` writes YouTube's SBV (`clip.sbv`), the same cues as the `.srt`, for YouTube Studio's subtitle upload.
 `-t lrc` writes Enhanced LRC (`clip.lrc`): a line per cue with a time before every word, for karaoke players and music apps.
+## Plain text transcript
+
+`-t transcript` (or `-t text`, `-t txt`) writes a plain text transcript (`clip.txt`): a paragraph per speaker turn, headed by
+the name and the time, a new paragraph after a pause of over 5 s, at the first sentence end after a minute, or after two minutes
+without one; sounds and voices a CAPT file marks as labels in
+English or Russian (`--labels en|ru`; by default the transcript's language).
 
 `sonisub render` makes the same files without Soniox: from a CAPT file (`-t capt` writes `clip.capt`, the whole
 transcript as small text you can read and edit, see [docs/capt.md](docs/capt.md)), or from words saved as JSON

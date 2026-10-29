@@ -41,5 +41,7 @@ let (ass, _) = ass::build(&words, &layout, &ass::Options { karaoke: true, ..Defa
   `Word::marks`.
 - `sbv`: YouTube's SBV, the same cues as SRT.
 - `lrc`: Enhanced LRC, a time before every word.
+- `transcript`: a plain text transcript from a CAPT file, a paragraph per speaker turn; `labels` writes its
+  sounds and voices in English or Russian.
 
 MIT licensed.

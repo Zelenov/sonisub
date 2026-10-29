@@ -203,3 +203,117 @@ fn lrc_glues_words_keeps_long_times_and_writes_nothing_for_nothing() {
     assert!(captions::lrc::build(&late, &Layout::default()).0.starts_with("[100:00.00]"));
     assert_eq!(captions::lrc::build(&[], &Layout::default()), (String::new(), 0));
 }
+fn transcript(file: &str) -> String {
+    captions::transcript::build(&captions::capt::Doc::parse(file).unwrap(), &Layout::default(), "en")
+}
+
+#[test]
+fn a_transcript_keeps_a_sentence_whole_when_someone_else_talks_or_laughs_in_it() {
+    let overlap = "CAPT 1\nspeaker:1 name:Anna\nspeaker:2 name:Boris\n\n\
+                   00:00:01.000 --> 00:00:04.000 speaker:1\n{0}So{20} {50}I{70} {100}read{150} {200}twice.{300}\n\n\
+                   00:00:01.300 --> 00:00:02.500 speaker:2\n{0}Yeah{40} {60}right.{120}\n\n\
+                   00:00:02.000 --> 00:00:02.500 speaker:2 sound:laughter\n";
+    assert_eq!(
+        transcript(overlap),
+        "Anna  [00:00:01]\nSo I read twice.\n\nBoris  [00:00:01]\nYeah right. [laughs]\n\n"
+    );
+}
+
+#[test]
+fn a_sound_of_no_one_comes_after_the_sentence_it_falls_in() {
+    let file = "CAPT 1\n\n00:00:01.000 --> 00:00:01.500\n{0}One{20} {30}two.{50}\n\n\
+                00:00:01.350 --> 00:00:01.900 sound:phone\n\n\
+                00:00:02.000 --> 00:00:02.500\n{0}Three{20} {30}four.{50}\n";
+    assert_eq!(transcript(file), "[00:00:01]\nOne two.\n\n[00:00:01]\n[phone ringing]\n\n[00:00:02]\nThree four.\n\n");
+}
+
+#[test]
+fn a_long_turn_is_cut_into_paragraphs_at_pauses() {
+    let file = "CAPT 1\n\n00:00:01.000 --> 00:00:02.000\n{0}Hello{30} {40}there.{90}\n\n\
+                00:01:10.000 --> 00:01:11.000\n{0}Much{30} {40}later.{90}\n\n\
+                00:01:12.000 --> 00:01:13.000\n{0}Right{30} {40}after.{90}\n";
+    assert_eq!(transcript(file), "[00:00:01]\nHello there.\n\n[00:01:10]\nMuch later. Right after.\n\n");
+}
+
+#[test]
+fn what_waits_for_a_sentence_that_never_ends_comes_after_it() {
+    let file = "CAPT 1\n\n00:00:01.000 --> 00:00:02.000 speaker:1\n{0}And{30} {40}so{90}\n\n\
+                00:00:01.500 --> 00:00:02.000 sound:phone\n";
+    assert_eq!(transcript(file), "Speaker 1  [00:00:01]\nAnd so\n\n[00:00:01]\n[phone ringing]\n\n");
+}
+
+#[test]
+fn an_unfinished_sentence_does_not_hold_back_what_is_said_after_it() {
+    let file = "CAPT 1\nspeaker:1 name:Anna\nspeaker:2 name:Boris\n\n\
+                00:00:01.000 --> 00:00:01.500 speaker:1\n{0}I{20} {30}think{50}\n\n\
+                00:00:02.000 --> 00:00:10.000 speaker:2\n{0}No.{50} {100}That{150} {200}is{250} {300}wrong.{400}\n\n\
+                00:01:00.000 --> 00:01:00.500 speaker:1\n{0}Okay.{50}\n";
+    assert_eq!(
+        transcript(file),
+        "Anna  [00:00:01]\nI think\n\nBoris  [00:00:02]\nNo. That is wrong.\n\nAnna  [00:01:00]\nOkay.\n\n"
+    );
+}
+
+#[test]
+fn a_sound_of_no_one_ends_the_paragraph_at_its_sentence() {
+    let file = "CAPT 1\n\n00:00:10.000 --> 00:00:11.000 speaker:1\n{0}Still{40} {50}here.{100}\n\n\
+                00:00:10.200 --> 00:00:11.000 sound:phone\n\n\
+                00:00:11.200 --> 00:00:11.800 speaker:1 sound:laughter\n";
+    // The speaker goes on under a new heading after the sound.
+    assert_eq!(
+        transcript(file),
+        "Speaker 1  [00:00:10]\nStill here.\n\n[00:00:10]\n[phone ringing]\n\nSpeaker 1  [00:00:11]\n[laughs]\n\n"
+    );
+}
+
+#[test]
+fn a_minute_long_paragraph_is_cut_at_its_next_sentence_end() {
+    let file = "CAPT 1\n\n00:00:00.000 --> 00:00:40.000\n{0}One{100} {2000}long{3000} {3900}sentence.{4000}\n\n\
+                00:00:41.000 --> 00:01:05.000\n{0}And{100} {2300}more.{2400}\n\n\
+                00:01:06.000 --> 00:01:07.000\n{0}Then{40} {50}this.{100}\n";
+    assert_eq!(transcript(file), "[00:00:00]\nOne long sentence. And more.\n\n[00:01:06]\nThen this.\n\n");
+}
+
+#[test]
+fn speech_without_punctuation_is_cut_after_two_minutes() {
+    let mut file = String::from("CAPT 1\n");
+    for i in 0..50u64 {
+        let t = i * 3;
+        file.push_str(&format!(
+            "\n00:{:02}:{:02}.000 --> 00:{:02}:{:02}.500\n{{0}}word{{50}}\n",
+            t / 60,
+            t % 60,
+            t / 60,
+            t % 60
+        ));
+    }
+    let text = transcript(&file);
+    assert_eq!(text.matches("[00:").count(), 2, "{text}");
+    assert!(text.contains("[00:02:03]"), "{text}");
+}
+
+#[test]
+fn what_waited_comes_before_a_later_sound() {
+    let file = "CAPT 1\nspeaker:1 name:Anna\nspeaker:2 name:Boris\n\n\
+                00:00:00.000 --> 00:00:02.000 speaker:1\n{0}Hello{100} {110}there{200}\n\n\
+                00:00:01.000 --> 00:00:01.500 speaker:2\n{0}Yes.{50}\n\n\
+                00:00:02.100 --> 00:00:03.000 speaker:1\n{0}friend.{90}\n\n\
+                00:01:00.000 --> 00:01:01.000 sound:phone\n";
+    assert_eq!(
+        transcript(file),
+        "Anna  [00:00:00]\nHello there friend.\n\nBoris  [00:00:01]\nYes.\n\n[00:01:00]\n[phone ringing]\n\n"
+    );
+}
+
+#[test]
+fn a_speakers_own_sound_does_not_keep_their_sentence_open() {
+    let file = "CAPT 1\nspeaker:1 name:Anna\nspeaker:2 name:Boris\n\n\
+                00:00:00.000 --> 00:00:01.000 speaker:1\n{0}I{20} {30}think{100}\n\n\
+                00:00:01.000 --> 00:00:30.000 speaker:1 sound:laughter\n\n\
+                00:00:05.000 --> 00:00:05.500 speaker:2\n{0}No.{50}\n\n\
+                00:00:31.000 --> 00:00:31.500 speaker:1\n{0}so.{50}\n";
+    assert_eq!(
+        transcript(file),
+        "Anna  [00:00:00]\nI think [laughs]\n\nBoris  [00:00:05]\nNo.\n\nAnna  [00:00:31]\nso.\n\n"
+    );
+}

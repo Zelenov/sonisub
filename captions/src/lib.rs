@@ -8,17 +8,21 @@
 //! - [`capt`] reads and writes CAPT, the transcript format between a recogniser and these writers.
 //! - [`sbv`] writes YouTube's SBV, the same cues as [`srt`].
 //! - [`lrc`] writes Enhanced LRC, a time before every word of the same cues.
+//! - [`transcript`] writes a plain text transcript from a CAPT file, a paragraph per turn, sounds and
+//!   voices as labels from [`labels`].
 
 use serde::{Deserialize, Serialize};
 
 pub mod ass;
 pub mod capt;
 pub mod cues;
+pub mod labels;
 pub mod lrc;
 pub mod premiere;
 pub mod sbv;
 pub mod srt;
 mod style;
+pub mod transcript;
 pub mod vtt;
 
 pub use cues::{Cue, Layout};
@@ -84,7 +88,7 @@ pub struct Marks {
     /// Where on screen; a subtitle is never shared by two places. `None` is the bottom.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub pos: Option<capt::Pos>,
-    /// How the word is said (`whisper`, `laughter`): a span's or a block's `voice:`.
+    /// How the word is said (`whisper`, `laughter`): a span's or a block's `voice:`; see [`labels`].
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub voice: Option<String>,
     /// The word's language when it differs from the file's (a block's or a span's `lang:`), so

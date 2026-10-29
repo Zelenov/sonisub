@@ -1,8 +1,8 @@
 //! What the writers share for a CAPT file's marks: a cue's lines with markup for italic and
 //! language, and where on screen a cue goes in each format.
 
-use crate::capt::Pos;
-use crate::cues::{Cue, pieces};
+use crate::capt::{Doc, Pos};
+use crate::cues::{Cue, Layout, pieces, speaker_label};
 
 /// The tags around words in a language: `en` -> (`<lang en>`, `</lang>`).
 pub(crate) type LangTags<'a> = &'a dyn Fn(&str) -> (String, String);
@@ -108,6 +108,17 @@ pub(crate) fn place(cue: &Cue) -> Option<Pos> {
 /// Text as it is, for formats that escape nothing.
 pub(crate) fn plain(text: &str) -> String {
     text.to_string()
+}
+
+/// The name a speaker is shown by where no subtitle shows it next to speech (transcript turns):
+/// the file's name, else the layout's, else "Speaker N". The command line puts `--speaker-names`
+/// into the file first, so both agree; a library caller should do the same (`job::name_speakers`).
+pub(crate) fn speaker_name(doc: &Doc, layout: &Layout, speaker: &str) -> String {
+    doc.speakers
+        .iter()
+        .find(|s| s.id == speaker)
+        .and_then(|s| s.name.clone())
+        .unwrap_or_else(|| speaker_label(speaker, &layout.speaker_names))
 }
 
 /// The numpad alignment of SRT's `{\anN}` (7 8 9 / 4 5 6 / 1 2 3) nearest to a place.

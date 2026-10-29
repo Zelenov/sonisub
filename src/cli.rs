@@ -2,7 +2,7 @@ use std::path::PathBuf;
 use std::time::Duration;
 
 use clap::{Args, Parser, Subcommand};
-use sonisub::captions::ass;
+use sonisub::captions::{self, ass};
 use sonisub::job::Format;
 use sonisub::{audio, job, soniox, srt};
 
@@ -86,7 +86,8 @@ pub struct RunArgs {
     /// What to write, comma separated: srt, vtt (WebVTT), ass (a style per speaker), premiere (Premiere Pro
     /// transcript, clip.premiere.json), capt (the whole transcript as small text, clip.capt; `sonisub render`
     /// makes the other formats from it), sbv (YouTube's SBV, clip.sbv), lrc (Enhanced LRC, a time before every word,
-    /// clip.lrc). Only missing files are written, so adding a format later reuses the saved transcript for free.
+    /// clip.lrc), transcript (plain text, a paragraph per speaker turn, clip.txt). Only missing files are written, so
+    /// adding a format later reuses the saved transcript for free.
     #[arg(short = 't', long = "format", value_enum, value_delimiter = ',', default_value = "srt")]
     pub formats: Vec<Format>,
 
@@ -201,6 +202,11 @@ pub struct SegArgs {
     /// In .ass, light up each word as it is spoken (\k karaoke).
     #[arg(long)]
     pub karaoke: bool,
+
+    /// The language of sound and voice labels in -t transcript: en ([laughs]) or ru ((смеётся)).
+    /// Default: ru for a Russian transcript, else en.
+    #[arg(long, value_parser = captions::labels::LANGUAGES, help_heading = "Outputs")]
+    pub labels: Option<String>,
 }
 
 impl SegArgs {
@@ -221,7 +227,15 @@ impl SegArgs {
 
     /// How the formats are written beyond the layout.
     pub fn outputs(&self) -> job::Outputs {
-        job::Outputs { ass: ass::Options { karaoke: self.karaoke, ..Default::default() } }
+        job::Outputs { ass: ass::Options { karaoke: self.karaoke, ..Default::default() }, labels: self.labels.clone() }
+    }
+
+    /// `--labels` with nothing that writes a label is a mistake: say so instead of ignoring it.
+    pub fn check_labels(&self, formats: &[Format]) -> anyhow::Result<()> {
+        if self.labels.is_some() && !formats.contains(&Format::Transcript) {
+            anyhow::bail!("--labels needs -t transcript: nothing else writes a label");
+        }
+        Ok(())
     }
 }
 
@@ -232,7 +246,7 @@ pub struct RenderArgs {
     /// (start and end in milliseconds; speaker and language optional).
     pub input: PathBuf,
 
-    /// What to write, comma separated: srt, vtt, ass, premiere, capt, sbv, lrc.
+    /// What to write, comma separated: srt, vtt, ass, premiere, capt, sbv, lrc, transcript.
     #[arg(short = 't', long = "format", value_enum, value_delimiter = ',', default_value = "srt")]
     pub formats: Vec<Format>,
 

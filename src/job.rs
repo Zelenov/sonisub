@@ -34,6 +34,10 @@ pub enum Format {
     Sbv,
     /// Enhanced LRC, a time before every word, for karaoke and music apps: `clip.lrc`.
     Lrc,
+    /// A plain text transcript, a paragraph per speaker turn, sounds and voices as labels: `clip.txt` (also
+    /// `text`, `txt`).
+    #[cfg_attr(feature = "cli", value(aliases = ["text", "txt"]))]
+    Transcript,
 }
 
 impl Format {
@@ -52,6 +56,7 @@ impl Format {
             Format::Capt => output.with_extension("capt"),
             Format::Sbv => output.with_extension("sbv"),
             Format::Lrc => output.with_extension("lrc"),
+            Format::Transcript => output.with_extension("txt"),
         }
     }
 }
@@ -61,6 +66,9 @@ impl Format {
 pub struct Outputs {
     /// Speaker names and word highlight for [`Format::Ass`].
     pub ass: ass::Options,
+    /// The language of the transcript's sound and voice labels (`en`, `ru`); `None`: Russian for a
+    /// Russian transcript, else English.
+    pub labels: Option<String>,
 }
 
 /// What to do with a file.
@@ -285,8 +293,8 @@ pub fn name_speakers(doc: &mut captions::capt::Doc, layout: &srt::Layout, ass: &
 /// `words`, CAPT from `doc` (the same speech with every piece of a word). A transcript from
 /// Soniox passes `doc.to_words()` and Soniox's words (confidence to the third decimal), saved words
 /// pass themselves twice. The files written and the number of cues of the first subtitles written
-/// (0 with only a Premiere transcript or CAPT). `default_language` and `seed` are for
-/// [`Format::Premiere`] ([`captions::premiere::build`]); with no `words` nothing is written.
+/// (0 with only a Premiere transcript, CAPT or a text transcript). `default_language` and `seed` are
+/// for [`Format::Premiere`] ([`captions::premiere::build`]), which needs `words`.
 #[allow(clippy::too_many_arguments)]
 pub fn write_outputs(
     targets: &[(Format, PathBuf)],
@@ -306,6 +314,7 @@ pub fn write_outputs(
     // Everything is made before anything is written, so a format with nothing to show leaves no
     // files behind.
     let mut made = Vec::new();
+    let labels = outputs.labels.clone().unwrap_or_else(|| captions::labels::for_language(doc.lang.as_deref()).into());
     for (format, path) in targets {
         let (text, n) = match format {
             Format::Srt => captions::srt::build(cue_words, layout),
@@ -313,6 +322,7 @@ pub fn write_outputs(
             Format::Ass => ass::build(cue_words, layout, &outputs.ass),
             Format::Sbv => captions::sbv::build(cue_words, layout),
             Format::Lrc => captions::lrc::build(cue_words, layout),
+            Format::Transcript => (captions::transcript::build(doc, layout, &labels), 0),
             Format::Premiere => {
                 let t = captions::premiere::build(words, layout, default_language, seed)
                     .ok_or_else(|| anyhow!("no words to write"))?;
@@ -462,11 +472,22 @@ pub fn default_output(input: &Path, out_dir: Option<&Path>) -> PathBuf {
 /// The .srt base for an `-o` path given with any output extension: `clip.premiere.json` -> `clip.srt`.
 pub fn output_base(path: &Path) -> PathBuf {
     let name = path.file_name().map_or_else(String::new, |n| n.to_string_lossy().into_owned());
-    let stem =
-        [".premiere.json", ".soniox.json", ".words.json", ".srt", ".vtt", ".ass", ".capt", ".sbv", ".lrc", ".json"]
-            .iter()
-            .find_map(|s| strip_suffix(&name, s))
-            .unwrap_or(&name);
+    let stem = [
+        ".premiere.json",
+        ".soniox.json",
+        ".words.json",
+        ".srt",
+        ".vtt",
+        ".ass",
+        ".capt",
+        ".sbv",
+        ".lrc",
+        ".txt",
+        ".json",
+    ]
+    .iter()
+    .find_map(|s| strip_suffix(&name, s))
+    .unwrap_or(&name);
     path.with_file_name(format!("{stem}.srt"))
 }
 

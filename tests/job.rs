@@ -197,6 +197,7 @@ fn output_base_accepts_any_output_extension() {
         "out/clip.words.json",
         "out/clip.sbv",
         "out/clip.lrc",
+        "out/clip.txt",
     ];
     for given in given {
         assert_eq!(job::output_base(Path::new(given)), Path::new("out/clip.srt"), "{given}");
