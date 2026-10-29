@@ -59,7 +59,7 @@ const DASHES: [char; 2] = ['—', '–'];
 
 /// Splits "finally—and" into "finally—" + glued "and", so a cue or a line may end at the dash.
 /// Timing is shared out by length.
-fn split_dashes(w: Word) -> Vec<Word> {
+pub(crate) fn split_dashes(w: Word) -> Vec<Word> {
     let mut parts: Vec<String> = Vec::new();
     let mut cur = String::new();
     let chars: Vec<char> = w.text.chars().collect();
@@ -402,6 +402,42 @@ impl Cue {
     pub fn text(&self) -> String {
         self.lines.join("\n")
     }
+
+    /// The cue's lines piece by piece as they are shown, each word of [`Cue::words`] where it is:
+    /// what a preview needs to light up words as they are spoken (as ASS karaoke and YTT time
+    /// them). `None` if the lines do not split back into the cue's words.
+    pub fn shown(&self) -> Option<Vec<Shown>> {
+        use crate::style::{Gap, StepKind};
+        let (mut line, mut word) = (0, None);
+        let mut out = Vec::new();
+        for s in crate::style::steps(self)? {
+            if matches!(s.gap, Gap::Line) {
+                line += 1;
+            }
+            match s.kind {
+                StepKind::Prefix => word = None,
+                StepKind::Word { index, .. } => word = Some(index),
+                StepKind::More => {}
+            }
+            out.push(Shown { line, space: matches!(s.gap, Gap::Space), text: s.text.to_string(), word });
+        }
+        Some(out)
+    }
+}
+
+/// A piece of a cue's line as it is shown ([`Cue::shown`]): a word, the part of a word after a
+/// dash or a space, or a part of the speaker label.
+#[derive(Debug, Clone, PartialEq)]
+#[non_exhaustive]
+pub struct Shown {
+    /// The line it is on, from 0.
+    pub line: usize,
+    /// A space comes before it on its line.
+    pub space: bool,
+    /// The text as shown.
+    pub text: String,
+    /// The word of [`Cue::words`] it shows; `None` for the speaker label.
+    pub word: Option<usize>,
 }
 
 /// Cuts words into cues by the layout rules (see the module docs).

@@ -1,1 +1,3 @@
 /target
+/captions-wasm/target
+/captions-wasm/pkg

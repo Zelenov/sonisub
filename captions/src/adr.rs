@@ -289,10 +289,41 @@ fn dialogue(heard: &[(u64, Heard)], lang: &str) -> String {
     text
 }
 
+/// A row of the cue list, as [`build`] writes it.
+#[derive(Debug, Clone, PartialEq)]
+#[non_exhaustive]
+pub struct Row {
+    /// `Cue ID`, from 1.
+    pub id: usize,
+    /// When the cue is heard, milliseconds from the start of the media.
+    pub start: u64,
+    pub end: u64,
+    /// `In` and `Out` on the timeline: the frames the cue starts and ends in, at least a frame long.
+    pub tc_in: Timecode,
+    pub tc_out: Timecode,
+    /// `Character`: the speaker's name.
+    pub character: String,
+    /// `Dialogue`: the words with the speaker's sounds and voices as directions.
+    pub dialogue: String,
+}
+
 /// The cue list for `doc`, speaker names as `layout` gives them, sound and voice labels in
 /// `lang` (`en`, `ru`), and the number of cues. An error for a start the rate does not have, or a
 /// list that would run past 23:59:59 of the timeline.
 pub fn build(doc: &Doc, layout: &Layout, o: &Options, lang: &str) -> Result<(String, usize), String> {
+    let rows = rows(doc, layout, o, lang)?;
+    let mut out = String::from("\u{feff}");
+    for r in &rows {
+        let row =
+            [r.id.to_string(), r.tc_in.to_string(), r.tc_out.to_string(), r.character.clone(), r.dialogue.clone()];
+        out.push_str(&row.iter().map(|f| quote(f)).collect::<Vec<_>>().join(","));
+        out.push_str("\r\n");
+    }
+    Ok((out, rows.len()))
+}
+
+/// The rows of the cue list [`build`] writes, with the moments they are heard; the same errors.
+pub fn rows(doc: &Doc, layout: &Layout, o: &Options, lang: &str) -> Result<Vec<Row>, String> {
     let start = o.start.frames_at(o.rate)?;
     let cut = Layout {
         max_line: o.max_chars,
@@ -364,11 +395,11 @@ pub fn build(doc: &Doc, layout: &Layout, o: &Options, lang: &str) -> Result<(Str
     }
 
     let tc = |frame: u64| {
-        Timecode::from_frames(start + frame, o.rate).map(|t| t.to_string()).ok_or_else(|| {
+        Timecode::from_frames(start + frame, o.rate).ok_or_else(|| {
             format!("the cue list runs past 23:59:59 of the timeline; start it earlier than {}", o.start)
         })
     };
-    let mut out = String::from("\u{feff}");
+    let mut out = Vec::with_capacity(rows.len());
     for (n, r) in rows.iter().enumerate() {
         // A transcript without speakers still names the one voice, as the subtitles would; a
         // file with named speakers gives speech of no one a name of its own.
@@ -380,11 +411,17 @@ pub fn build(doc: &Doc, layout: &Layout, o: &Options, lang: &str) -> Result<(Str
         // A cue is at least a frame long, so Resolve shows it.
         let from = o.rate.frame(r.start, false);
         let to = o.rate.frame(r.end, true).max(from + 1);
-        let row = [(n + 1).to_string(), tc(from)?, tc(to)?, who, dialogue(&r.heard, lang)];
-        out.push_str(&row.iter().map(|f| quote(f)).collect::<Vec<_>>().join(","));
-        out.push_str("\r\n");
+        out.push(Row {
+            id: n + 1,
+            start: r.start,
+            end: r.end,
+            tc_in: tc(from)?,
+            tc_out: tc(to)?,
+            character: who,
+            dialogue: dialogue(&r.heard, lang),
+        });
     }
-    Ok((out, rows.len()))
+    Ok(out)
 }
 
 #[cfg(test)]

@@ -1,3 +1,8 @@
+# NEXT
+## Added
+- `captions-wasm`: the subtitle formats in the browser. Every release carries `captions-wasm-<version>.tgz`, an npm package (ES module with TypeScript types, WebAssembly) that makes every format from a CAPT file, byte for byte what `sonisub render` writes, lists each format's options with their defaults, and gives a preview the cues with every word and piece timed (`npm i https://github.com/Zelenov/sonisub/releases/download/v0.9.1/captions-wasm-0.3.1.tgz`).
+- Library (captions 0.3.1): `Cue::shown` (where each word of a cue is shown), `capt::Doc::pieces` (the pieces of every word of the cues, with their times), `ass::styles`, `adr::rows`, `Doc::speaker_names`, `Doc::name_speakers`. Nothing changes for callers.
+
 # 0.9.0
 ## Added
 - Subtitles from a CAPT file follow what the file says: they cut at its cut points (a ` / ` moved by hand moves the cut), end sentences where `sentence:` says, show `style:italic` in italic (SRT, WebVTT, ASS), mark words in another language (WebVTT), and put a subtitle where `pos:` says (top, middle, a point or a rectangle).

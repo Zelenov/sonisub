@@ -286,28 +286,12 @@ pub fn process(input: &Path, output: &Path, opts: &Options, client: Option<&Clie
 /// [`srt::Layout::speaker_names`] takes them. A speaker with another id is named by
 /// [`ass::Options::names`] only.
 pub fn speaker_names(doc: &captions::capt::Doc) -> Vec<String> {
-    let mut names: Vec<String> = Vec::new();
-    for s in &doc.speakers {
-        if let (Some(name), Ok(n)) = (&s.name, s.id.parse::<usize>())
-            && n > 0
-        {
-            if names.len() < n {
-                names.resize(n, String::new());
-            }
-            names[n - 1] = name.clone();
-        }
-    }
-    names
+    doc.speaker_names()
 }
 
 /// The names the user gave (`--speaker-names`, ASS names) into a CAPT file's header.
 pub fn name_speakers(doc: &mut captions::capt::Doc, layout: &srt::Layout, ass: &ass::Options) {
-    for s in &mut doc.speakers {
-        let by_number = s.id.parse::<usize>().ok().and_then(|n| layout.speaker_names.get(n.checked_sub(1)?));
-        if let Some(name) = ass.names.get(&s.id).or(by_number).filter(|n| !n.trim().is_empty()) {
-            s.name = Some(name.clone());
-        }
-    }
+    doc.name_speakers(&layout.speaker_names, &ass.names);
 }
 
 /// Writes every format of `targets`: subtitles from `cue_words`, the Premiere transcript from

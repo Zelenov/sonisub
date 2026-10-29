@@ -47,5 +47,9 @@ let (ass, _) = ass::build(&words, &layout, &ass::Options { karaoke: true, ..Defa
 - `adr`: a DaVinci Resolve Fairlight ADR cue list from a CAPT file (`adr::Rate`, `adr::Timecode`); `labels`
   writes its sound and voice directions in English or Russian.
 - `ytt`: YouTube's YTT (srv3), a time for every word.
+- For a preview: `Cue::shown` gives where each word of a cue is shown (line by line, after the speaker label),
+  `capt::Doc::pieces` the pieces (syllables, tokens) of every word of the cues with their times, `ass::styles`
+  the ASS styles with their colours, and `adr::rows` the ADR cue list's rows with the moments they are heard.
+  `Doc::speaker_names` and `Doc::name_speakers` read and set the header's names as `sonisub render` does.
 
 MIT licensed.

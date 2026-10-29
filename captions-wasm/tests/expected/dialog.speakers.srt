@@ -1,0 +1,40 @@
+1
+00:00:00,870 --> 00:00:03,330
+Speaker 1: Hi, today we're testing the subtitle generator.
+
+2
+00:00:03,870 --> 00:00:04,370
+Speaker 2: Great.
+
+3
+00:00:04,590 --> 00:00:07,470
+I've prepared a very long sentence with plenty of commas
+
+4
+00:00:07,890 --> 00:00:10,470
+so we can check how the tool splits it into parts,
+
+5
+00:00:10,770 --> 00:00:14,850
+without breaking a phrase in the middle, and without exceeding the line length.
+
+6
+00:00:15,450 --> 00:00:18,450
+Speaker 1: What happens if I pause... and then continue?
+
+7
+00:00:20,370 --> 00:00:22,110
+Speaker 3: А теперь короткая фраза по-русски.
+
+8
+00:00:22,890 --> 00:00:24,330
+Speaker 4: Y una frase corta en español.
+
+9
+00:00:25,110 --> 00:00:25,610
+Speaker 2: Yes.
+
+10
+00:00:26,550 --> 00:00:28,290
+Speaker 1: Okay, that's the end of the test.
+

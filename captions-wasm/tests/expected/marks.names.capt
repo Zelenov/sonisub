@@ -1,0 +1,28 @@
+CAPT 1
+id:marks-fixture
+title:Marks
+lang:en
+speaker:1 name:Ann
+speaker:2 name:Bob
+
+00:00:01.000 --> 00:00:04.000 id:aaaaa1 speaker:1
+{0}So{12} {18}I{24} {30}read{50} {60}War{80} {86}and{100} {106}Peace{140} / {150}twice.{200}
+{0..12} conf:0.80
+{60..140} style:italic
+
+00:00:04.200 --> 00:00:05.000 id:aaaaa2 speaker:1 sound:laughter
+
+00:00:05.500 --> 00:00:09.000 id:aaaaa3 speaker:2 lang:ru
+{0}Короче,{40} {52}этот{70} / {76}deploy{98}ment{120} {126}упал{160} / {180}и{186} {192}мы{204} {210}сделали{250} {256}roll{276}back.{310}
+{76..120} lang:en
+{256..310} lang:en
+
+00:00:10.000 --> 00:00:14.000 id:aaaaa4 speaker:1 pos:top
+{0}Listen{30} {40}to{50} {56}me,{80} / {100}please{150} {156}Dr.{180} {190}Who.{240}
+{100..180} voice:whisper
+{156..180} sentence:end
+
+00:00:15.000 --> 00:00:17.000 id:aaaaa5 speaker:2 pos:0.05,0.05,0.4,0.2
+{0}This{20} {26}sits{50} {56}in{66} {70}a{76} {80}box.{120}
+
+00:00:15.500 --> 00:00:16.500 id:aaaaa6 sound:phone

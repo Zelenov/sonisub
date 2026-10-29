@@ -1071,6 +1071,78 @@ impl Doc {
     pub fn sounds(&self) -> impl Iterator<Item = &Block> {
         self.blocks.iter().filter(|b| b.sound.is_some())
     }
+
+    /// The pieces of the words of `cues` laid out from [`Doc::to_words`] (by any layout): for every
+    /// cue, for every word of it, its pieces with their starts, so a preview lights up a word piece
+    /// by piece (a syllable, a token). A word a dash cuts in two ([`crate::Cue::words`]) gives each
+    /// part the pieces, or parts of a piece, of its text; a piece cut there starts no earlier than
+    /// the part. `None` when `cues` are not exactly this file's words.
+    pub fn pieces(&self, cues: &[crate::Cue]) -> Option<Vec<Vec<Vec<Piece>>>> {
+        let mut words = self.blocks.iter().filter(|b| b.sound.is_none()).flat_map(|b| b.words());
+        // The word being shown in parts, and how many of its characters the parts before took.
+        let mut open: Option<(&Word, usize)> = None;
+        let mut out = Vec::with_capacity(cues.len());
+        for c in cues {
+            let mut of_cue = Vec::with_capacity(c.words.len());
+            for w in &c.words {
+                let (source, used) = match open.take() {
+                    Some(o) => o,
+                    None => (words.next()?, 0),
+                };
+                let len = w.text.chars().count();
+                let mut at = 0;
+                let mut pieces = Vec::new();
+                for p in &source.pieces {
+                    let n = p.text.chars().count();
+                    let (from, to) = (at.max(used), (at + n).min(used + len));
+                    if from < to {
+                        let text = p.text.chars().skip(from - at).take(to - from).collect();
+                        let start = if from > at { p.start.max(w.start) } else { p.start };
+                        pieces.push(Piece { text, start });
+                    }
+                    at += n;
+                }
+                if pieces.iter().map(|p| p.text.as_str()).collect::<String>() != w.text {
+                    return None;
+                }
+                if used + len < at {
+                    open = Some((source, used + len));
+                }
+                of_cue.push(pieces);
+            }
+            out.push(of_cue);
+        }
+        (open.is_none() && words.next().is_none()).then_some(out)
+    }
+
+    /// The names of the numbered speakers in order (`speaker:2 name:Anna` is the second), as
+    /// [`Layout::speaker_names`] takes them; a speaker with another id is not in it.
+    pub fn speaker_names(&self) -> Vec<String> {
+        let mut names: Vec<String> = Vec::new();
+        for s in &self.speakers {
+            if let (Some(name), Ok(n)) = (&s.name, s.id.parse::<usize>())
+                && n > 0
+            {
+                if names.len() < n {
+                    names.resize(n, String::new());
+                }
+                names[n - 1] = name.clone();
+            }
+        }
+        names
+    }
+
+    /// Names given by the user into the header: `by_id` (`{"1": "Anna"}`, as
+    /// [`crate::ass::Options::names`]) first, else `numbered` by the speaker's number (as
+    /// [`Layout::speaker_names`]); an empty name changes nothing.
+    pub fn name_speakers(&mut self, numbered: &[String], by_id: &std::collections::BTreeMap<String, String>) {
+        for s in &mut self.speakers {
+            let by_number = s.id.parse::<usize>().ok().and_then(|n| numbered.get(n.checked_sub(1)?));
+            if let Some(name) = by_id.get(&s.id).or(by_number).filter(|n| !n.trim().is_empty()) {
+                s.name = Some(name.clone());
+            }
+        }
+    }
 }
 
 /// One sentence's block: words on the grid (`plain`) with their pieces (`spoken`).

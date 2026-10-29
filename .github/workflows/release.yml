@@ -39,6 +39,11 @@ jobs:
           # sonisub on crates.io builds against the published captions, so a captions version that is
           # already there must be exactly this code: a change to captions/src needs a new version.
           CAPTIONS=$(sed -n 's/^version[[:space:]]*=[[:space:]]*"\(.*\)"/\1/p' captions/Cargo.toml | head -1)
+          # The browser package is captions compiled to WebAssembly: its version is captions'.
+          WASM=$(sed -n 's/^version[[:space:]]*=[[:space:]]*"\(.*\)"/\1/p' captions-wasm/Cargo.toml | head -1)
+          if [ "$WASM" != "$CAPTIONS" ]; then
+            echo "::error::captions-wasm/Cargo.toml says $WASM, captions/Cargo.toml says $CAPTIONS"; exit 1
+          fi
           mkdir -p "$RUNNER_TEMP/published"
           if curl -sSfL -A "sonisub-release (github.com/Zelenov/sonisub)" -o "$RUNNER_TEMP/captions.crate" \
             "https://static.crates.io/crates/captions/captions-$CAPTIONS.crate"; then
@@ -143,8 +148,47 @@ jobs:
             dist/*.zip
             dist/*.tar.gz
 
+  # captions-wasm-<captions version>.tgz: the browser package (an ES module with TypeScript types),
+  # installed with `npm i <release URL of the .tgz>`.
+  wasm:
+    needs: prepare
+    if: needs.prepare.outputs.should_build == 'true'
+    runs-on: ubuntu-22.04
+    permissions:
+      contents: read
+    defaults:
+      run:
+        working-directory: captions-wasm
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+
+      # The toolchain rust-toolchain.toml pins, with the WebAssembly target.
+      - name: WebAssembly target
+        run: rustup target add wasm32-unknown-unknown
+
+      - uses: taiki-e/install-action@v2
+        with:
+          tool: wasm-pack@0.15.0
+
+      - name: Test
+        run: wasm-pack test --node -- --locked
+
+      - name: Package
+        run: |
+          wasm-pack build --release --target web -- --locked
+          wasm-pack pack
+          ls -la pkg
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: captions-wasm
+          path: captions-wasm/pkg/*.tgz
+
   release:
-    needs: [prepare, build]
+    needs: [prepare, build, wasm]
     if: needs.prepare.outputs.should_build == 'true'
     runs-on: ubuntu-22.04
     permissions:
@@ -177,6 +221,7 @@ jobs:
           files: |
             artifacts/*.zip
             artifacts/*.tar.gz
+            artifacts/*.tgz
         env:
           GITHUB_TOKEN: ${{ github.token }}
 
@@ -185,10 +230,11 @@ jobs:
   # Runs after the builds' tests passed, or when the GitHub release already existed (a manual run
   # to publish an earlier version).
   publish:
-    needs: [prepare, build]
+    needs: [prepare, build, wasm]
     if: >-
       always() && github.ref == 'refs/heads/main' && needs.prepare.result == 'success' &&
-      (needs.build.result == 'success' || needs.build.result == 'skipped')
+      (needs.build.result == 'success' || needs.build.result == 'skipped') &&
+      (needs.wasm.result == 'success' || needs.wasm.result == 'skipped')
     runs-on: ubuntu-22.04
     permissions:
       contents: read
