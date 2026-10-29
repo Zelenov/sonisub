@@ -314,3 +314,41 @@ fn speech_of_no_one_among_named_speakers_is_unknown_in_the_labels_language() {
     let (csv, _) = captions::adr::build(&doc, &Layout::default(), &Default::default(), "ru").unwrap();
     assert!(csv.contains(r#""Неизвестный","Hm.""#), "{csv}");
 }
+
+fn max_dialogue(rows: &[String]) -> usize {
+    rows.iter().map(|r| r.rsplit("\",\"").next().unwrap().trim_end_matches('"').chars().count()).max().unwrap_or(0)
+}
+
+#[test]
+fn an_adr_row_stays_within_200_characters_with_its_sounds_and_repeated_voices() {
+    let word = "abcdefghijklmnopqrst";
+    let words: Vec<String> = (0..9).map(|i| format!("{{{}}}{word}{{{}}}", i * 50, i * 50 + 40)).collect();
+    let file = format!(
+        "CAPT 1\n\n00:00:00.000 --> 00:00:05.000 speaker:1\n{}\n\n\
+         00:00:01.000 --> 00:00:01.400 speaker:1 sound:laughter\n\n00:00:03.000 --> 00:00:03.400 speaker:1 sound:laughter\n",
+        words.join(" ")
+    );
+    assert!(max_dialogue(&adr(&file)) <= 200, "{:?}", adr(&file));
+    let words: Vec<String> = (0..31).map(|i| format!("{{{}}}abcde{{{}}}", i * 13, i * 13 + 10)).collect();
+    let file = format!(
+        "CAPT 1\n\n00:00:00.000 --> 00:00:05.000 speaker:1\n{}\n{{0..101}} voice:whisper\n{{299..400}} voice:whisper\n",
+        words.join(" ")
+    );
+    assert!(max_dialogue(&adr(&file)) <= 200, "{:?}", adr(&file));
+}
+
+#[test]
+fn a_sound_belongs_to_the_cue_whose_words_it_is_heard_among() {
+    // Words cut at 8 s, the next cue at 7.95 s; a laugh from 7.4 s runs into it, a cough is in it.
+    let first: Vec<String> = (0..16).map(|i| format!("{{{}}}w{i}{{{}}}", i * 49, i * 49 + 40)).collect();
+    let file = format!(
+        "CAPT 1\n\n00:00:00.000 --> 00:00:08.000 speaker:1\n{}\n\n\
+         00:00:07.400 --> 00:00:09.000 speaker:1 sound:laughter\n\n\
+         00:00:07.950 --> 00:00:10.000 speaker:1\n{{0}}v0{{40}} {{50}}v1{{90}}\n\n\
+         00:00:07.970 --> 00:00:08.100 speaker:1 sound:cough\n",
+        first.join(" ")
+    );
+    let rows = adr(&file);
+    let first_row = rows.iter().find(|r| r.contains("w0")).unwrap();
+    assert!(!first_row.contains("[coughs]"), "{rows:?}");
+}

@@ -194,10 +194,19 @@ fn quote(s: &str) -> String {
     format!("\"{}\"", s.replace('"', "\"\""))
 }
 
-/// What is heard in a row: a word, or a sound of its speaker.
+/// What is heard in a row: a word, or a sound of its speaker (and when it ends).
 enum Heard<'a> {
     Word(&'a Word),
-    Sound(&'a str),
+    Sound(&'a str, u64),
+}
+
+impl Heard<'_> {
+    fn end(&self) -> u64 {
+        match self {
+            Heard::Word(w) => w.end,
+            Heard::Sound(_, end) => *end,
+        }
+    }
 }
 
 /// A row of the list, or a piece to join into one: a speaker's cue with their sounds inside it in
@@ -212,9 +221,40 @@ struct Piece<'a> {
     spoken: Vec<(u64, u64)>,
 }
 
-impl Piece<'_> {
-    fn speech(&self) -> bool {
-        !self.spoken.is_empty()
+impl<'a> Piece<'a> {
+    /// A piece of what was heard, in order: from the first to the last thing's end.
+    fn of(speaker: Option<&'a str>, heard: Vec<(u64, Heard<'a>)>) -> Piece<'a> {
+        let start = heard.first().map_or(0, |(t, _)| *t);
+        let end = heard.iter().map(|(_, h)| h.end()).max().unwrap_or(start);
+        let words: Vec<&Word> =
+            heard.iter().filter_map(|(_, h)| if let Heard::Word(w) = h { Some(*w) } else { None }).collect();
+        let spoken = match (words.first(), words.last()) {
+            (Some(a), Some(b)) => vec![(a.start, b.end)],
+            _ => Vec::new(),
+        };
+        Piece { start, end, speaker, heard, spoken }
+    }
+
+    /// This piece as pieces of at most `max` characters of dialogue, cut between what is heard.
+    fn split(self, max: usize, lang: &str) -> Vec<Piece<'a>> {
+        if dialogue(&self.heard, lang).chars().count() <= max {
+            return vec![self];
+        }
+        let speaker = self.speaker;
+        let mut out = Vec::new();
+        let mut part: Vec<(u64, Heard<'a>)> = Vec::new();
+        for item in self.heard {
+            part.push(item);
+            if part.len() > 1 && dialogue(&part, lang).chars().count() > max {
+                let last = part.pop().expect("just pushed");
+                out.push(Piece::of(speaker, std::mem::take(&mut part)));
+                part.push(last);
+            }
+        }
+        if !part.is_empty() {
+            out.push(Piece::of(speaker, part));
+        }
+        out
     }
 }
 
@@ -238,7 +278,7 @@ fn dialogue(heard: &[(u64, Heard)], lang: &str) -> String {
                 }
                 text.push_str(&w.text);
             }
-            Heard::Sound(code) => {
+            Heard::Sound(code, _) => {
                 if !text.is_empty() {
                     text.push(' ');
                 }
@@ -254,16 +294,8 @@ fn dialogue(heard: &[(u64, Heard)], lang: &str) -> String {
 /// list that would run past 23:59:59 of the timeline.
 pub fn build(doc: &Doc, layout: &Layout, o: &Options, lang: &str) -> Result<(String, usize), String> {
     let start = o.start.frames_at(o.rate)?;
-    // Room in a row's characters for a voice label it may get (the longest in the file).
-    let room = doc
-        .to_words()
-        .iter()
-        .filter_map(|w| w.marks.voice.as_deref())
-        .map(|v| labels::voice(v, lang).chars().count() + 1)
-        .max()
-        .unwrap_or(0);
     let cut = Layout {
-        max_line: o.max_chars.saturating_sub(room).max(1),
+        max_line: o.max_chars,
         max_lines: 1,
         max_duration: o.max_duration,
         gap: o.max_gap,
@@ -274,46 +306,39 @@ pub fn build(doc: &Doc, layout: &Layout, o: &Options, lang: &str) -> Result<(Str
         readable: false,
         ..layout.clone()
     };
+    let max_ms = (o.max_duration * 1000.0) as u64;
     let cues = cues(&doc.to_words(), &cut);
-    // The speaker's cues, each with their own sounds heard inside it; their other sounds alone.
-    let mut pieces: Vec<Piece> = cues
-        .iter()
-        .map(|c| Piece {
-            start: c.start,
-            end: c.end,
-            speaker: c.speaker.as_deref(),
-            heard: c.words.iter().map(|w| (w.start, Heard::Word(w))).collect(),
-            spoken: vec![(c.start, c.end)],
-        })
-        .collect();
+    // The speaker's own sounds go into the cue whose words they are heard among; a cue goes on as
+    // long as such a sound, up to its limit and the speaker's next cue. Their other sounds alone.
+    let mut heard: Vec<Vec<(u64, Heard)>> =
+        cues.iter().map(|c| c.words.iter().map(|w| (w.start, Heard::Word(w))).collect()).collect();
+    let mut alone: Vec<Piece> = Vec::new();
     for b in doc.sounds() {
         let (Some(sp), Some(code)) = (b.speaker.as_deref(), b.sound.as_deref()) else { continue };
         let inside =
-            pieces.iter_mut().find(|p| p.speech() && p.speaker == Some(sp) && p.start <= b.start && b.start < p.end);
+            cues.iter().position(|c| c.speaker.as_deref() == Some(sp) && c.start <= b.start && b.start < c.end);
         match inside {
-            Some(p) => {
-                // The actor goes on laughing past the last word: so does the cue, up to its limit.
-                p.end = p.end.max(b.end.min(p.start + (o.max_duration * 1000.0) as u64));
-                p.heard.push((b.start, Heard::Sound(code)));
+            Some(i) => {
+                let next = cues[i + 1..].iter().find(|c| c.speaker == cues[i].speaker).map_or(u64::MAX, |c| c.start);
+                let end = b.end.min(cues[i].start + max_ms).min(next).max(cues[i].end);
+                heard[i].push((b.start, Heard::Sound(code, end)));
             }
-            None => pieces.push(Piece {
-                start: b.start,
-                end: b.end,
-                speaker: Some(sp),
-                heard: vec![(b.start, Heard::Sound(code))],
-                spoken: Vec::new(),
-            }),
+            None => alone.push(Piece::of(Some(sp), vec![(b.start, Heard::Sound(code, b.end))])),
         }
     }
-    for p in &mut pieces {
+    let mut pieces: Vec<Piece> = Vec::new();
+    for (c, mut h) in cues.iter().zip(heard) {
         // A sound after the word it is heard during.
-        p.heard.sort_by_key(|(t, h)| (*t, matches!(h, Heard::Sound(_))));
+        h.sort_by_key(|(t, h)| (*t, matches!(h, Heard::Sound(..))));
+        // A row is at most so many characters as written, labels and all.
+        pieces.extend(Piece::of(c.speaker.as_deref(), h).split(o.max_chars, lang));
     }
+    pieces.extend(alone);
     pieces.sort_by_key(|p| p.start);
 
     // Joined while the speaker goes on, the pause is short and the cue stays within its limits.
     let mut rows: Vec<Piece> = Vec::new();
-    let (gap_ms, max_ms) = ((o.max_gap * 1000.0) as u64, (o.max_duration * 1000.0) as u64);
+    let gap_ms = (o.max_gap * 1000.0) as u64;
     for piece in pieces {
         // The speaker's last row, if no one else has spoken since it began, in time.
         let last = rows.iter().rposition(|r| r.speaker == piece.speaker);
