@@ -86,12 +86,7 @@ fn run(args: &RunArgs) -> Result<ExitCode> {
     }
 
     args.seg.check(&args.formats)?;
-    // Said once before the batch: every file's list is timed the same.
-    if let Some(timing) = args.seg.adr_timing(&args.formats)
-        && !args.quiet
-    {
-        eprintln!("{timing}");
-    }
+    let adr_timing = args.seg.adr_timing(&args.formats);
     let mut opts = args.job_options();
     let scanning = spinner(format!("reading {} file(s)...", items.len()), folder_mode && !args.quiet);
     let plan = batch::plan(&items, &opts);
@@ -170,7 +165,8 @@ fn run(args: &RunArgs) -> Result<ExitCode> {
             sent_audio_s += secs;
         }
         let fatal = result.as_ref().err().and_then(api_error).filter(|a| a.is_fatal()).map(|a| a.error_type.clone());
-        let (line, log_msg) = describe(name, &result, &mut stats, started.elapsed().as_secs_f64(), &exists);
+        let (line, log_msg) =
+            describe(name, &result, &mut stats, started.elapsed().as_secs_f64(), &exists, adr_timing.as_deref());
         say(line);
         log_line(&log, input, &log_msg);
         if result.is_err() && !folder_mode {
@@ -267,8 +263,22 @@ fn exists_label(formats: &[job::Format]) -> String {
     format!("{} exist{}", names.join(", "), if names.len() == 1 { "s" } else { "" })
 }
 
+/// ` (ADR at 25 fps from 01:00:00:00)` when `files` has an ADR list: a skipped one keeps the timing
+/// it was made with, so it is said only for a list written now.
+fn adr_note(files: &[std::path::PathBuf], timing: Option<&str>) -> String {
+    let wrote = files.iter().any(|f| f.to_string_lossy().ends_with(".adr.csv"));
+    timing.filter(|_| wrote).map(|t| format!(" ({t})")).unwrap_or_default()
+}
+
 /// One result line for the screen, one for the log.
-fn describe(name: &str, result: &Result<Outcome>, stats: &mut Stats, secs: f64, exists: &str) -> (String, String) {
+fn describe(
+    name: &str,
+    result: &Result<Outcome>,
+    stats: &mut Stats,
+    secs: f64,
+    exists: &str,
+    adr_timing: Option<&str>,
+) -> (String, String) {
     match result {
         Ok(Outcome::Written { files, cues, cached, .. }) => {
             let from = if *cached {
@@ -280,7 +290,8 @@ fn describe(name: &str, result: &Result<Outcome>, stats: &mut Stats, secs: f64, 
             };
             let what = if *cues > 0 { format!("{cues} cues") } else { "transcript".into() };
             let paths: Vec<String> = files.iter().map(|f| f.display().to_string()).collect();
-            (format!("✓ {name} — {what}{from}"), format!("OK -> {} ({secs:.0}s){from}", paths.join(", ")))
+            let adr = adr_note(files, adr_timing);
+            (format!("✓ {name} — {what}{from}{adr}"), format!("OK -> {} ({secs:.0}s){from}{adr}", paths.join(", ")))
         }
         Ok(Outcome::Skipped { .. }) => {
             stats.skipped += 1;
@@ -484,10 +495,7 @@ fn render(args: &RenderArgs) -> Result<()> {
         job::write_outputs(&targets, &cue_words, &words, &doc, &layout, &outputs, language.as_deref(), &seed)?;
     let what = if cues > 0 { format!("{cues} cues") } else { "transcript".into() };
     let paths: Vec<String> = files.iter().map(|f| f.display().to_string()).collect();
-    // Only when an ADR list was written: a skipped one keeps the timing it was made with.
-    let wrote_adr = files.iter().any(|f| f.to_string_lossy().ends_with(".adr.csv"));
-    let timing =
-        args.seg.adr_timing(&args.formats).filter(|_| wrote_adr).map(|t| format!(" ({t})")).unwrap_or_default();
+    let timing = adr_note(&files, args.seg.adr_timing(&args.formats).as_deref());
     eprintln!("✓ {name} — {what} -> {}{timing}", paths.join(", "));
     Ok(())
 }
@@ -552,7 +560,7 @@ mod tests {
     #[test]
     fn a_cancelled_file_is_not_a_failure_and_counts_as_not_finished() {
         let mut stats = Stats::default();
-        let (line, _) = describe("c.mp4", &Err(Cancelled.into()), &mut stats, 1.0, ".srt exists");
+        let (line, _) = describe("c.mp4", &Err(Cancelled.into()), &mut stats, 1.0, ".srt exists", None);
         assert_eq!(line, "⏹ c.mp4 — interrupted");
         assert_eq!((stats.failed, stats.cancelled), (0, 1));
         stats.written = 3;

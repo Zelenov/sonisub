@@ -1,8 +1,10 @@
 # 0.9.1
 ## Changed
-- `-t ytt`: up to nine lines at once each get a window of their own (from four on they used to share one and be drawn on top of each other); a line lasts until its last word shows; control characters XML forbids are left out of `.ytt` and `.ttml`, so YouTube and strict importers do not refuse the file. The README now says `.ytt` has not yet been checked on YouTube itself (#21).
-- `-t adr`: when a long cue is cut, each row keeps its own Out (a speaker's sound no longer stretched the first row over the second); a sound heard alone stays within 8 s; a long sound and the same speaker's speech during it no longer overlap.
-- `--fps` and `--timeline-start` without `-t adr` are now an error (they used to be ignored), so a script that passes them for every format must pass them only with `-t adr`. The run says the rate and start an ADR list is written at (`ADR at 25 fps from 01:00:00:00`).
+- `-t ytt`: up to eight lines shown at once each get a window of their own (from four on they used to be drawn on top of each other).
+- `-t ytt`: a line lasts until its last word shows.
+- `-t ytt`, `-t ttml`: characters XML forbids are left out, so YouTube and strict importers do not refuse the file.
+- `-t adr`: one actor's rows never overlap, not even by a frame (a cut cue, a long sound and speech during it, rows starting in one frame); a sound heard alone stays within 8 s.
+- `--fps` and `--timeline-start` without `-t adr` are now an error (they used to be ignored), so a script that passes them for every format must pass them only with `-t adr`. The result line of a file says the rate and start its ADR list was written at (`(ADR at 25 fps from 01:00:00:00)`).
 - captions 0.3.1.
 
 # 0.9.0

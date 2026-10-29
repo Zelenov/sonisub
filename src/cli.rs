@@ -210,12 +210,12 @@ pub struct SegArgs {
     pub labels: Option<String>,
 
     /// Frame rate of the Fairlight timeline (-t adr): 23.976, 24, 25, 29.97, 30, 50, 59.94 or 60; in Resolve, Project
-    /// Settings > Master Settings > Timeline frame rate. Default 25.
+    /// Settings > Master Settings > Timeline frame rate. [default: 25]
     #[arg(long, value_parser = captions::adr::Rate::parse, help_heading = "Fairlight ADR")]
     pub fps: Option<captions::adr::Rate>,
 
     /// Where the clip starts on the Fairlight timeline (-t adr), HH:MM:SS:FF, non-drop frame; usually the
-    /// timeline's own start (Timeline > Starting Timecode). Default 01:00:00:00.
+    /// timeline's own start (Timeline > Starting Timecode). [default: 01:00:00:00]
     #[arg(long, value_parser = captions::adr::Timecode::parse, help_heading = "Fairlight ADR")]
     pub timeline_start: Option<captions::adr::Timecode>,
 }

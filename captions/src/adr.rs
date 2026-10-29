@@ -366,12 +366,6 @@ pub fn build(doc: &Doc, layout: &Layout, o: &Options, lang: &str) -> Result<(Str
             row.heard.extend(piece.heard);
             continue;
         }
-        // One actor never has two rows at once: a long sound before this piece ends where it starts.
-        if let Some(i) = last
-            && rows[i].end > piece.start
-        {
-            rows[i].end = piece.start.max(rows[i].start + 1);
-        }
         rows.push(piece);
     }
 
@@ -381,6 +375,8 @@ pub fn build(doc: &Doc, layout: &Layout, o: &Options, lang: &str) -> Result<(Str
         })
     };
     let mut out = String::from("\u{feff}");
+    // The Out frame of each actor's last row written.
+    let mut outs: Vec<(Option<&str>, u64)> = Vec::new();
     for (n, r) in rows.iter().enumerate() {
         // A transcript without speakers still names the one voice, as the subtitles would; a
         // file with named speakers gives speech of no one a name of its own.
@@ -389,12 +385,19 @@ pub fn build(doc: &Doc, layout: &Layout, o: &Options, lang: &str) -> Result<(Str
             None if doc.speakers.is_empty() => speaker_label("1", &layout.speaker_names),
             None => labels::unknown_speaker(lang),
         };
-        // A cue is at least a frame long, so Resolve shows it, and ends by the frame the same
-        // actor's next row starts on (Out is rounded up, In down: a cut between them in
-        // milliseconds would still share a frame).
-        let from = o.rate.frame(r.start, false);
+        // One actor never has two rows at once, counted in frames (Out is rounded up and In down,
+        // so rows apart in milliseconds can still share a frame): a row starts no earlier than the
+        // actor's last one ends, and ends by the frame their next one starts on. A cue is at least
+        // a frame long, so Resolve shows it; that frame wins over the next row, which then starts
+        // after it.
+        let last_out = outs.iter().find(|(s, _)| *s == r.speaker).map_or(0, |(_, f)| *f);
+        let from = o.rate.frame(r.start, false).max(last_out);
         let next = rows[n + 1..].iter().find(|x| x.speaker == r.speaker).map(|x| o.rate.frame(x.start, false));
         let to = o.rate.frame(r.end, true).min(next.unwrap_or(u64::MAX)).max(from + 1);
+        match outs.iter_mut().find(|(s, _)| *s == r.speaker) {
+            Some(last) => last.1 = to,
+            None => outs.push((r.speaker, to)),
+        }
         let row = [(n + 1).to_string(), tc(from)?, tc(to)?, who, dialogue(&r.heard, lang)];
         out.push_str(&row.iter().map(|f| quote(f)).collect::<Vec<_>>().join(","));
         out.push_str("\r\n");

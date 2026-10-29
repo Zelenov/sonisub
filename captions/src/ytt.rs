@@ -50,7 +50,7 @@ fn window(place: Option<Pos>) -> Window {
 /// when the bottom, the top and the middle are all taken: clear of the middle window (50) and the
 /// top one, for lines of up to two rows each (a taller one may reach the window above). A line
 /// past these goes where it wants, over another.
-const STACKED: [u32; 6] = [89, 78, 67, 34, 23, 12];
+const STACKED: [u32; 5] = [89, 78, 67, 34, 23];
 
 /// One `<s>`: milliseconds after the subtitle's start, italic, the text as shown.
 struct Run {
@@ -123,7 +123,7 @@ pub fn build(words: &[Word], layout: &Layout) -> (String, usize) {
 
     // YouTube gives every `<p>` its own window, and windows in one place are drawn on top of each
     // other: a line goes where it wants if that is free at the time, else to the bottom, the top
-    // or the middle, whichever is free first, else to a window stacked up from the bottom: nine
+    // or the middle, whichever is free first, else to a window stacked up from the bottom: eight
     // lines at once at most each have their own.
     let free_order = [window(None), window(Some(Pos::Top)), window(Some(Pos::Middle))];
     let stacked = STACKED.map(|av| (7, 50, av));
