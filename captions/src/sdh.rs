@@ -29,5 +29,12 @@ pub fn ass(doc: &Doc, layout: &Layout, opts: &ass::Options, lang: &str) -> (Stri
 /// SDH as TTML / IMSC, and the number of subtitles.
 pub fn ttml(doc: &Doc, layout: &Layout, lang: &str) -> (String, usize) {
     let voice = |v: &str| labels::voice(v, lang);
-    ttml::write(doc, &cues(&doc.to_words(), layout), &style::sounds(doc, layout, lang), layout, Some(&voice))
+    ttml::write(
+        doc,
+        &cues(&doc.to_words(), layout),
+        &style::sounds(doc, layout, lang),
+        layout,
+        Some(&voice),
+        Some(lang),
+    )
 }

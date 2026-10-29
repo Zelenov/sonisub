@@ -244,7 +244,8 @@ fn ttml_never_shows_two_overlapping_regions_at_once() {
                        00:00:01.500 --> 00:00:02.500 sound:phone\n";
     let doc = captions::capt::Doc::parse(near_bottom).unwrap();
     let ttml = captions::sdh::ttml(&doc, &Layout::default(), "en").0;
-    assert!(ttml.contains(r#"region="r1">[phone ringing]"#), "{ttml}");
+    // The file has no language, so the English label says it is English.
+    assert!(ttml.contains(r#"region="r1"><span xml:lang="en">[phone ringing]</span>"#), "{ttml}");
     // The top and a rectangle over it, spoken at once.
     let top_and_box = "CAPT 1\n\n00:00:01.000 --> 00:00:03.000 speaker:1 pos:top\n{0}Up{50}\n\n\
                        00:00:01.500 --> 00:00:02.500 speaker:2 pos:0.05,0.05,0.4,0.2\n{0}Box{50}\n";
@@ -266,7 +267,54 @@ fn ttml_regions_stay_inside_the_frame_and_fit_the_layout() {
     let doc = captions::capt::Doc::parse(file).unwrap();
     let ttml = captions::ttml::build(&doc, &Layout::default()).0;
     assert!(ttml.contains(r#"xml:id="r1" tts:origin="0.1% 0%" tts:extent="99.9% 50%""#), "{ttml}");
-    // A vertical line of 22 characters fits: 25 rows, so a cell is 1920 / 25 = 77 px.
+    // A vertical line of 22 characters fits with room to spare: 27 rows, a cell of 71 px.
     let ttml = captions::ttml::build(&doc, &Layout::vertical()).0;
-    assert!(ttml.contains(r#"ttp:cellResolution="14 25""#), "{ttml}");
+    assert!(ttml.contains(r#"ttp:cellResolution="15 27""#), "{ttml}");
+}
+
+#[test]
+fn a_ttml_region_grows_to_hold_everything_shown_in_it() {
+    // Two lines of speech at the bottom and a sound under them, at once: three lines and more.
+    let file = "CAPT 1\nlang:ru\n\n00:00:01.000 --> 00:00:03.000\n\
+                {0}Один{20} {30}два{50} {60}три{80} {90}четыре{110} {120}пять{140} {150}шесть{170} {175}семь{185} \
+                {186}восемь{190} {191}девять{195} {196}десять.{199}\n\n\
+                00:00:02.000 --> 00:00:03.000 sound:phone\n";
+    let doc = captions::capt::Doc::parse(file).unwrap();
+    let layout = Layout { wrap_lines: true, max_line: 20, max_lines: 4, ..Layout::default() };
+    let ttml = captions::sdh::ttml(&doc, &layout, "en").0;
+    let bottom = ttml.lines().find(|l| l.contains(r#"xml:id="bottom""#)).unwrap();
+    let height: f64 = bottom.split("tts:extent=\"80% ").nth(1).unwrap().split('%').next().unwrap().parse().unwrap();
+    // A line is 1.25 of 1080 / 15 rows.
+    let lines = ttml.lines().filter(|l| l.contains("<p ")).map(|l| l.matches("<br/>").count() + 1).sum::<usize>();
+    assert!(height >= lines as f64 * 1.25 / 15.0 * 100.0 - 0.2, "{lines} lines in {height}%\n{ttml}");
+    // The label in English, the file in Russian.
+    assert!(ttml.contains(r#"<span xml:lang="en">[phone ringing]</span>"#), "{ttml}");
+}
+
+#[test]
+fn ttml_takes_the_first_word_language_when_the_file_has_none() {
+    let file = "CAPT 1\n\n00:00:01.000 --> 00:00:02.000 lang:ru\n{0}Привет.{50}\n";
+    let ttml = captions::ttml::build(&captions::capt::Doc::parse(file).unwrap(), &Layout::default()).0;
+    assert!(ttml.contains(r#"xml:lang="ru">"#), "{ttml}");
+}
+
+#[test]
+fn a_ttml_region_that_takes_a_moved_subtitle_grows_for_both() {
+    // 59 characters each: two lines each at the default 50; the box overlaps the top, so it moves in.
+    let long = |from: u64| {
+        (0..10).map(|i| format!("{{{}}}word{i}{{{}}}", from + i * 9, from + i * 9 + 8)).collect::<Vec<_>>().join(" ")
+    };
+    let file = format!(
+        "CAPT 1\n\n00:00:01.000 --> 00:00:03.000 speaker:1 pos:top\n{}\n\n\
+         00:00:01.500 --> 00:00:03.000 speaker:2 pos:0.05,0.05,0.4,0.2\n{}\n",
+        long(0),
+        long(0)
+    );
+    let doc = captions::capt::Doc::parse(&file).unwrap();
+    let ttml = captions::ttml::build(&doc, &Layout::default()).0;
+    assert!(ttml.contains(r#"region="top" ttm:agent="speaker_2""#), "{ttml}");
+    let top = ttml.lines().find(|l| l.contains(r#"xml:id="top""#)).unwrap();
+    let height: f64 = top.split("tts:extent=\"80% ").nth(1).unwrap().split('%').next().unwrap().parse().unwrap();
+    // Four lines of 1.25 cells, 20 rows.
+    assert!(height >= 4.0 * 1.25 / 20.0 * 100.0 - 0.2, "{height}%\n{ttml}");
 }

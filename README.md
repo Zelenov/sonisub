@@ -136,7 +136,8 @@ highlight (`\k`).
 `--sdh` makes `.srt`, `.vtt`, `.ass` and `.ttml` subtitles for the deaf and hard of hearing from the sounds and voices
 marked in a CAPT file (`sound:phone`, `voice:whisper` → `[phone ringing]`, `[whispering]`; `--labels en|ru`).
 Soniox reports no sounds, so a fresh transcript has none until they are added to `clip.capt`.
-For Reels, Shorts and TikTok add `--vertical`: short two-line subtitles cut where they read well; `.ass` and `.vtt` also keep them clear of the app's buttons (`.srt` has no position).
+For Reels, Shorts and TikTok add `--vertical`: short two-line subtitles cut where they read well; `.ass`, `.vtt` and `.ttml` also keep them clear of the app's buttons (`.srt` has no position; a rectangle from the
+CAPT file stays where the file puts it).
 
 `sonisub render` makes the same files without Soniox: from a CAPT file (`-t capt` writes `clip.capt`, the whole
 transcript as small text you can read and edit, see [docs/capt.md](docs/capt.md)), or from words saved as JSON
