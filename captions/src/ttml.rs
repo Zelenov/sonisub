@@ -3,21 +3,21 @@
 //!
 //! Speakers are `ttm:agent`s and each subtitle names its speaker; a place is a `region` (the
 //! bottom, the top, the middle, and one per point or rectangle of the file, exactly); italic and
-//! other languages than the file's are `<span>`s. [`crate::sdh::ttml`] adds sounds as subtitles
-//! and voices as labels ([`crate::labels`]). Text is white with a black outline, in the player's
-//! sans serif, so it reads on any picture.
+//! other languages than the file's are `<span>`s. Text is white with a black outline, in the
+//! player's sans serif, so it reads on any picture.
 //!
 //! IMSC wants regions shown at the same time never to overlap and at most four of them: a
 //! subtitle whose region would overlap one already on screen, or be a fifth, goes into one on
 //! screen, under what is there, and a region grows (from its anchored edge) to hold every line
 //! shown in it at once. The font is sized from the frame (`ttp:cellResolution`) so a line of the
-//! layout's length fits a region's width with room to spare; on a vertical frame the bottom and top
-//! regions stay clear of a phone app's buttons.
+//! layout's length fits a region's width with room to spare.
 
 use crate::capt::{Doc, Pos};
 use crate::cues::{Cue, Layout, cues};
-use crate::style::{self, Markup, Sound, speaker_name};
+use crate::style::{self, Markup, speaker_name};
 
+/// The frame the document is laid out on (`tts:extent`), in pixels.
+const FRAME: (u32, u32) = (1920, 1080);
 /// The width of a character, in cells: a sans serif needs about half a cell; this leaves room for
 /// Cyrillic and capitals.
 const CHAR_WIDTH: f64 = 0.55;
@@ -145,7 +145,7 @@ impl Grid {
     /// A line of the layout's length fills 80% of the frame's width. IMSC's default is 15 rows; a
     /// frame never gets bigger text than that.
     fn new(layout: &Layout) -> Grid {
-        let (w, h) = (layout.frame.0 as f64, layout.frame.1 as f64);
+        let (w, h) = (FRAME.0 as f64, FRAME.1 as f64);
         let rows = if layout.max_line == 0 {
             15
         } else {
@@ -163,8 +163,8 @@ impl Grid {
     }
 }
 
-/// The height of the named regions: the layout's lines (two when IMSC wraps a long one) and a
-/// sound under them, at least 20% of the frame.
+/// The height of the named regions: the layout's lines (two when IMSC wraps a long one) and one
+/// to spare, at least 20% of the frame.
 fn region_height(layout: &Layout, grid: &Grid) -> f64 {
     let lines = if layout.wrap_lines { layout.max_lines.max(1) } else { 2 };
     ((lines + 1) as f64 * grid.line_h).max(0.2)
@@ -172,11 +172,9 @@ fn region_height(layout: &Layout, grid: &Grid) -> f64 {
 
 /// The bottom, top and middle regions (in the order of `BOTTOM`, `TOP`, `MIDDLE`), 80% of the
 /// width: the middle right under the top one, never over the bottom one.
-fn named_regions(layout: &Layout, height: f64) -> [Region; 3] {
-    // The bottom region ends 5% above the frame's edge, or where a vertical frame's clear zone starts.
-    let bottom = if layout.is_vertical() { 1.0 - style::bottom_clear(layout) } else { 0.95 };
-    let top = if layout.is_vertical() { style::top_clear(layout) } else { 0.05 };
-    let middle = if layout.is_vertical() { (top + height).min(bottom - 2.0 * height) } else { 0.5 - height / 2.0 };
+fn named_regions(height: f64) -> [Region; 3] {
+    // The bottom region ends 5% above the frame's edge, the top one starts 5% below it.
+    let (bottom, top, middle) = (0.95, 0.05, 0.5 - height / 2.0);
     let region = |id: &str, y: f64, display| Region {
         id: id.into(),
         rect: (0.1, y, 0.8, height),
@@ -320,23 +318,11 @@ fn place_items(items: &mut [Item], regions: &mut [Region], grid: &Grid) {
 /// TTML text for `doc` laid out by `layout`, and the number of subtitles. It takes the CAPT
 /// document, not words like [`crate::srt::build`], for its title, speakers and language.
 pub fn build(doc: &Doc, layout: &Layout) -> (String, usize) {
-    write(doc, &cues(&doc.to_words(), layout), &[], layout, None, None)
-}
-
-/// TTML for cues and, for subtitles for the deaf and hard of hearing, sounds and voice labels in
-/// `label_lang`; `doc` gives the title, the speakers and the language.
-pub(crate) fn write(
-    doc: &Doc,
-    cues: &[Cue],
-    sounds: &[Sound],
-    layout: &Layout,
-    voice: Option<&dyn Fn(&str) -> String>,
-    label_lang: Option<&str>,
-) -> (String, usize) {
+    let cues = &cues(&doc.to_words(), layout);
     let grid = Grid::new(layout);
     let height = region_height(layout, &grid);
     // The named regions, then one per other place of the file, in order of first use.
-    let mut regions: Vec<Region> = named_regions(layout, height).into();
+    let mut regions: Vec<Region> = named_regions(height).into();
     let mut places: Vec<Pos> = Vec::new();
     for p in cues.iter().filter_map(style::place) {
         let id = format!("r{}", places.len() + 1);
@@ -360,17 +346,12 @@ pub(crate) fn write(
 
     let agents = agent_ids(doc);
     let agent = |sp: Option<&str>| sp.and_then(|s| agents.iter().find(|(a, _)| a == s)).map(|(_, id)| id.clone());
-    let markup = Markup {
-        italic: Some(("<span tts:fontStyle=\"italic\">", "</span>")),
-        lang: Some(&lang_span),
-        voice,
-        escape: &xml,
-    };
+    let markup =
+        Markup { italic: Some(("<span tts:fontStyle=\"italic\">", "</span>")), lang: Some(&lang_span), escape: &xml };
     let lang = doc_lang(doc, cues);
     let mut items: Vec<Item> = cues
         .iter()
         .map(|c| {
-            // Counted as shown: with a voice label, if SDH writes one.
             let lines = style::lines(c, &markup);
             Item {
                 start: c.start,
@@ -382,20 +363,9 @@ pub(crate) fn write(
             }
         })
         .collect();
-    // A sound label in another language than the document's says so.
-    let label_span = label_lang.filter(|l| *l != lang).map(lang_span);
-    items.extend(sounds.iter().map(|s| {
-        let text = match &label_span {
-            Some((open, close)) => format!("{open}{}{close}", xml(&s.text)),
-            None => xml(&s.text),
-        };
-        let widths = vec![s.text.chars().count()];
-        Item { start: s.start, end: s.end, region: BOTTOM, agent: agent(s.speaker.as_deref()), text, widths }
-    }));
-    items.sort_by_key(|i| i.start);
     place_items(&mut items, &mut regions, &grid);
 
-    let (w, h) = layout.frame;
+    let (w, h) = FRAME;
     let mut out = format!(
         "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n\
          <tt xmlns=\"http://www.w3.org/ns/ttml\" xmlns:tts=\"http://www.w3.org/ns/ttml#styling\" \

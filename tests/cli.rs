@@ -197,94 +197,7 @@ fn speaker_names_go_into_capt_and_come_back_out_of_it() {
 }
 
 #[test]
-fn vertical_sdh_subtitles_from_a_saved_transcript_and_the_frame_in_its_capt() {
-    let dir = tempfile::tempdir().unwrap();
-    let t = dir.path().join("dialog.soniox.json");
-    std::fs::copy(common::fixture("dialog.soniox.json"), &t).unwrap();
-    let all = "capt,srt,vtt,ass";
-    let args = [t.as_os_str(), "-t".as_ref(), all.as_ref(), "--vertical".as_ref(), "--sdh".as_ref()];
-    let out = sonisub(&args).output().unwrap();
-    assert!(out.status.success(), "{}", plain(&out));
-    for ext in ["capt", "srt", "vtt", "ass"] {
-        assert!(dir.path().join(format!("dialog.{ext}")).is_file(), "dialog.{ext}");
-    }
-    let capt = std::fs::read_to_string(dir.path().join("dialog.capt")).unwrap();
-    assert!(capt.contains("\nframe:1080,1920\n"), "the frame goes into the CAPT file:\n{capt}");
-    let ass = std::fs::read_to_string(dir.path().join("dialog.ass")).unwrap();
-    assert!(ass.contains("PlayResX: 1080\nPlayResY: 1920\n"), "{ass}");
-
-    // render takes the frame from the CAPT file: a vertical ASS again, without --vertical.
-    let capt_path = dir.path().join("dialog.capt");
-    let out = sonisub(&["render".as_ref(), capt_path.as_os_str(), "-t".as_ref(), "ass".as_ref(), "-f".as_ref()])
-        .output()
-        .unwrap();
-    assert!(out.status.success(), "{}", plain(&out));
-    let ass = std::fs::read_to_string(dir.path().join("dialog.ass")).unwrap();
-    assert!(ass.contains("PlayResX: 1080\nPlayResY: 1920\n"), "{ass}");
-}
-
-#[test]
-fn render_writes_the_frame_it_is_given_into_the_capt_file() {
-    let dir = tempfile::tempdir().unwrap();
-    let capt = dir.path().join("dialog.capt");
-    std::fs::copy(common::fixture("dialog.capt"), &capt).unwrap();
-    let base = dir.path().join("phone.srt");
-    let args = ["render".as_ref(), capt.as_os_str(), "-t".as_ref(), "capt".as_ref(), "-o".as_ref(), base.as_os_str()];
-    let out = sonisub(&[&args[..], &["--vertical".as_ref()]].concat()).output().unwrap();
-    assert!(out.status.success(), "{}", plain(&out));
-    let written = dir.path().join("phone.capt");
-    assert!(std::fs::read_to_string(&written).unwrap().contains("\nframe:1080,1920\n"));
-    // …so the next render of it is vertical without being told.
-    let out = sonisub(&["render".as_ref(), written.as_os_str(), "-t".as_ref(), "ass".as_ref()]).output().unwrap();
-    assert!(out.status.success(), "{}", plain(&out));
-    let ass = std::fs::read_to_string(dir.path().join("phone.ass")).unwrap();
-    assert!(ass.contains("PlayResX: 1080\nPlayResY: 1920\n"), "{ass}");
-}
-
-#[test]
-fn sdh_adds_sounds_and_voices_to_the_subtitles_it_writes() {
-    let dir = tempfile::tempdir().unwrap();
-    let capt = dir.path().join("marks.capt");
-    std::fs::copy(common::fixture("marks.capt"), &capt).unwrap();
-    let out = sonisub(&["render".as_ref(), capt.as_os_str(), "-t".as_ref(), "srt,vtt".as_ref(), "--sdh".as_ref()])
-        .output()
-        .unwrap();
-    assert!(out.status.success(), "{}", plain(&out));
-    for ext in ["srt", "vtt"] {
-        let text = std::fs::read_to_string(dir.path().join(format!("marks.{ext}"))).unwrap();
-        assert!(text.contains("[phone ringing]") && text.contains("[whispering]"), "{text}");
-    }
-}
-
-#[test]
-fn a_capt_file_of_sounds_only_gives_sdh_subtitles() {
-    let dir = tempfile::tempdir().unwrap();
-    let capt = dir.path().join("intro.capt");
-    std::fs::write(&capt, "CAPT 1\n\n00:00:00.000 --> 00:00:04.000 sound:music\n").unwrap();
-    let out = sonisub(&["render".as_ref(), capt.as_os_str(), "-t".as_ref(), "srt".as_ref(), "--sdh".as_ref()])
-        .output()
-        .unwrap();
-    assert!(out.status.success(), "{}", plain(&out));
-    let srt = std::fs::read_to_string(dir.path().join("intro.srt")).unwrap();
-    assert_eq!(srt, "1\n00:00:00,000 --> 00:00:04,000\n[music]\n\n");
-    // Without --sdh there is nothing to write.
-    let out =
-        sonisub(&["render".as_ref(), capt.as_os_str(), "-t".as_ref(), "srt".as_ref(), "-f".as_ref()]).output().unwrap();
-    assert!(!out.status.success());
-}
-
-#[test]
-fn labels_without_sdh_are_refused() {
-    let dir = tempfile::tempdir().unwrap();
-    let capt = dir.path().join("marks.capt");
-    std::fs::copy(common::fixture("marks.capt"), &capt).unwrap();
-    let out = sonisub(&["render".as_ref(), capt.as_os_str(), "--labels".as_ref(), "ru".as_ref()]).output().unwrap();
-    assert!(!out.status.success());
-    assert!(plain(&out).contains("--sdh"), "{}", plain(&out));
-}
-
-#[test]
-fn subtitles_with_nothing_to_show_are_not_written() {
+fn a_capt_file_of_sounds_only_has_nothing_to_write() {
     let dir = tempfile::tempdir().unwrap();
     let capt = dir.path().join("intro.capt");
     std::fs::write(
@@ -295,12 +208,9 @@ fn subtitles_with_nothing_to_show_are_not_written() {
 ",
     )
     .unwrap();
-    // A file of sounds only, --sdh: the .srt has the sound, the .premiere.json has no words.
-    let out = sonisub(&["render".as_ref(), capt.as_os_str(), "-t".as_ref(), "srt,premiere".as_ref(), "--sdh".as_ref()])
-        .output()
-        .unwrap();
+    let out = sonisub(&["render".as_ref(), capt.as_os_str(), "-t".as_ref(), "srt".as_ref()]).output().unwrap();
     assert!(!out.status.success());
-    assert!(!dir.path().join("intro.srt").exists(), "nothing is written when one output fails");
+    assert!(!dir.path().join("intro.srt").exists());
 }
 
 #[test]
@@ -314,16 +224,4 @@ fn render_writes_ttml() {
     assert!(out.status.success(), "{}", plain(&out));
     let written = std::fs::read_to_string(dir.path().join("marks.ttml")).unwrap();
     assert_eq!(common::normalize(&written), common::golden("marks.ttml"));
-}
-
-#[test]
-fn render_writes_sdh_ttml() {
-    let dir = tempfile::tempdir().unwrap();
-    let capt = dir.path().join("marks.capt");
-    std::fs::copy(common::fixture("marks.capt"), &capt).unwrap();
-    let args = ["render".as_ref(), capt.as_os_str(), "-t".as_ref(), "ttml".as_ref(), "-s".as_ref(), "--sdh".as_ref()];
-    let out = sonisub(&args).output().unwrap();
-    assert!(out.status.success(), "{}", plain(&out));
-    let written = std::fs::read_to_string(dir.path().join("marks.ttml")).unwrap();
-    assert_eq!(common::normalize(&written), common::golden("marks.sdh.ttml"));
 }

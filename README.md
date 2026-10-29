@@ -63,8 +63,6 @@ sonisub . -t premiere                     # only the Premiere transcript; saved 
 sonisub clip.MP4 -t srt,vtt,ass           # also clip.vtt (WebVTT) and clip.ass (a style per speaker)
 sonisub clip.MP4 -t ass --karaoke         # each word lights up as it is spoken
 sonisub clip.MP4 -t srt,capt              # also clip.capt, the whole transcript as small text
-sonisub clip.MP4 -t ass,vtt --vertical    # Reels, Shorts, TikTok: short lines, clear of the app's buttons
-sonisub render clip.capt -t srt --sdh     # for the deaf and hard of hearing: sounds and voices marked in clip.capt
 sonisub render clip.capt -t vtt,premiere  # other formats from a CAPT file or saved words, no Soniox
 sonisub clip.MP4 --no-json                # don't keep clip.soniox.json
 sonisub clip.MP4 -u                       # no length limit: one cue per sentence
@@ -131,14 +129,9 @@ orange, violet, red, then repeating), black outline, bottom centre. Every line n
 you restyle or rename a person in one place. Without diarization all lines use the `Default` style. `--karaoke` adds word-by-word
 highlight (`\k`).
 
-`-t ttml` writes TTML / IMSC 1.1 Text (`clip.ttml`), what broadcasters and streaming services ask for: speakers as agents, places as regions (a rectangle exactly), italic and languages; `--sdh` adds sounds and voices, `--vertical` keeps the regions clear of a phone app. For a delivery spec
-that counts characters a line, add `-w --max-line 42`.
-
-`--sdh` makes `.srt`, `.vtt`, `.ass` and `.ttml` subtitles for the deaf and hard of hearing from the sounds and voices
-marked in a CAPT file (`sound:phone`, `voice:whisper` → `[phone ringing]`, `[whispering]`; `--labels en|ru`).
-Soniox reports no sounds, so a fresh transcript has none until they are added to `clip.capt`.
-For Reels, Shorts and TikTok add `--vertical`: short two-line subtitles cut where they read well; `.ass`, `.vtt` and `.ttml` also keep them clear of the app's buttons (`.srt` has no position; a rectangle from the
-CAPT file stays where the file puts it).
+`-t ttml` writes TTML / IMSC 1.1 Text (`clip.ttml`), what broadcasters and streaming services ask for: speakers as
+agents, places as regions (a rectangle exactly), italic and languages. For a delivery spec that counts characters a
+line, add `-w --max-line 42`.
 
 `sonisub render` makes the same files without Soniox: from a CAPT file (`-t capt` writes `clip.capt`, the whole
 transcript as small text you can read and edit, see [docs/capt.md](docs/capt.md)), or from words saved as JSON

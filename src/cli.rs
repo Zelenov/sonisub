@@ -2,7 +2,7 @@ use std::path::PathBuf;
 use std::time::Duration;
 
 use clap::{Args, Parser, Subcommand};
-use sonisub::captions::{self, ass};
+use sonisub::captions::ass;
 use sonisub::job::Format;
 use sonisub::{audio, job, soniox, srt};
 
@@ -85,8 +85,8 @@ pub struct RunArgs {
 
     /// What to write, comma separated: srt, vtt (WebVTT), ass (a style per speaker), premiere (Premiere Pro
     /// transcript, clip.premiere.json), capt (the whole transcript as small text, clip.capt; `sonisub render`
-    /// makes the other formats from it), ttml (TTML / IMSC 1.1 Text, clip.ttml). Only missing files are written, so adding a format later reuses the saved
-    /// transcript for free.
+    /// makes the other formats from it), ttml (TTML / IMSC 1.1 Text, clip.ttml). Only missing files are written, so
+    /// adding a format later reuses the saved transcript for free.
     #[arg(short = 't', long = "format", value_enum, value_delimiter = ',', default_value = "srt")]
     pub formats: Vec<Format>,
 
@@ -161,18 +161,17 @@ pub struct RunArgs {
 #[command(next_help_heading = "Subtitle layout")]
 pub struct SegArgs {
     /// Max characters per line (with --wrap); a cue holds up to --max-line × --max-lines characters. 0 = no limit.
-    /// Sentences are cut at punctuation first, between words only if that can't fit. Default 50, 22 for a
-    /// vertical video.
-    #[arg(long)]
-    pub max_line: Option<usize>,
+    /// Sentences are cut at punctuation first, between words only if that can't fit.
+    #[arg(long, default_value_t = 50)]
+    pub max_line: usize,
 
-    /// Max lines per cue. Default 2.
-    #[arg(long)]
-    pub max_lines: Option<usize>,
+    /// Max lines per cue.
+    #[arg(long, default_value_t = 2)]
+    pub max_lines: usize,
 
-    /// Max cue duration, seconds; 0 = no limit. Default 8, 4 for a vertical video.
-    #[arg(long)]
-    pub max_duration: Option<f64>,
+    /// Max cue duration, seconds; 0 = no limit.
+    #[arg(long, default_value_t = 8.0)]
+    pub max_duration: f64,
 
     /// Break each cue's text into lines (up to --max-lines of --max-line chars). By default a cue is one line.
     #[arg(long, short = 'w')]
@@ -202,68 +201,27 @@ pub struct SegArgs {
     /// In .ass, light up each word as it is spoken (\k karaoke).
     #[arg(long)]
     pub karaoke: bool,
-
-    /// A vertical video (Reels, Shorts, TikTok; same as --frame 1080x1920): short lines broken in two, short cues,
-    /// and in .ass, .vtt and .ttml the text kept clear of the phone app's buttons.
-    #[arg(long, conflicts_with = "frame")]
-    pub vertical: bool,
-
-    /// The video's frame, WIDTHxHEIGHT in pixels (1920x1080 by default); a frame taller than wide is vertical.
-    /// Written into clip.capt; `render` takes it from there.
-    #[arg(long, value_parser = parse_frame)]
-    pub frame: Option<(u32, u32)>,
-
-    /// Subtitles for the deaf and hard of hearing: .srt, .vtt, .ass and .ttml get a subtitle for every sound
-    /// ([phone ringing]) and a label before words said in a voice of their own ([whispering]), as a CAPT file marks
-    /// them (Soniox reports no sounds: add them to clip.capt and `render` it).
-    #[arg(long, help_heading = "Outputs")]
-    pub sdh: bool,
-
-    /// The language of sound and voice labels (--sdh): en ([laughs]) or ru ((смеётся)).
-    /// Default: ru for a Russian transcript, else en.
-    #[arg(long, value_parser = captions::labels::LANGUAGES, requires = "sdh", help_heading = "Outputs")]
-    pub labels: Option<String>,
-}
-
-fn parse_frame(s: &str) -> Result<(u32, u32), String> {
-    let (w, h) = s.split_once(['x', 'X']).ok_or("expected WIDTHxHEIGHT, like 1080x1920")?;
-    match (w.trim().parse::<u32>(), h.trim().parse::<u32>()) {
-        (Ok(w), Ok(h)) if w > 0 && h > 0 => Ok((w, h)),
-        _ => Err("expected WIDTHxHEIGHT in pixels, like 1080x1920".into()),
-    }
 }
 
 impl SegArgs {
-    /// The frame --vertical or --frame gives, if either does.
-    pub fn frame_given(&self) -> Option<(u32, u32)> {
-        self.vertical.then(|| srt::Layout::vertical().frame).or(self.frame)
-    }
-
-    /// The cue layout; `by_speaker`: a speaker change ends a cue. `file_frame` is a CAPT file's
-    /// frame, used when neither --vertical nor --frame is given.
-    pub fn layout(&self, by_speaker: bool, file_frame: Option<(u32, u32)>) -> srt::Layout {
-        let base = self.frame_given().or(file_frame).map_or_else(srt::Layout::default, srt::Layout::for_frame);
+    /// The cue layout; `by_speaker`: a speaker change ends a cue.
+    pub fn layout(&self, by_speaker: bool) -> srt::Layout {
         srt::Layout {
-            max_line: if self.unlimited { 0 } else { self.max_line.unwrap_or(base.max_line) },
-            max_lines: self.max_lines.unwrap_or(base.max_lines),
-            max_duration: if self.unlimited { 0.0 } else { self.max_duration.unwrap_or(base.max_duration) },
+            max_line: if self.unlimited { 0 } else { self.max_line },
+            max_lines: self.max_lines,
+            max_duration: if self.unlimited { 0.0 } else { self.max_duration },
             gap: self.gap,
             min_duration: self.min_duration,
             by_speaker,
             speaker_labels: self.speakers || !self.speaker_names.is_empty(),
             speaker_names: self.speaker_names.clone(),
-            wrap_lines: self.wrap || base.wrap_lines,
-            ..base
+            wrap_lines: self.wrap,
         }
     }
 
     /// How the formats are written beyond the layout.
     pub fn outputs(&self) -> job::Outputs {
-        job::Outputs {
-            ass: ass::Options { karaoke: self.karaoke, ..Default::default() },
-            sdh: self.sdh,
-            labels: self.labels.clone(),
-        }
+        job::Outputs { ass: ass::Options { karaoke: self.karaoke, ..Default::default() } }
     }
 }
 
@@ -305,7 +263,7 @@ impl RunArgs {
             keep_json: !self.no_json,
             formats: self.formats.clone(),
             force: self.force,
-            layout: self.seg.layout(!self.no_diarization, None),
+            layout: self.seg.layout(!self.no_diarization),
             outputs: self.seg.outputs(),
             poll: Duration::from_secs_f64(self.poll.max(0.2)),
             prefix: String::new(),
@@ -315,19 +273,5 @@ impl RunArgs {
             // Ctrl+C sets the process-wide flag, which every token also obeys.
             cancel: Default::default(),
         }
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::parse_frame;
-
-    #[test]
-    fn a_frame_is_width_x_height() {
-        assert_eq!(parse_frame("1080x1920"), Ok((1080, 1920)));
-        assert_eq!(parse_frame("1920X1080"), Ok((1920, 1080)));
-        assert!(parse_frame("1080").is_err());
-        assert!(parse_frame("0x1920").is_err());
-        assert!(parse_frame("wide x tall").is_err());
     }
 }

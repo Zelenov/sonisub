@@ -239,26 +239,18 @@ fn ttml_regions_shown_together(ttml: &str) -> Vec<(String, String)> {
 
 #[test]
 fn ttml_never_shows_two_overlapping_regions_at_once() {
-    // A point over the bottom region, with a sound during it.
-    let near_bottom = "CAPT 1\n\n00:00:01.000 --> 00:00:03.000 pos:0.5,0.85\n{0}Low{150}\n\n\
-                       00:00:01.500 --> 00:00:02.500 sound:phone\n";
+    // A point over the bottom region, with someone else speaking at the bottom during it.
+    let near_bottom = "CAPT 1\n\n00:00:01.000 --> 00:00:03.000 speaker:1 pos:0.5,0.85\n{0}Low{150}\n\n\
+                       00:00:01.500 --> 00:00:02.500 speaker:2\n{0}Hi.{50}\n";
     let doc = captions::capt::Doc::parse(near_bottom).unwrap();
-    let ttml = captions::sdh::ttml(&doc, &Layout::default(), "en").0;
-    // The file has no language, so the English label says it is English.
-    assert!(ttml.contains(r#"region="r1"><span xml:lang="en">[phone ringing]</span>"#), "{ttml}");
+    let ttml = captions::ttml::build(&doc, &Layout::default()).0;
+    assert!(ttml.contains(r#"region="r1" ttm:agent="speaker_2">Hi."#), "{ttml}");
     // The top and a rectangle over it, spoken at once.
     let top_and_box = "CAPT 1\n\n00:00:01.000 --> 00:00:03.000 speaker:1 pos:top\n{0}Up{50}\n\n\
                        00:00:01.500 --> 00:00:02.500 speaker:2 pos:0.05,0.05,0.4,0.2\n{0}Box{50}\n";
     let doc = captions::capt::Doc::parse(top_and_box).unwrap();
     let ttml = captions::ttml::build(&doc, &Layout::default()).0;
     assert_eq!(ttml_regions_shown_together(&ttml), Vec::<(String, String)>::new(), "{ttml}");
-    // On a vertical frame the middle and the bottom are apart.
-    let middle = "CAPT 1\n\n00:00:01.000 --> 00:00:03.000 pos:middle\n{0}Mid{150}\n\n\
-                  00:00:01.500 --> 00:00:02.500 sound:phone\n";
-    let doc = captions::capt::Doc::parse(middle).unwrap();
-    let ttml = captions::sdh::ttml(&doc, &Layout::vertical(), "en").0;
-    assert_eq!(ttml_regions_shown_together(&ttml), [("middle".to_string(), "bottom".to_string())], "{ttml}");
-    assert!(ttml.contains(r#"xml:id="middle" tts:origin="10% 32%""#), "{ttml}");
 }
 
 #[test]
@@ -267,28 +259,26 @@ fn ttml_regions_stay_inside_the_frame_and_fit_the_layout() {
     let doc = captions::capt::Doc::parse(file).unwrap();
     let ttml = captions::ttml::build(&doc, &Layout::default()).0;
     assert!(ttml.contains(r#"xml:id="r1" tts:origin="0.1% 0%" tts:extent="99.9% 50%""#), "{ttml}");
-    // A vertical line of 22 characters fits with room to spare: 27 rows, a cell of 71 px.
-    let ttml = captions::ttml::build(&doc, &Layout::vertical()).0;
-    assert!(ttml.contains(r#"ttp:cellResolution="15 27""#), "{ttml}");
+    // A line of 22 characters fits with room to spare: 15 rows (IMSC's default) is enough.
+    let ttml = captions::ttml::build(&doc, &Layout { max_line: 22, ..Layout::default() }).0;
+    assert!(ttml.contains(r#"ttp:cellResolution="27 15""#), "{ttml}");
 }
 
 #[test]
 fn a_ttml_region_grows_to_hold_everything_shown_in_it() {
-    // Two lines of speech at the bottom and a sound under them, at once: three lines and more.
+    // Two lines of speech at the bottom and another speaker's line under them, at once: three lines and more.
     let file = "CAPT 1\nlang:ru\n\n00:00:01.000 --> 00:00:03.000\n\
                 {0}Один{20} {30}два{50} {60}три{80} {90}четыре{110} {120}пять{140} {150}шесть{170} {175}семь{185} \
                 {186}восемь{190} {191}девять{195} {196}десять.{199}\n\n\
-                00:00:02.000 --> 00:00:03.000 sound:phone\n";
+                00:00:02.000 --> 00:00:03.000 speaker:2\n{0}Алло?{50}\n";
     let doc = captions::capt::Doc::parse(file).unwrap();
     let layout = Layout { wrap_lines: true, max_line: 20, max_lines: 4, ..Layout::default() };
-    let ttml = captions::sdh::ttml(&doc, &layout, "en").0;
+    let ttml = captions::ttml::build(&doc, &layout).0;
     let bottom = ttml.lines().find(|l| l.contains(r#"xml:id="bottom""#)).unwrap();
     let height: f64 = bottom.split("tts:extent=\"80% ").nth(1).unwrap().split('%').next().unwrap().parse().unwrap();
     // A line is 1.25 of 1080 / 15 rows.
     let lines = ttml.lines().filter(|l| l.contains("<p ")).map(|l| l.matches("<br/>").count() + 1).sum::<usize>();
     assert!(height >= lines as f64 * 1.25 / 15.0 * 100.0 - 0.2, "{lines} lines in {height}%\n{ttml}");
-    // The label in English, the file in Russian.
-    assert!(ttml.contains(r#"<span xml:lang="en">[phone ringing]</span>"#), "{ttml}");
 }
 
 #[test]
@@ -296,6 +286,10 @@ fn ttml_takes_the_first_word_language_when_the_file_has_none() {
     let file = "CAPT 1\n\n00:00:01.000 --> 00:00:02.000 lang:ru\n{0}Привет.{50}\n";
     let ttml = captions::ttml::build(&captions::capt::Doc::parse(file).unwrap(), &Layout::default()).0;
     assert!(ttml.contains(r#"xml:lang="ru">"#), "{ttml}");
+    // An empty lang: is no language.
+    let file = "CAPT 1\nlang:\n\n00:00:01.000 --> 00:00:02.000\n{0}Hi.{50}\n";
+    let ttml = captions::ttml::build(&captions::capt::Doc::parse(file).unwrap(), &Layout::default()).0;
+    assert!(ttml.contains(r#"xml:lang="und">"#), "{ttml}");
 }
 
 #[test]
@@ -406,7 +400,7 @@ fn ttml_shows_at_most_four_regions_and_none_overlap() {
         timed("Right.", 0)
     );
     let doc = captions::capt::Doc::parse(&file).unwrap();
-    let ttml = captions::sdh::ttml(&doc, &Layout::default(), "en").0;
+    let ttml = captions::ttml::build(&doc, &Layout::default()).0;
     assert_eq!(imsc_problems(&ttml), Vec::<String>::new(), "{ttml}");
     // Nine thin boxes at once, no length limit: they end in regions that do not overlap.
     let boxes: Vec<String> = (0..9)
@@ -421,26 +415,4 @@ fn ttml_shows_at_most_four_regions_and_none_overlap() {
     let doc = captions::capt::Doc::parse(&format!("CAPT 1\n\n{}", boxes.join("\n"))).unwrap();
     let ttml = captions::ttml::build(&doc, &Layout::unlimited()).0;
     assert_eq!(imsc_problems(&ttml), Vec::<String>::new(), "{ttml}");
-}
-
-#[test]
-fn a_ttml_voice_label_counts_in_the_lines_a_region_holds() {
-    let words: Vec<String> = (0..15).map(|i| format!("{{{}}}w{:03}{{{}}}", i * 9, i, i * 9 + 8)).collect();
-    let file = format!(
-        "CAPT 1\nlang:\n\n00:00:01.000 --> 00:00:03.000 voice:whisper\n{}\n\n00:00:02.000 --> 00:00:03.000 sound:phone\n",
-        words.join(" ")
-    );
-    let doc = captions::capt::Doc::parse(&file).unwrap();
-    let layout = Layout::unlimited();
-    let ttml = captions::sdh::ttml(&doc, &layout, "en").0;
-    assert_eq!(imsc_problems(&ttml), Vec::<String>::new(), "{ttml}");
-    // 15 rows, 38 characters a line in 80%: 74 characters are two lines, with the 13 of the label
-    // three, and the sound a fourth.
-    let bottom = ttml.lines().find(|l| l.contains(r#"xml:id="bottom""#)).unwrap();
-    let height: f64 = bottom.split("tts:extent=\"80% ").nth(1).unwrap().split('%').next().unwrap().parse().unwrap();
-    let rows: f64 =
-        ttml.split("ttp:cellResolution=\"").nth(1).unwrap().split(['"', ' ']).nth(1).unwrap().parse().unwrap();
-    assert!(height >= 4.0 * 1.25 / rows * 100.0, "{height}%\n{ttml}");
-    // An empty lang: is no language.
-    assert!(ttml.contains(r#"xml:lang="und">"#), "{ttml}");
 }
