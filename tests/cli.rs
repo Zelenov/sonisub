@@ -224,3 +224,15 @@ fn render_writes_sbv() {
     let written = std::fs::read_to_string(dir.path().join("dialog.sbv")).unwrap();
     assert_eq!(common::normalize(&written), common::golden("dialog.sbv"));
 }
+
+#[test]
+fn render_writes_lrc() {
+    let dir = tempfile::tempdir().unwrap();
+    let capt = dir.path().join("dialog.capt");
+    std::fs::copy(common::fixture("dialog.capt"), &capt).unwrap();
+    let out =
+        sonisub(&["render".as_ref(), capt.as_os_str(), "-t".as_ref(), "lrc".as_ref(), "-s".as_ref()]).output().unwrap();
+    assert!(out.status.success(), "{}", plain(&out));
+    let written = std::fs::read_to_string(dir.path().join("dialog.lrc")).unwrap();
+    assert_eq!(common::normalize(&written), common::golden("dialog.lrc"));
+}

@@ -40,5 +40,6 @@ let (ass, _) = ass::build(&words, &layout, &ass::Options { karaoke: true, ..Defa
   writers above; a CAPT file's cut points, sentence ends, places and italic reach every writer through
   `Word::marks`.
 - `sbv`: YouTube's SBV, the same cues as SRT.
+- `lrc`: Enhanced LRC, a time before every word.
 
 MIT licensed.

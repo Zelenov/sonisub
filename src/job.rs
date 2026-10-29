@@ -32,12 +32,14 @@ pub enum Format {
     Capt,
     /// YouTube's SBV, the same cues as SRT: `clip.sbv`.
     Sbv,
+    /// Enhanced LRC, a time before every word, for karaoke and music apps: `clip.lrc`.
+    Lrc,
 }
 
 impl Format {
     /// Subtitles: a file of them with no cue is empty, not written.
     fn has_cues(self) -> bool {
-        matches!(self, Format::Srt | Format::Vtt | Format::Ass | Format::Sbv)
+        matches!(self, Format::Srt | Format::Vtt | Format::Ass | Format::Sbv | Format::Lrc)
     }
 
     /// Where this format goes for the output base path (`clip.srt` -> `clip.premiere.json`).
@@ -49,6 +51,7 @@ impl Format {
             Format::Premiere => output.with_extension("premiere.json"),
             Format::Capt => output.with_extension("capt"),
             Format::Sbv => output.with_extension("sbv"),
+            Format::Lrc => output.with_extension("lrc"),
         }
     }
 }
@@ -309,6 +312,7 @@ pub fn write_outputs(
             Format::Vtt => vtt::build(cue_words, layout),
             Format::Ass => ass::build(cue_words, layout, &outputs.ass),
             Format::Sbv => captions::sbv::build(cue_words, layout),
+            Format::Lrc => captions::lrc::build(cue_words, layout),
             Format::Premiere => {
                 let t = captions::premiere::build(words, layout, default_language, seed)
                     .ok_or_else(|| anyhow!("no words to write"))?;
@@ -458,10 +462,11 @@ pub fn default_output(input: &Path, out_dir: Option<&Path>) -> PathBuf {
 /// The .srt base for an `-o` path given with any output extension: `clip.premiere.json` -> `clip.srt`.
 pub fn output_base(path: &Path) -> PathBuf {
     let name = path.file_name().map_or_else(String::new, |n| n.to_string_lossy().into_owned());
-    let stem = [".premiere.json", ".soniox.json", ".words.json", ".srt", ".vtt", ".ass", ".capt", ".sbv", ".json"]
-        .iter()
-        .find_map(|s| strip_suffix(&name, s))
-        .unwrap_or(&name);
+    let stem =
+        [".premiere.json", ".soniox.json", ".words.json", ".srt", ".vtt", ".ass", ".capt", ".sbv", ".lrc", ".json"]
+            .iter()
+            .find_map(|s| strip_suffix(&name, s))
+            .unwrap_or(&name);
     path.with_file_name(format!("{stem}.srt"))
 }
 

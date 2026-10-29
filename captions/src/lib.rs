@@ -7,12 +7,14 @@
 //! - [`srt`], [`vtt`] and [`ass`] write those cues; [`premiere`] writes a Premiere Pro transcript.
 //! - [`capt`] reads and writes CAPT, the transcript format between a recogniser and these writers.
 //! - [`sbv`] writes YouTube's SBV, the same cues as [`srt`].
+//! - [`lrc`] writes Enhanced LRC, a time before every word of the same cues.
 
 use serde::{Deserialize, Serialize};
 
 pub mod ass;
 pub mod capt;
 pub mod cues;
+pub mod lrc;
 pub mod premiere;
 pub mod sbv;
 pub mod srt;

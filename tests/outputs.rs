@@ -8,7 +8,7 @@
 mod common;
 
 use sonisub::captions::capt::Doc;
-use sonisub::captions::{Layout, ass, sbv, srt, vtt};
+use sonisub::captions::{Layout, ass, lrc, sbv, srt, vtt};
 
 fn doc(name: &str) -> Doc {
     Doc::parse(&common::golden(&format!("{name}.capt"))).unwrap()
@@ -37,6 +37,14 @@ fn sbv_of_both_fixtures() {
     for name in ["dialog", "marks"] {
         let d = doc(name);
         check(name, "sbv", &sbv::build(&d.to_words(), &layout(&d)).0);
+    }
+}
+
+#[test]
+fn lrc_of_both_fixtures() {
+    for name in ["dialog", "marks"] {
+        let d = doc(name);
+        check(name, "lrc", &lrc::build(&d.to_words(), &layout(&d)).0);
     }
 }
 

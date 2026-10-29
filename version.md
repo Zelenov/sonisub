@@ -1,8 +1,9 @@
 # NEXT
 ## Added
 - `-t sbv` writes YouTube's SBV subtitles (`clip.sbv`), the same cues as the `.srt`.
+- `-t lrc` writes Enhanced LRC (`clip.lrc`): a line per cue, a time before every word, for karaoke players and music apps.
 - Subtitles from a CAPT file follow what the file says: they cut at its cut points (a ` / ` moved by hand moves the cut), end sentences where `sentence:` says, show `style:italic` in italic (SRT, WebVTT, ASS), mark words in another language (WebVTT), and put a subtitle where `pos:` says (top, middle, a point or a rectangle).
-- Library: `captions::sbv`; `Doc::sounds()`, the sound blocks of a CAPT file.
+- Library: `captions::sbv`, `captions::lrc`; `Doc::sounds()`, the sound blocks of a CAPT file.
 
 ## Changed
 - The message after a file counts the cues of the first subtitles written, not the most of any format.

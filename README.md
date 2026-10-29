@@ -2,7 +2,7 @@
 
 <img src="https://raw.githubusercontent.com/Zelenov/sonisub/main/docs/icon/sonisub-256.png" align="left" width="128" height="128" alt="sonisub icon">
 
-Generate subtitles (`.srt`, WebVTT, ASS, YouTube's SBV) and Premiere Pro transcripts for video and audio files with
+Generate subtitles (`.srt`, WebVTT, ASS, YouTube's SBV, LRC) and Premiere Pro transcripts for video and audio files with
 [Soniox](https://soniox.com) speech-to-text.
 One self-contained binary: no Python, no ffmpeg required.
 
@@ -63,6 +63,7 @@ sonisub . -t premiere                     # only the Premiere transcript; saved 
 sonisub clip.MP4 -t srt,vtt,ass           # also clip.vtt (WebVTT) and clip.ass (a style per speaker)
 sonisub clip.MP4 -t ass --karaoke         # each word lights up as it is spoken
 sonisub clip.MP4 -t srt,sbv               # also clip.sbv for YouTube Studio
+sonisub clip.MP4 -t lrc                   # clip.lrc for karaoke players and music apps
 sonisub clip.MP4 -t srt,capt              # also clip.capt, the whole transcript as small text
 sonisub render clip.capt -t vtt,premiere  # other formats from a CAPT file or saved words, no Soniox
 sonisub clip.MP4 --no-json                # don't keep clip.soniox.json
@@ -131,6 +132,7 @@ you restyle or rename a person in one place. Without diarization all lines use t
 highlight (`\k`).
 
 `-t sbv` writes YouTube's SBV (`clip.sbv`), the same cues as the `.srt`, for YouTube Studio's subtitle upload.
+`-t lrc` writes Enhanced LRC (`clip.lrc`): a line per cue with a time before every word, for karaoke players and music apps.
 
 `sonisub render` makes the same files without Soniox: from a CAPT file (`-t capt` writes `clip.capt`, the whole
 transcript as small text you can read and edit, see [docs/capt.md](docs/capt.md)), or from words saved as JSON
