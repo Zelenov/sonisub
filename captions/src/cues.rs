@@ -30,17 +30,7 @@ pub struct Layout {
     /// Break a cue's text into up to `max_lines` lines of `max_line` chars. Off: one line per cue,
     /// up to `max_line × max_lines` chars.
     pub wrap_lines: bool,
-    /// The video's frame, width and height in pixels. Writers that place text (ASS, WebVTT)
-    /// use it; a vertical frame keeps text clear of a phone app's buttons ([`Layout::vertical`]).
-    pub frame: (u32, u32),
-    /// Cut for reading on a phone: weigh every cut at once, and avoid a cue or a line that ends on
-    /// a short function word ("the", "и"), a cue shorter than `min_duration`, and one too fast to
-    /// read. On in [`Layout::vertical`].
-    pub readable: bool,
 }
-
-/// The frame of a [`Layout`] by default, and of a CAPT file without `frame:`: 1920×1080.
-pub const DEFAULT_FRAME: (u32, u32) = (1920, 1080);
 
 impl Default for Layout {
     fn default() -> Self {
@@ -54,8 +44,6 @@ impl Default for Layout {
             speaker_labels: false,
             speaker_names: Vec::new(),
             wrap_lines: false,
-            frame: DEFAULT_FRAME,
-            readable: false,
         }
     }
 }
@@ -64,32 +52,6 @@ impl Layout {
     /// No length or duration limit: every cue is one sentence of one speaker.
     pub fn unlimited() -> Self {
         Self { max_line: 0, max_duration: 0.0, ..Self::default() }
-    }
-
-    /// For a vertical video (Reels, Shorts, TikTok, 1080×1920): short lines broken in two, short
-    /// cues, so the text stays narrow and quick to read on a phone.
-    pub fn vertical() -> Self {
-        Self {
-            max_line: 22,
-            max_lines: 2,
-            max_duration: 4.0,
-            wrap_lines: true,
-            frame: (1080, 1920),
-            readable: true,
-            ..Self::default()
-        }
-    }
-
-    /// The layout for a video's frame: [`Layout::vertical`] for a frame taller than wide, else
-    /// [`Layout::default`], with the frame set.
-    pub fn for_frame(frame: (u32, u32)) -> Self {
-        let given = Self { frame, ..Self::default() };
-        if given.is_vertical() { Self { frame, ..Self::vertical() } } else { given }
-    }
-
-    /// Whether the frame is taller than it is wide.
-    pub fn is_vertical(&self) -> bool {
-        self.frame.1 > self.frame.0
     }
 }
 
@@ -265,7 +227,7 @@ pub(crate) fn sentences(words: Vec<Word>, s: &Layout) -> Vec<Vec<Word>> {
 
 /// Splits `text` into at most `max_lines` lines of at most `max_line` chars, balanced, preferring breaks
 /// after punctuation. `None` if it can't fit. `max_line == 0` means one line, any length.
-fn wrap(text: &str, max_line: usize, max_lines: usize, readable: bool) -> Option<Vec<String>> {
+fn wrap(text: &str, max_line: usize, max_lines: usize) -> Option<Vec<String>> {
     let total = text.chars().count();
     if max_line == 0 || total <= max_line {
         return Some(vec![text.to_string()]);
@@ -292,16 +254,12 @@ fn wrap(text: &str, max_line: usize, max_lines: usize, readable: bool) -> Option
                     }
                     let Some((c, _)) = best[l - 1][i] else { continue };
                     let brk = if j < n && !ends_clause(words[j - 1].0) && !ends_sentence(words[j - 1].0) {
-                        // A line ending on "the" reads as broken off: worse than any imbalance.
-                        if readable && is_weak(words[j - 1].0) { break_penalty * 3.0 } else { break_penalty }
+                        break_penalty
                     } else {
                         0.0
                     };
                     let cost = c + (len as f64 - target).powi(2) + brk;
-                    // `i` falls, so for reading on a phone a tie goes to the later one: the shorter
-                    // line above, the longer below.
-                    let tie = if readable { 1e-9 } else { -1e-9 };
-                    if best[l][j].is_none_or(|(b, _)| cost < b + tie) {
+                    if best[l][j].is_none_or(|(b, _)| cost < b) {
                         best[l][j] = Some((cost, i));
                     }
                 }
@@ -332,7 +290,7 @@ fn wrap(text: &str, max_line: usize, max_lines: usize, readable: bool) -> Option
 /// The lines of a cue's text under the layout, or `None` if it doesn't fit.
 fn lay_out(text: &str, s: &Layout) -> Option<Vec<String>> {
     if s.wrap_lines {
-        return wrap(text, s.max_line, s.max_lines.max(1), s.readable);
+        return wrap(text, s.max_line, s.max_lines.max(1));
     }
     let fits = s.max_line == 0 || text.chars().count() <= s.max_line * s.max_lines.max(1);
     fits.then(|| vec![text.to_string()])
@@ -355,90 +313,6 @@ fn cue_cost(ws: &[Word], prefix: &str, s: &Layout) -> Option<f64> {
         1.0
     };
     Some(CUE_COST + 30.0 * (1.0 - fill.min(1.0)).powi(2))
-}
-
-/// Short function words a phrase goes on after: a cue or a line should not end on one.
-const WEAK: [&str; 46] = [
-    "a", "an", "the", "of", "to", "in", "on", "at", "for", "and", "or", "but", "with", "by", "from", "as", "into",
-    "than", "that", "is", "are", "was", "my", "your", "our", "his", "her", "its", "their", "и", "в", "во", "на", "с",
-    "со", "к", "по", "о", "об", "у", "за", "из", "от", "до", "а", "но",
-];
-
-/// Whether a cue or a line should not end on `w` ("the", "и"); a word with punctuation may.
-fn is_weak(w: &str) -> bool {
-    WEAK.contains(&w.to_lowercase().as_str())
-}
-
-/// Who does something, with or without its verb ("we're", "этот"): a cue should not end on one,
-/// cutting the subject from what it does; a line may.
-const SUBJECTS: [&str; 30] = [
-    "i", "i'm", "i've", "i'll", "you", "you're", "we", "we're", "we've", "we'll", "they", "they're", "he", "she",
-    "it's", "this", "these", "those", "я", "ты", "он", "она", "мы", "вы", "они", "этот", "эта", "это", "эти", "тот",
-];
-
-fn is_subject(w: &str) -> bool {
-    SUBJECTS.contains(&w.to_lowercase().replace('’', "'").as_str())
-}
-
-/// For reading on a phone: every way to cut the sentence is weighed at once. A cut at punctuation
-/// costs nothing, at a pause a little, between other words more, and after a short function word
-/// most; a cue shorter than `min_duration` or faster than 20 characters a second costs extra.
-fn split_readable(ws: &[Word], prefix: &str, s: &Layout) -> Vec<Range<usize>> {
-    let n = ws.len();
-    if s.max_line == 0 && s.max_duration <= 0.0 {
-        return std::iter::once(0..n).collect();
-    }
-    let cost = |i: usize, j: usize| -> Option<f64> {
-        let p = if i == 0 { prefix } else { "" };
-        let base = cue_cost(&ws[i..j], p, s)?;
-        let dur = ws[j - 1].end.saturating_sub(ws[i].start) as f64 / 1000.0;
-        let chars = join(&ws[i..j]).chars().count() as f64;
-        let short = if dur < s.min_duration { 80.0 } else { 0.0 };
-        let fast = if dur > 0.0 && chars / dur > 20.0 { (chars / dur - 20.0) * 4.0 } else { 0.0 };
-        let last = &ws[j - 1];
-        let weak =
-            if j < n && !sentence_ends(last) && (is_weak(&last.text) || is_subject(&last.text)) { 120.0 } else { 0.0 };
-        Some(base + short + fast + weak)
-    };
-    let cut = |j: usize| -> f64 {
-        if j == 0 || j == n {
-            return 0.0;
-        }
-        [0.0, 15.0, 50.0][cut_level(&ws[j - 1], &ws[j])]
-    };
-    let mut best: Vec<Option<(f64, usize)>> = vec![None; n + 1];
-    best[0] = Some((0.0, 0));
-    // A cue that is already too long or too slow only grows as it starts earlier: stop there, so a
-    // long sentence without punctuation costs its length times a cue, not its length cubed.
-    let capacity = if s.max_line > 0 { s.max_line * s.max_lines.max(1) + prefix.chars().count() } else { usize::MAX };
-    let max_ms = if s.max_duration > 0.0 { (s.max_duration * 1000.0) as u64 } else { u64::MAX };
-    for j in 1..=n {
-        let mut chars = 0;
-        for i in (0..j).rev() {
-            chars += ws[i].text.chars().count() + usize::from(i + 1 < j);
-            // Without a length limit (`--max-line 0`), words packed in time are still bounded.
-            let too_many = s.max_line == 0 && j - i > 200;
-            if i + 1 < j && (chars > capacity || ws[j - 1].end.saturating_sub(ws[i].start) > max_ms || too_many) {
-                break;
-            }
-            let Some((c0, _)) = best[i] else { continue };
-            // A single word always fits, so there is always a way through.
-            let Some(c) = cost(i, j).or((j == i + 1).then_some(CUE_COST * 10.0)) else { continue };
-            let total = c0 + c + cut(i);
-            if best[j].is_none_or(|(b, _)| total < b) {
-                best[j] = Some((total, i));
-            }
-        }
-    }
-    let mut out = Vec::new();
-    let mut j = n;
-    while j > 0 {
-        let i = best[j].expect("every prefix is reachable").1;
-        out.push(i..j);
-        j = i;
-    }
-    out.reverse();
-    out
 }
 
 /// Splits one sentence into cues. Cuts at punctuation first; only a piece that still doesn't fit is
@@ -560,8 +434,7 @@ pub fn cues(words: &[Word], s: &Layout) -> Vec<Cue> {
         }
         for (ri, run) in runs.into_iter().enumerate() {
             let pre = if ri == 0 { prefix.as_str() } else { "" };
-            let ranges = if s.readable { split_readable(run, pre, s) } else { split(run, pre, s) };
-            for (k, r) in ranges.into_iter().enumerate() {
+            for (k, r) in split(run, pre, s).into_iter().enumerate() {
                 let ws = &run[r];
                 let p = if k == 0 { pre } else { "" };
                 let text = format!("{p}{}", join(ws));
@@ -605,19 +478,5 @@ mod tests {
         assert_eq!((parts[1].marks.cut, parts[1].marks.sentence), (Some(true), Some(false)));
         // What covers the whole word covers both parts.
         assert!(parts.iter().all(|p| p.marks.italic));
-    }
-
-    #[test]
-    fn a_long_sentence_without_punctuation_is_cut_quickly_on_a_vertical_frame() {
-        let words: Vec<Word> = (0..5000u64)
-            .map(|i| Word { text: "word".into(), start: i * 300, end: i * 300 + 250, ..Word::default() })
-            .collect();
-        let started = std::time::Instant::now();
-        let cues = cues(&words, &Layout::vertical());
-        assert!(cues.len() > 100);
-        // No limits: one cue, as without a frame.
-        let unlimited = Layout { max_line: 0, max_duration: 0.0, ..Layout::vertical() };
-        assert_eq!(super::cues(&words, &unlimited).len(), 1);
-        assert!(started.elapsed() < std::time::Duration::from_secs(10), "{:?}", started.elapsed());
     }
 }

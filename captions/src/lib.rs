@@ -6,8 +6,6 @@
 //! - [`cues`] cuts words into subtitle cues by a [`Layout`].
 //! - [`srt`], [`vtt`] and [`ass`] write those cues; [`premiere`] writes a Premiere Pro transcript.
 //! - [`capt`] reads and writes CAPT, the transcript format between a recogniser and these writers.
-//! - From a CAPT file, with its sounds and voices: [`sdh`] (SRT, WebVTT, ASS and SBV for the deaf and
-//!   hard of hearing), labels from [`labels`].
 //! - [`sbv`] writes YouTube's SBV, the same cues as [`srt`].
 
 use serde::{Deserialize, Serialize};
@@ -15,10 +13,8 @@ use serde::{Deserialize, Serialize};
 pub mod ass;
 pub mod capt;
 pub mod cues;
-pub mod labels;
 pub mod premiere;
 pub mod sbv;
-pub mod sdh;
 pub mod srt;
 mod style;
 pub mod vtt;
@@ -86,7 +82,7 @@ pub struct Marks {
     /// Where on screen; a subtitle is never shared by two places. `None` is the bottom.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub pos: Option<capt::Pos>,
-    /// How the word is said (`whisper`, `laughter`); see [`labels`].
+    /// How the word is said (`whisper`, `laughter`): a span's or a block's `voice:`.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub voice: Option<String>,
     /// The word's language when it differs from the file's (a block's or a span's `lang:`), so
