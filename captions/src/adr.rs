@@ -290,8 +290,9 @@ fn dialogue(heard: &[(u64, Heard)], lang: &str) -> String {
 }
 
 /// The cue list for `doc`, speaker names as `layout` gives them, sound and voice labels in
-/// `lang` (`en`, `ru`), and the number of cues. An error for a start the rate does not have, or a
-/// list that would run past 23:59:59 of the timeline.
+/// `lang` (`en`, `ru`), and the number of cues. Only `layout.speaker_names` is read: a cue list is
+/// cut by `o` (`max_gap`, `max_duration`, `max_chars`). An error for a start the rate does not
+/// have, or a list that would run past 23:59:59 of the timeline.
 pub fn build(doc: &Doc, layout: &Layout, o: &Options, lang: &str) -> Result<(String, usize), String> {
     let start = o.start.frames_at(o.rate)?;
     let cut = Layout {
@@ -319,10 +320,15 @@ pub fn build(doc: &Doc, layout: &Layout, o: &Options, lang: &str) -> Result<(Str
         match inside {
             Some(i) => {
                 let next = cues[i + 1..].iter().find(|c| c.speaker == cues[i].speaker).map_or(u64::MAX, |c| c.start);
-                let end = b.end.min(cues[i].start + max_ms).min(next).max(cues[i].end);
+                // Only up to the sound's own end: when the cue is cut, the part with the sound
+                // keeps its own Out, not the whole cue's.
+                let end = b.end.min(cues[i].start + max_ms).min(next).max(b.start);
                 heard[i].push((b.start, Heard::Sound(code, end)));
             }
-            None => alone.push(Piece::of(Some(sp), vec![(b.start, Heard::Sound(code, b.end))])),
+            None => {
+                let end = b.end.min(b.start + max_ms);
+                alone.push(Piece::of(Some(sp), vec![(b.start, Heard::Sound(code, end))]));
+            }
         }
     }
     let mut pieces: Vec<Piece> = Vec::new();
@@ -359,6 +365,12 @@ pub fn build(doc: &Doc, layout: &Layout, o: &Options, lang: &str) -> Result<(Str
             row.spoken.extend(piece.spoken);
             row.heard.extend(piece.heard);
             continue;
+        }
+        // One actor never has two rows at once: a long sound before this piece ends where it starts.
+        if let Some(i) = last
+            && rows[i].end > piece.start
+        {
+            rows[i].end = piece.start.max(rows[i].start + 1);
         }
         rows.push(piece);
     }

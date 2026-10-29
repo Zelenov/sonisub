@@ -86,6 +86,10 @@ fn run(args: &RunArgs) -> Result<ExitCode> {
     }
 
     args.seg.check(&args.formats)?;
+    if args.formats.contains(&job::Format::Adr) && !args.quiet {
+        let o = args.seg.adr();
+        eprintln!("ADR cue lists at {} fps from {}", o.rate, o.start);
+    }
     let mut opts = args.job_options();
     let scanning = spinner(format!("reading {} file(s)...", items.len()), folder_mode && !args.quiet);
     let plan = batch::plan(&items, &opts);
@@ -478,7 +482,7 @@ fn render(args: &RenderArgs) -> Result<()> {
         job::write_outputs(&targets, &cue_words, &words, &doc, &layout, &outputs, language.as_deref(), &seed)?;
     let what = if cues > 0 { format!("{cues} cues") } else { "transcript".into() };
     let paths: Vec<String> = files.iter().map(|f| f.display().to_string()).collect();
-    eprintln!("✓ {name} — {what} -> {}", paths.join(", "));
+    eprintln!("✓ {name} — {what} -> {}{}", paths.join(", "), args.seg.adr_note(&args.formats));
     Ok(())
 }
 

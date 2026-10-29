@@ -1,3 +1,11 @@
+# 0.9.1
+## Changed
+- `-t ytt`: six or more lines at once each get a window of their own (four and more used to be drawn on top of each other); a line lasts until its last word shows; control characters XML forbids are left out, so YouTube does not refuse the file.
+- `-t adr`: when a long cue is cut, each row keeps its own Out (a speaker's sound no longer stretched the first row over the second); a sound heard alone stays within 8 s; a long sound and the same speaker's speech during it no longer overlap.
+- `--fps` and `--timeline-start` without `-t adr` are refused instead of ignored; the run says the rate and start an ADR list is written at (`ADR at 25 fps from 01:00:00:00`).
+- README: the YTT format is not yet checked on YouTube itself (#21); the ADR columns to check in Resolve's import preview.
+- captions 0.3.1.
+
 # 0.9.0
 ## Added
 - Subtitles from a CAPT file follow what the file says: they cut at its cut points (a ` / ` moved by hand moves the cut), end sentences where `sentence:` says, show `style:italic` in italic (SRT, WebVTT, ASS), mark words in another language (WebVTT), and put a subtitle where `pos:` says (top, middle, a point or a rectangle).

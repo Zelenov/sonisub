@@ -22,9 +22,16 @@ use crate::capt::Pos;
 use crate::cues::{Cue, Layout, cues};
 use crate::style::{self, Gap, StepKind};
 
-/// Text goes only into element content: `&` and `<` start markup, `>` is escaped as well.
+/// Text goes only into element content: `&` and `<` start markup, `>` is escaped as well, and
+/// characters XML 1.0 forbids (control characters other than tab and newline) are left out, as
+/// YouTube refuses a file that has one.
 fn xml(s: &str) -> String {
-    s.replace('&', "&amp;").replace('<', "&lt;").replace('>', "&gt;")
+    s.chars()
+        .filter(|c| matches!(c, '\t' | '\n') || (*c >= ' ' && !matches!(c, '\u{fffe}' | '\u{ffff}')))
+        .collect::<String>()
+        .replace('&', "&amp;")
+        .replace('<', "&lt;")
+        .replace('>', "&gt;")
 }
 
 /// A window position: anchor point (0 top left … 4 centre … 7 bottom centre … 8 bottom right),
@@ -44,6 +51,11 @@ fn window(place: Option<Pos>) -> Window {
         Some(Pos::Rect { x, y, w, .. }) => (1, yt_place(x + w / 2.0), yt_place(y)),
     }
 }
+
+/// Windows stacked up from the bottom for lines shown at once when the bottom, the top and the
+/// middle are all taken, and how far apart, in YouTube's percent.
+const MAX_STACKED: u32 = 6;
+const STACK_STEP: u32 = 11;
 
 /// One `<s>`: milliseconds after the subtitle's start, italic, the text as shown.
 struct Run {
@@ -94,11 +106,13 @@ fn runs(cue: &Cue, t0: u64) -> Option<Vec<Run>> {
 
 /// YTT text for `words` laid out by `layout`, and the number of subtitles.
 pub fn build(words: &[Word], layout: &Layout) -> (String, usize) {
-    let cues = cues(words, layout);
+    // In order of start, so a line only has to look at the lines still on screen.
+    let mut cues = cues(words, layout);
+    cues.sort_by_key(|c| c.start);
     // Window positions in order of first use, after an unused one: YTSubConverter leaves item 0 of
     // each list unused, as the iOS app mishandles the first.
     let mut windows: Vec<Window> = vec![(7, 50, 100)];
-    let mut wp = |w: Window| match windows.iter().skip(1).position(|x| *x == w) {
+    let mut window_id = |w: Window| match windows.iter().skip(1).position(|x| *x == w) {
         Some(i) => i + 1,
         None => {
             windows.push(w);
@@ -107,27 +121,30 @@ pub fn build(words: &[Word], layout: &Layout) -> (String, usize) {
     };
     // `<p>` from `t0` (the start, at 1 ms at the earliest, as the Android app needs) to `end`, with
     // a pen for the whole line or none.
-    let p = |t0: u64, end: u64, wp: usize, pen: &str, body: &str| {
+    let paragraph = |t0: u64, end: u64, wp: usize, pen: &str, body: &str| {
         format!("<p t=\"{t0}\" d=\"{}\" wp=\"{wp}\" ws=\"1\"{pen}>{body}</p>\n", end.saturating_sub(t0).max(1))
     };
     let pen = |italic: bool| if italic { " p=\"2\"" } else { "" };
 
     // YouTube gives every `<p>` its own window, and windows in one place are drawn on top of each
     // other: a line goes where it wants if that is free at the time, else to the bottom, the top
-    // or the middle, whichever is free first.
+    // or the middle, whichever is free first, else to a window stacked up from the bottom.
     let free_order = [window(None), window(Some(Pos::Top)), window(Some(Pos::Middle))];
-    let mut placed: Vec<(u64, u64, Window)> = Vec::new();
+    let stacked = (1..=MAX_STACKED).map(|k| (7, 50, 100 - STACK_STEP * k));
+    // The lines on screen: their end and window.
+    let mut shown: Vec<(u64, Window)> = Vec::new();
     let mut items: Vec<String> = Vec::new();
     for c in &cues {
         let (start, end, wants) = (c.start, c.end, window(style::place(c)));
-        let free = |w: &Window| !placed.iter().any(|(a, b, pw)| pw == w && *a < end && start < *b);
-        let at = std::iter::once(wants).chain(free_order).find(|w| free(w)).unwrap_or(wants);
-        placed.push((start, end, at));
-        let id = wp(at);
+        shown.retain(|(until, _)| *until > start);
+        let free = |w: &Window| !shown.iter().any(|(_, sw)| sw == w);
+        let at = std::iter::once(wants).chain(free_order).chain(stacked.clone()).find(|w| free(w)).unwrap_or(wants);
+        shown.push((end, at));
+        let id = window_id(at);
         let t0 = start.max(1);
         items.push(match runs(c, t0) {
             // One section: its pen on the line, as YTSubConverter writes it.
-            Some(runs) if runs.len() == 1 => p(t0, c.end, id, pen(runs[0].italic), &xml(&runs[0].text)),
+            Some(runs) if runs.len() == 1 => paragraph(t0, c.end, id, pen(runs[0].italic), &xml(&runs[0].text)),
             // The server drops the first section's pen unless the line has text outside any
             // section: a zero-width space after the first one.
             Some(runs) => {
@@ -141,9 +158,12 @@ pub fn build(words: &[Word], layout: &Layout) -> (String, usize) {
                         format!("<s{}{t}>{}</s>{after}", pen(r.italic), xml(&r.text))
                     })
                     .collect();
-                p(t0, c.end, id, "", &body)
+                // Sections bumped a millisecond apart may run past the cue's end: the line lasts
+                // until its last one starts at least.
+                let last = runs.last().map_or(0, |r| r.t);
+                paragraph(t0, c.end.max(t0 + last + 1), id, "", &body)
             }
-            None => p(t0, c.end, id, "", &xml(&c.text())),
+            None => paragraph(t0, c.end, id, "", &xml(&c.text())),
         });
     }
 
@@ -153,8 +173,8 @@ pub fn build(words: &[Word], layout: &Layout) -> (String, usize) {
         out.push_str(&format!("<wp id=\"{i}\" ap=\"{ap}\" ah=\"{ah}\" av=\"{av}\"/>\n"));
     }
     out.push_str("</head>\n<body>\n");
-    for p in &items {
-        out.push_str(p);
+    for item in &items {
+        out.push_str(item);
     }
     out.push_str("</body>\n</timedtext>\n");
     (out, items.len())

@@ -295,7 +295,7 @@ fn render_writes_adr() {
 }
 
 #[test]
-fn a_timeline_start_past_the_frame_rate_is_refused_only_for_adr() {
+fn the_timeline_options_are_checked_and_only_taken_with_adr() {
     let dir = tempfile::tempdir().unwrap();
     let capt = dir.path().join("marks.capt");
     std::fs::copy(common::fixture("marks.capt"), &capt).unwrap();
@@ -309,10 +309,14 @@ fn a_timeline_start_past_the_frame_rate_is_refused_only_for_adr() {
     // Drop-frame timecode is refused with what to do.
     let out = sonisub(&[&args[..], &["01:00:00;00".as_ref()]].concat()).output().unwrap();
     assert!(plain(&out).contains("non-drop frame"), "{}", plain(&out));
-    // Other formats do not care about the timeline.
-    let srt = ["render".as_ref(), capt.as_os_str(), "-t".as_ref(), "srt".as_ref(), "--timeline-start".as_ref()];
-    let out = sonisub(&[&srt[..], &["01:00:00:25".as_ref()]].concat()).output().unwrap();
-    assert!(out.status.success(), "{}", plain(&out));
+    // The timeline options without -t adr are a mistake, said rather than ignored.
+    let srt = ["render".as_ref(), capt.as_os_str(), "-t".as_ref(), "srt".as_ref(), "--fps".as_ref()];
+    let out = sonisub(&[&srt[..], &["29.97".as_ref()]].concat()).output().unwrap();
+    assert!(!out.status.success());
+    assert!(plain(&out).contains("need -t adr"), "{}", plain(&out));
+    // The result line says what the list is timed by.
+    let out = sonisub(&[&args[..], &rate[..]].concat()).output().unwrap();
+    assert!(plain(&out).contains("(ADR at 29.97 fps from 01:00:00:29)"), "{}", plain(&out));
 }
 
 #[test]
