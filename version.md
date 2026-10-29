@@ -1,15 +1,12 @@
 # NEXT
 ## Added
 - Subtitles from a CAPT file follow what the file says: they cut at its cut points (a ` / ` moved by hand moves the cut), end sentences where `sentence:` says, show `style:italic` in italic (SRT, WebVTT, ASS), mark words in another language (WebVTT), and put a subtitle where `pos:` says (top, middle, a point or a rectangle).
-- `--sdh`: `.srt`, `.vtt` and `.ass` become subtitles for the deaf and hard of hearing, with a subtitle for every sound (`[phone ringing]`, `Anna: [laughs]` with `-s`) and a label before words said in a voice of their own (`[whispering]`); English or Russian labels with `--labels` (which needs `--sdh`). Sounds and voices come from a CAPT file (Soniox reports none): mark them in `clip.capt` and `render` it; a file of sounds only works too.
-- `--vertical` (or `--frame 1080x1920`) for Reels, Shorts and TikTok: short two-line subtitles cut where they read well (not after "the" or "and", not too fast to read), and in `.ass` and `.vtt` the text kept clear of the phone app's caption and buttons. The frame goes into the `clip.capt` written, so the next `render` of it remembers it; `render clip.capt --vertical` leaves an existing `clip.capt` alone unless `-t capt -f` rewrites it (or put `frame:1080,1920` in its header).
-- Library: `captions::sdh::{srt, vtt, ass}` (subtitles for the deaf and hard of hearing from a CAPT file), `captions::labels` (sound and voice labels, en/ru), `Layout::vertical()` and `Layout::for_frame`, `Doc::sounds()`.
+- Library: `Doc::sounds()`, the sound blocks of a CAPT file.
 
 ## Changed
-- `--max-line`, `--max-lines` and `--max-duration` keep their defaults (50, 2, 8) for a horizontal video; a vertical one gets 22, 2 and 4 unless they are given.
 - The message after a file counts the cues of the first subtitles written, not the most of any format.
 - Subtitles are always made from the transcript as CAPT reads it, so `-t srt`, `-t srt,capt` and `render clip.capt` give the same cues; WebVTT now marks a sentence in another language than the file's (`<lang ru>…</lang>`). The Premiere transcript keeps Soniox's words as they are.
-- Library: `captions::Word` has `marks` and `Default` (build words with `..Word::default()`); `captions::Layout` has `frame` and `readable`, and `Layout::for_frame`; `job::Options::ass` is now `job::Options::outputs` (`job::Outputs`: `ass`, `sdh`, `labels`); `job::write_outputs` takes the words to lay out, the words for Premiere, the CAPT document and `&job::Outputs` instead of `&ass::Options`; `job::frame_into` writes the layout's frame into a CAPT document; `job::Format` is `#[non_exhaustive]` (a `match` needs a `_` arm). captions 0.3.0.
+- Library: `captions::Word` has `marks` and `Default` (build words with `..Word::default()`); `job::Options::ass` is now `job::Options::outputs` (`job::Outputs`: `ass`); `job::write_outputs` takes the words to lay out, the words for Premiere, the CAPT document and `&job::Outputs` instead of `&ass::Options`; `job::Format` is `#[non_exhaustive]` (a `match` needs a `_` arm). captions 0.3.0.
 
 # 0.8.0
 ## Added

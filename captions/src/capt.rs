@@ -34,10 +34,6 @@ pub struct Doc {
     pub media: Option<String>,
     /// The source's length, milliseconds.
     pub duration: Option<u64>,
-    /// The video's frame, width and height in pixels (`frame:1080,1920` for a vertical video):
-    /// outputs that place text (ASS, WebVTT) keep it clear of the edges and a phone app's
-    /// buttons.
-    pub frame: Option<(u32, u32)>,
     /// Every speaker the writer knows, in order of appearance.
     pub speakers: Vec<Speaker>,
     /// Header options this version does not know, kept as written.
@@ -631,13 +627,6 @@ impl Doc {
                 "title" => self.title = Some(joined),
                 "lang" => self.lang = Some(joined),
                 "media" => self.media = Some(joined),
-                "frame" => match value.iter().map(|v| v.parse::<u32>()).collect::<Result<Vec<_>, _>>().as_deref() {
-                    Ok([w, h]) if *w > 0 && *h > 0 => self.frame = Some((*w, *h)),
-                    _ => errors.push(Error {
-                        line: line_no,
-                        message: format!("frame is width,height in pixels, not “{joined}”"),
-                    }),
-                },
                 "duration" => match parse_time(&joined) {
                     Some(ms) => self.duration = Some(ms),
                     None => errors
@@ -820,11 +809,7 @@ impl Doc {
         line(options([("id", one(&self.id))]));
         line(options([("title", one(&self.title))]));
         line(options([("lang", one(&self.lang))]));
-        line(options([
-            ("media", one(&self.media)),
-            ("duration", self.duration.map(|d| vec![time(d)])),
-            ("frame", self.frame.map(|(w, h)| vec![w.to_string(), h.to_string()])),
-        ]));
+        line(options([("media", one(&self.media)), ("duration", self.duration.map(|d| vec![time(d)]))]));
         for (k, v) in &self.other {
             line(options([(k.as_str(), Some(v.clone()))]));
         }

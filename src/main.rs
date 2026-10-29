@@ -444,8 +444,7 @@ fn render(args: &RenderArgs) -> Result<()> {
             .with_context(|| format!("{} is neither a CAPT file nor a JSON list of words", input.display()))?;
         (words, None)
     };
-    let sounds = doc.as_ref().is_some_and(|d| d.sounds().next().is_some());
-    if words.is_empty() && !(args.seg.sdh && sounds) {
+    if words.is_empty() {
         bail!("{} has no words", input.display());
     }
     let output = job::output_base(args.output.as_deref().unwrap_or(input));
@@ -454,15 +453,13 @@ fn render(args: &RenderArgs) -> Result<()> {
         eprintln!("· {name} — skipped, {} (--force to redo)", exists_label(&args.formats));
         return Ok(());
     }
-    let mut layout = args.seg.layout(true, doc.as_ref().and_then(|d| d.frame));
+    let mut layout = args.seg.layout(true);
     let mut outputs = args.seg.outputs();
     let given = !layout.speaker_names.is_empty();
     // Saved words are laid out as they are; they become a CAPT file without an id (the input's
-    // name only seeds the Premiere ids) for `-t capt` and `--sdh`.
+    // name only seeds the Premiere ids) for `-t capt`.
     let cue_words = if is_capt { None } else { Some(words.clone()) };
     let mut doc = doc.unwrap_or_else(|| Doc::from_words(&words, None));
-    // --vertical or --frame go into the CAPT written, so the next render lays it out the same.
-    job::frame_into(&mut doc, &layout);
     if given {
         // --speaker-names win over a CAPT file's names, and go into the CAPT written.
         job::name_speakers(&mut doc, &layout, &outputs.ass);
