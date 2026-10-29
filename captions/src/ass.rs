@@ -120,28 +120,57 @@ fn placement(cue: &Cue) -> (String, u32, u32, u32) {
     }
 }
 
+/// A style of an ASS file as [`build`] writes it: `Default`, or a speaker's.
+#[derive(Debug, Clone, PartialEq)]
+#[non_exhaustive]
+pub struct Style {
+    /// The speaker label (`"1"`); `None` for `Default`, the style of words without a speaker.
+    pub speaker: Option<String>,
+    /// The style's name (`Speaker 1`, `Anna`).
+    pub name: String,
+    /// What the speaker's lines give in `Name`; empty for `Default`.
+    pub actor: String,
+    /// The text colour, RGB.
+    pub colour: u32,
+    /// With karaoke, the colour of a word until it is spoken, RGB.
+    pub dimmed: u32,
+}
+
+/// The styles of `cues` (laid out by `layout`), as [`build`] writes them: `Default` first, then one
+/// per speaker in order of appearance, each with its colour.
+pub fn styles(cues: &[Cue], layout: &Layout, opts: &Options) -> Vec<Style> {
+    let style = |speaker: Option<String>, name: String, actor: String, rgb: u32| Style {
+        speaker,
+        name,
+        actor,
+        colour: rgb,
+        dimmed: dimmed(rgb),
+    };
+    let mut out = vec![style(None, DEFAULT_STYLE.into(), String::new(), PALETTE[0])];
+    for sp in cues.iter().filter_map(|c| c.speaker.as_deref()) {
+        if out.iter().any(|s| s.speaker.as_deref() == Some(sp)) {
+            continue;
+        }
+        let name = opts.names.get(sp).filter(|n| !n.trim().is_empty()).cloned();
+        let actor = field(&name.unwrap_or_else(|| speaker_label(sp, &layout.speaker_names)));
+        let mut name = if actor.is_empty() { format!("Speaker {}", field(sp)) } else { actor.clone() };
+        if out.iter().any(|s| s.name == name) {
+            name = format!("{name} {}", field(sp));
+        }
+        let rgb = PALETTE[(out.len() - 1) % PALETTE.len()];
+        out.push(style(Some(sp.to_string()), name, actor, rgb));
+    }
+    out
+}
+
 /// ASS text for `words` laid out by `layout`, and the number of cues.
 pub fn build(words: &[Word], layout: &Layout, opts: &Options) -> (String, usize) {
     let cues = cues(words, layout);
 
-    // A style per speaker, in order of appearance.
-    let mut styles: Vec<(String, String, String)> = Vec::new(); // speaker, style, name
-    for sp in cues.iter().filter_map(|c| c.speaker.as_deref()) {
-        if styles.iter().any(|(s, _, _)| s == sp) {
-            continue;
-        }
-        let name = opts.names.get(sp).filter(|n| !n.trim().is_empty()).cloned();
-        let name = field(&name.unwrap_or_else(|| speaker_label(sp, &layout.speaker_names)));
-        let mut style = if name.is_empty() { format!("Speaker {}", field(sp)) } else { name.clone() };
-        if style == DEFAULT_STYLE || styles.iter().any(|(_, s, _)| *s == style) {
-            style = format!("{style} {}", field(sp));
-        }
-        styles.push((sp.to_string(), style, name));
-    }
+    let styles = styles(&cues, layout, opts);
     let style_of = |speaker: Option<&str>| {
-        speaker
-            .and_then(|sp| styles.iter().find(|(s, _, _)| s == sp))
-            .map_or((DEFAULT_STYLE, ""), |(_, style, name)| (style.as_str(), name.as_str()))
+        let s = speaker.and_then(|sp| styles.iter().find(|s| s.speaker.as_deref() == Some(sp))).unwrap_or(&styles[0]);
+        (s.name.as_str(), s.actor.as_str())
     };
 
     let mut out = format!(
@@ -158,9 +187,8 @@ pub fn build(words: &[Word], layout: &Layout, opts: &Options) -> (String, usize)
          Alignment, MarginL, MarginR, MarginV, Encoding\n",
         PLAY_RES.0, PLAY_RES.1
     );
-    out.push_str(&style_line(DEFAULT_STYLE, PALETTE[0]));
-    for (i, (_, style, _)) in styles.iter().enumerate() {
-        out.push_str(&style_line(style, PALETTE[i % PALETTE.len()]));
+    for s in &styles {
+        out.push_str(&style_line(&s.name, s.colour));
     }
     out.push_str(
         "\n[Events]\n\

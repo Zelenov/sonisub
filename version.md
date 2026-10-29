@@ -1,3 +1,9 @@
+# 0.9.1
+## Added
+- `captions-wasm`: the subtitle formats in the browser. Every release carries `captions-wasm-<version>.tgz`, an npm package (ES module with TypeScript types, WebAssembly) that makes every format from a CAPT file, byte for byte what `sonisub render` writes, lists each format's options with their defaults, gives a preview the cues with every word and piece timed, and merges speakers recognition split (`mergeSpeakers(capt, { 3: 1 })` gives the CAPT text with speaker 3 made speaker 1). `npm i https://github.com/Zelenov/sonisub/releases/download/v0.9.1/captions-wasm-0.3.1.tgz`.
+- Library (captions 0.3.1): `Cue::shown` (where each word of a cue is shown), `capt::Doc::pieces` (the pieces of every word of the cues, with their times), `ass::styles`, `adr::rows`, `Doc::speaker_names`, `Doc::name_speakers`, `Doc::merge_speakers` (speakers recognition split made one: `{3: 1}`, the others keep their numbers). Nothing changes for callers.
+- Speaker names on every subtitle: `--speakers-every` puts "Speaker 1: " (or the name) on every cue, not only when the speaker changes; the name counts toward the line length. `-s` alone is as before. Library: `Layout::speaker_labels_every` (default off; callers that build `Layout` with `..Layout::default()` need no change); captions-wasm option `speakerLabelsEvery`.
+
 # 0.9.0
 ## Added
 - Subtitles from a CAPT file follow what the file says: they cut at its cut points (a ` / ` moved by hand moves the cut), end sentences where `sentence:` says, show `style:italic` in italic (SRT, WebVTT, ASS), mark words in another language (WebVTT), and put a subtitle where `pos:` says (top, middle, a point or a rectangle).

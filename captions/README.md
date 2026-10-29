@@ -25,7 +25,8 @@ let (ass, _) = ass::build(&words, &layout, &ass::Options { karaoke: true, ..Defa
 
 - `Word`: text with its punctuation, start and end in milliseconds, optional speaker, language and
   confidence (serde).
-- `Layout`: line length, lines per cue, cue duration (8 s by default), pause and speaker cuts, speaker labels.
+- `Layout`: line length, lines per cue, cue duration (8 s by default), pause and speaker cuts, speaker labels
+  (`speaker_labels`: when the speaker changes; with `speaker_labels_every` too: on every cue).
   A cue never mixes speakers and never runs past a sentence end; a long sentence is cut at punctuation
   first, at pauses next, between words last. `cues::cues` gives the cues themselves.
 - `srt`, `vtt`: the same cues in each format.
@@ -47,5 +48,10 @@ let (ass, _) = ass::build(&words, &layout, &ass::Options { karaoke: true, ..Defa
 - `adr`: a DaVinci Resolve Fairlight ADR cue list from a CAPT file (`adr::Rate`, `adr::Timecode`); `labels`
   writes its sound and voice directions in English or Russian.
 - `ytt`: YouTube's YTT (srv3), a time for every word.
+- For a preview: `Cue::shown` gives where each word of a cue is shown (line by line, after the speaker label),
+  `capt::Doc::pieces` the pieces (syllables, tokens) of every word of the cues with their times, `ass::styles`
+  the ASS styles with their colours, and `adr::rows` the ADR cue list's rows with the moments they are heard.
+  `Doc::speaker_names` and `Doc::name_speakers` read and set the header's names as `sonisub render` does;
+  `Doc::merge_speakers` makes speakers recognition split one (`{3: 1}`), the others keeping their numbers.
 
 MIT licensed.

@@ -73,6 +73,7 @@ sonisub render clip.capt -t vtt,premiere  # other formats from a CAPT file or sa
 sonisub clip.MP4 --no-json                # don't keep clip.soniox.json
 sonisub clip.MP4 -u                       # no length limit: one cue per sentence
 sonisub clip.MP4 -s                       # "Speaker 1: ..." when the speaker changes
+sonisub clip.MP4 --speakers-every         # "Speaker 1: ..." on every subtitle
 sonisub clip.MP4 --speaker-names Eugene,Sasha
 sonisub clip.soniox.json -f --max-line 32 # re-cut subtitles from a saved transcript, no API call
 sonisub purge                             # list leftovers in the Soniox account (--yes deletes)
@@ -211,6 +212,7 @@ Exit codes: `0` ok, `1` some files failed, `2` fatal (key/balance/usage), `130` 
 | `src/soniox.rs` | Soniox REST client, error types, remote cleanup guard; `soniox::words` reads a transcript as words |
 | `src/languages.rs` | language codes `-l` takes, from Soniox (`languages::fetch(client)`) |
 | `captions/` | the [`captions`](captions/README.md) crate: words → cues → every subtitle format, and the CAPT format; no Soniox |
+| `captions-wasm/` | `captions` in the browser (WebAssembly, an npm package); see below |
 | `src/srt.rs`, `src/premiere.rs` | a Soniox transcript straight to SRT / Premiere Pro transcript, through `captions` |
 | `src/cancel.rs` | Ctrl+C flag and per-job `CancelToken` |
 | `src/main.rs`, `src/cli.rs`, `src/ui.rs` | command line only: arguments, the list of files, log, stopping on fatal errors, the batch bar and its ETA |
@@ -245,11 +247,36 @@ goes backwards. `fraction: None`: the media's length is not known yet, show a bu
 transcribing: the estimate has run out, say "finishing". The callback runs on the job's threads: send the value
 over a channel to your UI.
 
+### In the browser: captions-wasm
+
+`captions-wasm` is the `captions` crate compiled to WebAssembly, for web pages and Node: an ES module with
+TypeScript types that turns a CAPT file into every format above, byte for byte what `sonisub render` writes, and
+gives a preview what it needs. No network, no Soniox. Its version is the `captions` version. Every release carries
+it as `captions-wasm-<version>.tgz`; install it from the release:
+
+```sh
+npm i https://github.com/Zelenov/sonisub/releases/download/v0.9.1/captions-wasm-0.3.1.tgz
+```
+
+```js
+import init, { parse, formats, render, layout } from "captions-wasm";
+await init();
+const { text, fileName } = render(capt, "srt", {}); // the .srt sonisub writes, and "clip.srt"
+```
+
+`parse(capt)` sums a file up or lists its problems by line; `formats()` lists every format with the options
+`captions` takes for it (types, defaults, limits); `layout(capt, format, options)` gives the cues with every word
+and piece (syllable) timed and placed, the ADR rows, or the Premiere transcript; `mergeSpeakers(capt, { 3: 1 })`
+gives the file with speaker 3 made speaker 1. See
+[captions-wasm/README.md](captions-wasm/README.md). To build it: `wasm-pack build --release --target web` in
+`captions-wasm/` (needs [wasm-pack](https://github.com/drager/wasm-pack) and the `wasm32-unknown-unknown` target).
+
 ## Tests
 
 ```sh
 cargo test                            # offline: subtitles, audio, the whole job against a mock Soniox
 cargo test --test live -- --ignored   # real Soniox round trip (needs SONIOX_API_KEY)
+cd captions-wasm && wasm-pack test --node   # captions-wasm gives what sonisub render writes
 ```
 
 `tests/fixtures` is real Soniox output, made with Soniox TTS by `scripts/make-fixture.sh`:
@@ -258,7 +285,8 @@ numbers, a sentence without commas), `nospeech` (noise and music: Soniox's empty
 and `silence.m4a`. Each has the video, the transcript and expected subtitles for the default, `-u` and `-s`
 layouts, and `dialog`/`punctuation` the expected Premiere transcript. `dialog.capt` and the hand-written
 `marks.capt` have every other output; `BLESS=1 cargo test --test outputs` rewrites those. Review the diff before
-committing regenerated fixtures.
+committing regenerated fixtures. `captions-wasm/tests/expected` is what `sonisub render` writes for the cases in
+`captions-wasm/tests/cases`; `BLESS=1 cargo test --test wasm_render` rewrites them.
 
 ## Building for other platforms
 
@@ -274,7 +302,8 @@ TLS is rustls, so there is no OpenSSL dependency.
 
 `.github/workflows/release.yml` runs when `version.md` changes. The first line of `version.md` (`# 0.1.0`)
 is the version and must match `version` in `Cargo.toml`; the section under it becomes the release notes.
-The workflow runs the tests and builds Windows x64, Linux x64 and macOS arm64.
+The workflow runs the tests and builds Windows x64, Linux x64 and macOS arm64, and the browser package
+`captions-wasm-<captions version>.tgz`.
 
 - Push to `main`: a published release `vX.Y.Z` (skipped if that release already exists).
 - Push to any other branch: a draft `vX.Y.Z-<branch>`, rebuilt on every push.

@@ -790,3 +790,51 @@ fn ytt_lines_at_the_same_time_never_share_a_window() {
         }
     }
 }
+
+/// Speaker 1 says two sentences in a row (the second too long for one 30-char cue), then speaker 2.
+fn a_long_turn() -> Vec<Word> {
+    let mut w = sentence("Hello there.", 0, Some("1"));
+    w.extend(sentence("We went home early, and then we all had dinner together.", 1000, Some("1")));
+    w.extend(sentence("Nice.", 6000, Some("2")));
+    w
+}
+
+#[test]
+fn speaker_labels_every_labels_every_cue_and_counts_the_label_in_the_line_limits() {
+    let narrow = Layout { max_line: 30, max_lines: 1, max_duration: 0.0, speaker_labels: true, ..Layout::default() };
+    let every = Layout { speaker_labels_every: true, ..narrow.clone() };
+    let list = cues::cues(&a_long_turn(), &every);
+    assert!(list.len() >= 4, "{list:?}");
+    for c in &list {
+        let label = format!("Speaker {}: ", c.speaker.as_deref().unwrap());
+        assert_eq!(c.prefix, label);
+        assert!(c.lines[0].starts_with(&label), "{:?}", c.lines);
+        assert!(c.lines.iter().all(|l| l.chars().count() <= 30), "{:?}", c.lines);
+    }
+    // Every cue of the turn in SRT, WebVTT and ASS.
+    let n = list.len();
+    let srt = srt::build(&a_long_turn(), &every).0;
+    assert_eq!(srt.matches("Speaker 1: ").count(), n - 1, "{srt}");
+    assert_eq!(vtt::build(&a_long_turn(), &every).0.matches("Speaker 1: ").count(), n - 1);
+    let ass = ass::build(&a_long_turn(), &every, &ass::Options::default()).0;
+    assert!(dialogue(&ass).iter().all(|d| d[9].starts_with("Speaker ")), "{ass}");
+
+    // Without it, only the first cue after a change: the default is as before.
+    let changes = cues::cues(&a_long_turn(), &narrow);
+    let labelled: Vec<&str> = changes.iter().filter(|c| !c.prefix.is_empty()).map(|c| c.prefix.as_str()).collect();
+    assert_eq!(labelled, ["Speaker 1: ", "Speaker 2: "]);
+    assert!(!Layout::default().speaker_labels_every);
+}
+
+#[test]
+fn speaker_labels_every_keeps_the_conditions_of_speaker_labels() {
+    let every = Layout { speaker_labels: true, speaker_labels_every: true, ..Layout::default() };
+    // Without `speaker_labels`, nothing; with one speaker or `by_speaker` off (a cue may mix
+    // speakers, so no one label fits it), nothing either.
+    let off = Layout { speaker_labels: false, ..every.clone() };
+    assert!(cues::cues(&a_long_turn(), &off).iter().all(|c| c.prefix.is_empty()));
+    let one = sentence("We went home early, and then we all had dinner together.", 0, Some("1"));
+    assert!(cues::cues(&one, &every).iter().all(|c| c.prefix.is_empty()));
+    let mixed = Layout { by_speaker: false, ..every };
+    assert!(cues::cues(&a_long_turn(), &mixed).iter().all(|c| c.prefix.is_empty()));
+}

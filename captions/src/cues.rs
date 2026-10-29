@@ -23,8 +23,13 @@ pub struct Layout {
     pub min_duration: f64,
     /// A speaker change ends a cue.
     pub by_speaker: bool,
-    /// Prefix "Speaker 1: " when the speaker changes (only if the transcript has several speakers).
+    /// Prefix "Speaker 1: " when the speaker changes (only if the transcript has several speakers
+    /// and `by_speaker` is on: a cue of mixed speakers has no one label).
     pub speaker_labels: bool,
+    /// With `speaker_labels`: label every cue, not only the first after a speaker change. The same
+    /// conditions hold (several speakers, `by_speaker`); the label counts toward the line limits of
+    /// every cue it is on. Off by default, so the labels are where they always were.
+    pub speaker_labels_every: bool,
     /// Names for speakers 1, 2, ... used instead of "Speaker N".
     pub speaker_names: Vec<String>,
     /// Break a cue's text into up to `max_lines` lines of `max_line` chars. Off: one line per cue,
@@ -42,6 +47,7 @@ impl Default for Layout {
             min_duration: 0.5,
             by_speaker: true,
             speaker_labels: false,
+            speaker_labels_every: false,
             speaker_names: Vec::new(),
             wrap_lines: false,
         }
@@ -59,7 +65,7 @@ const DASHES: [char; 2] = ['—', '–'];
 
 /// Splits "finally—and" into "finally—" + glued "and", so a cue or a line may end at the dash.
 /// Timing is shared out by length.
-fn split_dashes(w: Word) -> Vec<Word> {
+pub(crate) fn split_dashes(w: Word) -> Vec<Word> {
     let mut parts: Vec<String> = Vec::new();
     let mut cur = String::new();
     let chars: Vec<char> = w.text.chars().collect();
@@ -322,7 +328,7 @@ fn split(ws: &[Word], prefix: &str, s: &Layout) -> Vec<Range<usize>> {
 }
 
 fn refine(ws: &[Word], range: Range<usize>, prefix: &str, s: &Layout, level: usize) -> Vec<Range<usize>> {
-    let p = if range.start == 0 { prefix } else { "" };
+    let p = if range.start == 0 || s.speaker_labels_every { prefix } else { "" };
     if level > 2 || cue_cost(&ws[range.clone()], p, s).is_some() {
         return vec![range];
     }
@@ -345,7 +351,7 @@ fn partition(ws: &[Word], range: Range<usize>, prefix: &str, s: &Layout, level: 
                 continue;
             }
             let Some((c0, _)) = best[i - a] else { continue };
-            let p = if i == 0 { prefix } else { "" };
+            let p = if i == 0 || s.speaker_labels_every { prefix } else { "" };
             let cost = match cue_cost(&ws[i..j], p, s) {
                 Some(c) => c,
                 None if (i + 1..j).all(|k| !can_cut(k)) => CUE_COST * 10.0,
@@ -402,6 +408,42 @@ impl Cue {
     pub fn text(&self) -> String {
         self.lines.join("\n")
     }
+
+    /// The cue's lines piece by piece as they are shown, each word of [`Cue::words`] where it is:
+    /// what a preview needs to light up words as they are spoken (as ASS karaoke and YTT time
+    /// them). `None` if the lines do not split back into the cue's words.
+    pub fn shown(&self) -> Option<Vec<Shown>> {
+        use crate::style::{Gap, StepKind};
+        let (mut line, mut word) = (0, None);
+        let mut out = Vec::new();
+        for s in crate::style::steps(self)? {
+            if matches!(s.gap, Gap::Line) {
+                line += 1;
+            }
+            match s.kind {
+                StepKind::Prefix => word = None,
+                StepKind::Word { index, .. } => word = Some(index),
+                StepKind::More => {}
+            }
+            out.push(Shown { line, space: matches!(s.gap, Gap::Space), text: s.text.to_string(), word });
+        }
+        Some(out)
+    }
+}
+
+/// A piece of a cue's line as it is shown ([`Cue::shown`]): a word, the part of a word after a
+/// dash or a space, or a part of the speaker label.
+#[derive(Debug, Clone, PartialEq)]
+#[non_exhaustive]
+pub struct Shown {
+    /// The line it is on, from 0.
+    pub line: usize,
+    /// A space comes before it on its line.
+    pub space: bool,
+    /// The text as shown.
+    pub text: String,
+    /// The word of [`Cue::words`] it shows; `None` for the speaker label.
+    pub word: Option<usize>,
 }
 
 /// Cuts words into cues by the layout rules (see the module docs).
@@ -417,7 +459,7 @@ pub fn cues(words: &[Word], s: &Layout) -> Vec<Cue> {
     for sentence in sentences(words.clone(), s) {
         let speaker = sentence[0].speaker.clone();
         let prefix = match &speaker {
-            Some(sp) if labels && prev_speaker.as_ref() != Some(&speaker) => {
+            Some(sp) if labels && (s.speaker_labels_every || prev_speaker.as_ref() != Some(&speaker)) => {
                 format!("{}: ", speaker_label(sp, &s.speaker_names))
             }
             _ => String::new(),
@@ -433,10 +475,10 @@ pub fn cues(words: &[Word], s: &Layout) -> Vec<Cue> {
             }
         }
         for (ri, run) in runs.into_iter().enumerate() {
-            let pre = if ri == 0 { prefix.as_str() } else { "" };
+            let pre = if ri == 0 || s.speaker_labels_every { prefix.as_str() } else { "" };
             for (k, r) in split(run, pre, s).into_iter().enumerate() {
                 let ws = &run[r];
-                let p = if k == 0 { pre } else { "" };
+                let p = if k == 0 || s.speaker_labels_every { pre } else { "" };
                 let text = format!("{p}{}", join(ws));
                 cues.push(Cue {
                     start: ws[0].start,

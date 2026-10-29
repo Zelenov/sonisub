@@ -195,6 +195,10 @@ pub struct SegArgs {
     #[arg(long, short = 's')]
     pub speakers: bool,
 
+    /// Prefix every cue with its speaker, not only when the speaker changes. Implies --speakers.
+    #[arg(long)]
+    pub speakers_every: bool,
+
     /// Speaker names instead of "Speaker N", comma separated in order of appearance: "Eugene,Sasha". Implies
     /// --speakers (in .ass the names are also the speakers' styles).
     #[arg(long, value_delimiter = ',')]
@@ -230,7 +234,8 @@ impl SegArgs {
             gap: self.gap,
             min_duration: self.min_duration,
             by_speaker,
-            speaker_labels: self.speakers || !self.speaker_names.is_empty(),
+            speaker_labels: self.speakers || self.speakers_every || !self.speaker_names.is_empty(),
+            speaker_labels_every: self.speakers_every,
             speaker_names: self.speaker_names.clone(),
             wrap_lines: self.wrap,
         }

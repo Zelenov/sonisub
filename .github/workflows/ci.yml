@@ -66,3 +66,55 @@ jobs:
 
       - name: Build
         run: cargo build --release --locked
+
+  # captions-wasm: the browser package (its own Cargo workspace), tested under Node and packed as
+  # the release workflow packs it.
+  wasm:
+    name: ci-wasm
+    runs-on: ubuntu-24.04
+    defaults:
+      run:
+        working-directory: captions-wasm
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
+
+      # The toolchain rust-toolchain.toml pins, with the WebAssembly target.
+      - name: WebAssembly target
+        run: rustup target add wasm32-unknown-unknown
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: captions-wasm
+
+      - uses: taiki-e/install-action@v2
+        with:
+          tool: wasm-pack@0.15.0
+
+      - name: Version follows captions
+        run: |
+          v() { sed -n 's/^version[[:space:]]*=[[:space:]]*"\(.*\)"/\1/p' "$1" | head -1; }
+          [ "$(v Cargo.toml)" = "$(v ../captions/Cargo.toml)" ] || { echo "::error::captions-wasm $(v Cargo.toml) is not captions $(v ../captions/Cargo.toml)"; exit 1; }
+
+      - name: Format
+        run: cargo fmt -- --check
+
+      - name: Clippy
+        run: cargo clippy --all-targets --locked --target wasm32-unknown-unknown -- -D warnings
+
+      - name: Test
+        run: wasm-pack test --node -- --locked
+
+      - name: Package
+        run: |
+          wasm-pack build --release --target web -- --locked
+          wasm-pack pack
+          ls -la pkg
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: captions-wasm
+          path: captions-wasm/pkg/*.tgz

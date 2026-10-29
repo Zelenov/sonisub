@@ -1,0 +1,45 @@
+[package]
+name = "captions-wasm"
+# Follows `captions` (`captions/Cargo.toml`): the package is that code, compiled to WebAssembly.
+version = "0.3.1"
+edition = "2024"
+description = "captions in the browser: CAPT -> SRT, WebVTT, ASS, Premiere, SBV, LRC, transcript, TTML, ADR, YTT, and the cues for a preview"
+repository = "https://github.com/Zelenov/sonisub"
+license = "MIT"
+readme = "README.md"
+publish = false
+
+# Its own workspace: its size profile below must not touch the sonisub binary's.
+[workspace]
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+captions = { path = "../captions" }
+js-sys = "0.3.106"
+serde_json = "1.0.151"
+wasm-bindgen = "0.2.129"
+
+[dev-dependencies]
+wasm-bindgen-test = "0.3.79"
+
+# Small: size over speed, one codegen unit, no unwinding, no symbols.
+[profile.release]
+opt-level = "z"
+lto = true
+codegen-units = 1
+panic = "abort"
+strip = true
+
+# wasm-pack's binaryen must be told the WebAssembly features Rust uses by default.
+[package.metadata.wasm-pack.profile.release]
+wasm-opt = [
+    "-Oz",
+    "--enable-bulk-memory",
+    "--enable-nontrapping-float-to-int",
+    "--enable-sign-ext",
+    "--enable-mutable-globals",
+    "--enable-reference-types",
+    "--enable-multivalue",
+]

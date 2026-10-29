@@ -1,0 +1,281 @@
+{
+  "language": "en-us",
+  "segments": [
+    {
+      "duration": 2.0,
+      "language": "en-us",
+      "speaker": "9fee5c27-f3e7-4b33-88e8-142b4ddd929b",
+      "start": 1.0,
+      "words": [
+        {
+          "confidence": 0.8,
+          "duration": 0.12,
+          "eos": false,
+          "start": 1.0,
+          "tags": [],
+          "text": "So",
+          "type": "word"
+        },
+        {
+          "confidence": 1.0,
+          "duration": 0.06,
+          "eos": false,
+          "start": 1.18,
+          "tags": [],
+          "text": "I",
+          "type": "word"
+        },
+        {
+          "confidence": 1.0,
+          "duration": 0.2,
+          "eos": false,
+          "start": 1.3,
+          "tags": [],
+          "text": "read",
+          "type": "word"
+        },
+        {
+          "confidence": 1.0,
+          "duration": 0.2,
+          "eos": false,
+          "start": 1.6,
+          "tags": [],
+          "text": "War",
+          "type": "word"
+        },
+        {
+          "confidence": 1.0,
+          "duration": 0.14,
+          "eos": false,
+          "start": 1.86,
+          "tags": [],
+          "text": "and",
+          "type": "word"
+        },
+        {
+          "confidence": 1.0,
+          "duration": 0.34,
+          "eos": false,
+          "start": 2.06,
+          "tags": [],
+          "text": "Peace",
+          "type": "word"
+        },
+        {
+          "confidence": 1.0,
+          "duration": 0.5,
+          "eos": true,
+          "start": 2.5,
+          "tags": [],
+          "text": "twice.",
+          "type": "word"
+        }
+      ]
+    },
+    {
+      "duration": 3.1,
+      "language": "ru-ru",
+      "speaker": "3a77bf61-e05b-4373-9ad1-a40bac27dd64",
+      "start": 5.5,
+      "words": [
+        {
+          "confidence": 1.0,
+          "duration": 0.4,
+          "eos": false,
+          "start": 5.5,
+          "tags": [],
+          "text": "Короче,",
+          "type": "word"
+        },
+        {
+          "confidence": 1.0,
+          "duration": 0.18,
+          "eos": false,
+          "start": 6.02,
+          "tags": [],
+          "text": "этот",
+          "type": "word"
+        },
+        {
+          "confidence": 1.0,
+          "duration": 0.44,
+          "eos": false,
+          "start": 6.26,
+          "tags": [],
+          "text": "deployment",
+          "type": "word"
+        },
+        {
+          "confidence": 1.0,
+          "duration": 0.34,
+          "eos": false,
+          "start": 6.76,
+          "tags": [],
+          "text": "упал",
+          "type": "word"
+        },
+        {
+          "confidence": 1.0,
+          "duration": 0.06,
+          "eos": false,
+          "start": 7.3,
+          "tags": [],
+          "text": "и",
+          "type": "word"
+        },
+        {
+          "confidence": 1.0,
+          "duration": 0.12,
+          "eos": false,
+          "start": 7.42,
+          "tags": [],
+          "text": "мы",
+          "type": "word"
+        },
+        {
+          "confidence": 1.0,
+          "duration": 0.4,
+          "eos": false,
+          "start": 7.6,
+          "tags": [],
+          "text": "сделали",
+          "type": "word"
+        },
+        {
+          "confidence": 1.0,
+          "duration": 0.54,
+          "eos": true,
+          "start": 8.06,
+          "tags": [],
+          "text": "rollback.",
+          "type": "word"
+        }
+      ]
+    },
+    {
+      "duration": 2.4,
+      "language": "en-us",
+      "speaker": "9fee5c27-f3e7-4b33-88e8-142b4ddd929b",
+      "start": 10.0,
+      "words": [
+        {
+          "confidence": 1.0,
+          "duration": 0.3,
+          "eos": false,
+          "start": 10.0,
+          "tags": [],
+          "text": "Listen",
+          "type": "word"
+        },
+        {
+          "confidence": 1.0,
+          "duration": 0.1,
+          "eos": false,
+          "start": 10.4,
+          "tags": [],
+          "text": "to",
+          "type": "word"
+        },
+        {
+          "confidence": 1.0,
+          "duration": 0.24,
+          "eos": false,
+          "start": 10.56,
+          "tags": [],
+          "text": "me,",
+          "type": "word"
+        },
+        {
+          "confidence": 1.0,
+          "duration": 0.5,
+          "eos": false,
+          "start": 11.0,
+          "tags": [],
+          "text": "please",
+          "type": "word"
+        },
+        {
+          "confidence": 1.0,
+          "duration": 0.24,
+          "eos": true,
+          "start": 11.56,
+          "tags": [],
+          "text": "Dr.",
+          "type": "word"
+        },
+        {
+          "confidence": 1.0,
+          "duration": 0.5,
+          "eos": true,
+          "start": 11.9,
+          "tags": [],
+          "text": "Who.",
+          "type": "word"
+        }
+      ]
+    },
+    {
+      "duration": 1.2,
+      "language": "en-us",
+      "speaker": "3a77bf61-e05b-4373-9ad1-a40bac27dd64",
+      "start": 15.0,
+      "words": [
+        {
+          "confidence": 1.0,
+          "duration": 0.2,
+          "eos": false,
+          "start": 15.0,
+          "tags": [],
+          "text": "This",
+          "type": "word"
+        },
+        {
+          "confidence": 1.0,
+          "duration": 0.24,
+          "eos": false,
+          "start": 15.26,
+          "tags": [],
+          "text": "sits",
+          "type": "word"
+        },
+        {
+          "confidence": 1.0,
+          "duration": 0.1,
+          "eos": false,
+          "start": 15.56,
+          "tags": [],
+          "text": "in",
+          "type": "word"
+        },
+        {
+          "confidence": 1.0,
+          "duration": 0.06,
+          "eos": false,
+          "start": 15.7,
+          "tags": [],
+          "text": "a",
+          "type": "word"
+        },
+        {
+          "confidence": 1.0,
+          "duration": 0.4,
+          "eos": true,
+          "start": 15.8,
+          "tags": [],
+          "text": "box.",
+          "type": "word"
+        }
+      ]
+    }
+  ],
+  "speakers": [
+    {
+      "id": "9fee5c27-f3e7-4b33-88e8-142b4ddd929b",
+      "name": "Anna"
+    },
+    {
+      "id": "3a77bf61-e05b-4373-9ad1-a40bac27dd64",
+      "name": "Boris"
+    }
+  ]
+}
