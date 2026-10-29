@@ -133,7 +133,7 @@ highlight (`\k`).
 
 `-t ttml` writes TTML / IMSC 1.1 Text (`clip.ttml`), what broadcasters and streaming services ask for: speakers as agents, places as regions (a rectangle exactly), italic and languages; `--sdh` adds sounds and voices, `--vertical` keeps the regions clear of a phone app.
 
-`--sdh` makes `.srt`, `.vtt` and `.ass` subtitles for the deaf and hard of hearing from the sounds and voices
+`--sdh` makes `.srt`, `.vtt`, `.ass` and `.ttml` subtitles for the deaf and hard of hearing from the sounds and voices
 marked in a CAPT file (`sound:phone`, `voice:whisper` → `[phone ringing]`, `[whispering]`; `--labels en|ru`).
 Soniox reports no sounds, so a fresh transcript has none until they are added to `clip.capt`.
 For Reels, Shorts and TikTok add `--vertical`: short two-line subtitles cut where they read well; `.ass` and `.vtt` also keep them clear of the app's buttons (`.srt` has no position).

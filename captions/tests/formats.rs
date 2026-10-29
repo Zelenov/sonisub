@@ -210,3 +210,63 @@ fn a_point_at_the_edge_gets_a_whole_region_and_tt_always_has_a_language() {
     assert!(ttml.contains(r#"<region xml:id="r2" tts:origin="0% 40%" tts:extent="80% 20%" tts:displayAlign="center" tts:textAlign="left"/>"#), "{ttml}");
     assert!(ttml.contains(r#"xml:lang="und""#), "{ttml}");
 }
+
+/// Every pair of regions shown at the same moment in a TTML document, by id.
+fn ttml_regions_shown_together(ttml: &str) -> Vec<(String, String)> {
+    let attr = |line: &str, name: &str| -> String {
+        let start = line.find(&format!("{name}=\"")).unwrap() + name.len() + 2;
+        line[start..].split('"').next().unwrap().to_string()
+    };
+    let ms = |t: &str| -> u64 {
+        let p: Vec<f64> = t.split(':').map(|x| x.parse().unwrap()).collect();
+        ((p[0] * 3600.0 + p[1] * 60.0 + p[2]) * 1000.0).round() as u64
+    };
+    let ps: Vec<(u64, u64, String)> = ttml
+        .lines()
+        .filter(|l| l.trim_start().starts_with("<p "))
+        .map(|l| (ms(&attr(l, "begin")), ms(&attr(l, "end")), attr(l, "region")))
+        .collect();
+    let mut pairs = Vec::new();
+    for (i, a) in ps.iter().enumerate() {
+        for b in &ps[i + 1..] {
+            if a.0 < b.1 && b.0 < a.1 && a.2 != b.2 {
+                pairs.push((a.2.clone(), b.2.clone()));
+            }
+        }
+    }
+    pairs
+}
+
+#[test]
+fn ttml_never_shows_two_overlapping_regions_at_once() {
+    // A point over the bottom region, with a sound during it.
+    let near_bottom = "CAPT 1\n\n00:00:01.000 --> 00:00:03.000 pos:0.5,0.85\n{0}Low{150}\n\n\
+                       00:00:01.500 --> 00:00:02.500 sound:phone\n";
+    let doc = captions::capt::Doc::parse(near_bottom).unwrap();
+    let ttml = captions::sdh::ttml(&doc, &Layout::default(), "en").0;
+    assert!(ttml.contains(r#"region="r1">[phone ringing]"#), "{ttml}");
+    // The top and a rectangle over it, spoken at once.
+    let top_and_box = "CAPT 1\n\n00:00:01.000 --> 00:00:03.000 speaker:1 pos:top\n{0}Up{50}\n\n\
+                       00:00:01.500 --> 00:00:02.500 speaker:2 pos:0.05,0.05,0.4,0.2\n{0}Box{50}\n";
+    let doc = captions::capt::Doc::parse(top_and_box).unwrap();
+    let ttml = captions::ttml::build(&doc, &Layout::default()).0;
+    assert_eq!(ttml_regions_shown_together(&ttml), Vec::<(String, String)>::new(), "{ttml}");
+    // On a vertical frame the middle and the bottom are apart.
+    let middle = "CAPT 1\n\n00:00:01.000 --> 00:00:03.000 pos:middle\n{0}Mid{150}\n\n\
+                  00:00:01.500 --> 00:00:02.500 sound:phone\n";
+    let doc = captions::capt::Doc::parse(middle).unwrap();
+    let ttml = captions::sdh::ttml(&doc, &Layout::vertical(), "en").0;
+    assert_eq!(ttml_regions_shown_together(&ttml), [("middle".to_string(), "bottom".to_string())], "{ttml}");
+    assert!(ttml.contains(r#"xml:id="middle" tts:origin="10% 32%""#), "{ttml}");
+}
+
+#[test]
+fn ttml_regions_stay_inside_the_frame_and_fit_the_layout() {
+    let file = "CAPT 1\n\n00:00:01.000 --> 00:00:03.000 pos:0.0005,0,0.9995,0.5\n{0}Wide{50}\n";
+    let doc = captions::capt::Doc::parse(file).unwrap();
+    let ttml = captions::ttml::build(&doc, &Layout::default()).0;
+    assert!(ttml.contains(r#"xml:id="r1" tts:origin="0.1% 0%" tts:extent="99.9% 50%""#), "{ttml}");
+    // A vertical line of 22 characters fits: 25 rows, so a cell is 1920 / 25 = 77 px.
+    let ttml = captions::ttml::build(&doc, &Layout::vertical()).0;
+    assert!(ttml.contains(r#"ttp:cellResolution="14 25""#), "{ttml}");
+}
