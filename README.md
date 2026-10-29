@@ -2,7 +2,7 @@
 
 <img src="https://raw.githubusercontent.com/Zelenov/sonisub/main/docs/icon/sonisub-256.png" align="left" width="128" height="128" alt="sonisub icon">
 
-Generate subtitles (`.srt`, WebVTT, ASS) and Premiere Pro transcripts for video and audio files with
+Generate subtitles (`.srt`, WebVTT, ASS, YouTube's SBV) and Premiere Pro transcripts for video and audio files with
 [Soniox](https://soniox.com) speech-to-text.
 One self-contained binary: no Python, no ffmpeg required.
 
@@ -62,6 +62,7 @@ sonisub clip.MP4 -t srt,premiere          # also clip.premiere.json for Premiere
 sonisub . -t premiere                     # only the Premiere transcript; saved .soniox.json files are reused
 sonisub clip.MP4 -t srt,vtt,ass           # also clip.vtt (WebVTT) and clip.ass (a style per speaker)
 sonisub clip.MP4 -t ass --karaoke         # each word lights up as it is spoken
+sonisub clip.MP4 -t srt,sbv               # also clip.sbv for YouTube Studio
 sonisub clip.MP4 -t srt,capt              # also clip.capt, the whole transcript as small text
 sonisub clip.MP4 -t ass,vtt --vertical    # Reels, Shorts, TikTok: short lines, clear of the app's buttons
 sonisub render clip.capt -t srt --sdh     # for the deaf and hard of hearing: sounds and voices marked in clip.capt
@@ -133,7 +134,7 @@ highlight (`\k`).
 
 `-t sbv` writes YouTube's SBV (`clip.sbv`), the same cues as the `.srt`, for YouTube Studio's subtitle upload.
 
-`--sdh` makes `.srt`, `.vtt` and `.ass` subtitles for the deaf and hard of hearing from the sounds and voices
+`--sdh` makes `.srt`, `.vtt`, `.ass` and `.sbv` subtitles for the deaf and hard of hearing from the sounds and voices
 marked in a CAPT file (`sound:phone`, `voice:whisper` → `[phone ringing]`, `[whispering]`; `--labels en|ru`).
 Soniox reports no sounds, so a fresh transcript has none until they are added to `clip.capt`.
 For Reels, Shorts and TikTok add `--vertical`: short two-line subtitles cut where they read well; `.ass` and `.vtt` also keep them clear of the app's buttons (`.srt` has no position).

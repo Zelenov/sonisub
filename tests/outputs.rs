@@ -42,6 +42,7 @@ fn outputs_of_both_fixtures() {
         let (l, _) = layouts(&d);
         check(name, "sdh.srt", &sdh::srt(&d, &l, "en").0);
         check(name, "sbv", &sbv::build(&d.to_words(), &l).0);
+        check(name, "sdh.sbv", &sdh::sbv(&d, &l, "en").0);
     }
 }
 

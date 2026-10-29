@@ -85,8 +85,8 @@ pub struct RunArgs {
 
     /// What to write, comma separated: srt, vtt (WebVTT), ass (a style per speaker), premiere (Premiere Pro
     /// transcript, clip.premiere.json), capt (the whole transcript as small text, clip.capt; `sonisub render`
-    /// makes the other formats from it), sbv (YouTube's SBV, clip.sbv). Only missing files are written, so adding a format later reuses the saved
-    /// transcript for free.
+    /// makes the other formats from it), sbv (YouTube's SBV, clip.sbv). Only missing files are written, so adding
+    /// a format later reuses the saved transcript for free.
     #[arg(short = 't', long = "format", value_enum, value_delimiter = ',', default_value = "srt")]
     pub formats: Vec<Format>,
 
@@ -213,7 +213,7 @@ pub struct SegArgs {
     #[arg(long, value_parser = parse_frame)]
     pub frame: Option<(u32, u32)>,
 
-    /// Subtitles for the deaf and hard of hearing: .srt, .vtt and .ass get a subtitle for every sound
+    /// Subtitles for the deaf and hard of hearing: .srt, .vtt, .ass and .sbv get a subtitle for every sound
     /// ([phone ringing]) and a label before words said in a voice of their own ([whispering]), as a CAPT file marks
     /// them (Soniox reports no sounds: add them to clip.capt and `render` it).
     #[arg(long, help_heading = "Outputs")]

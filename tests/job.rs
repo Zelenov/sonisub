@@ -153,14 +153,35 @@ fn a_new_format_is_made_from_the_saved_transcript_leaving_the_srt_alone() {
 fn vtt_and_ass_are_written_next_to_the_srt() {
     let s = setup();
     copy_fixture(&s, "dialog.soniox.json");
-    let opts = Options { formats: vec![Format::Vtt, Format::Ass], ..options(&s.temp) };
+    let opts = Options { formats: vec![Format::Vtt, Format::Ass, Format::Sbv], ..options(&s.temp) };
     let out = job::process(&common::fixture("dialog.mp4"), &s.srt, &opts, None).unwrap();
-    let (vtt, ass) = (s.dir.path().join("dialog.vtt"), s.dir.path().join("dialog.ass"));
+    let (vtt, ass, sbv) =
+        (s.dir.path().join("dialog.vtt"), s.dir.path().join("dialog.ass"), s.dir.path().join("dialog.sbv"));
     let Outcome::Written { files, cues: 10, cached: true, .. } = out else { panic!("{out:?}") };
-    assert_eq!(files, [vtt.clone(), ass.clone()]);
+    assert_eq!(files, [vtt.clone(), ass.clone(), sbv.clone()]);
     assert!(!s.srt.exists());
     assert_eq!(common::normalize(&std::fs::read_to_string(&vtt).unwrap()), common::golden("dialog.vtt"));
     assert_eq!(common::normalize(&std::fs::read_to_string(&ass).unwrap()), common::golden("dialog.ass"));
+    let sbv = std::fs::read_to_string(&sbv).unwrap();
+    // The same 10 cues as the .vtt, in YouTube's SBV.
+    assert_eq!(
+        common::normalize(&sbv)
+            .matches(
+                "
+
+"
+            )
+            .count(),
+        10,
+        "{sbv}"
+    );
+    assert!(
+        sbv.starts_with(
+            "0:00:00.870,0:00:03.330
+"
+        ),
+        "{sbv}"
+    );
 }
 
 #[test]

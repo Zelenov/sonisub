@@ -15,9 +15,10 @@ use crate::soniox::{self, Client, RemoteGuard};
 use crate::srt;
 use captions::{ass, vtt};
 
-/// What gets written for a file.
+/// What gets written for a file. New formats come in minor releases: a `match` needs a `_` arm.
 #[cfg_attr(feature = "cli", derive(clap::ValueEnum))]
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[non_exhaustive]
 pub enum Format {
     /// Subtitles: `clip.srt`.
     Srt,
@@ -29,11 +30,16 @@ pub enum Format {
     Premiere,
     /// CAPT, the whole transcript as small text, every other format can be made from: `clip.capt`.
     Capt,
-    /// YouTube's SBV, the same cues as SRT: `clip.sbv`.
+    /// YouTube's SBV, the same cues as SRT (with `--sdh`, sounds and voices): `clip.sbv`.
     Sbv,
 }
 
 impl Format {
+    /// Subtitles: a file of them with no cue is empty, not written.
+    fn has_cues(self) -> bool {
+        matches!(self, Format::Srt | Format::Vtt | Format::Ass | Format::Sbv)
+    }
+
     /// Where this format goes for the output base path (`clip.srt` -> `clip.premiere.json`).
     pub fn path(self, output: &Path) -> PathBuf {
         match self {
@@ -310,11 +316,15 @@ pub fn write_outputs(
     let mut cues = 0;
     let mut files = Vec::new();
     let labels = outputs.labels.clone().unwrap_or_else(|| captions::labels::for_language(doc.lang.as_deref()).into());
+    // Everything is made before anything is written, so a format with nothing to show leaves no
+    // files behind.
+    let mut made = Vec::new();
     for (format, path) in targets {
         let (text, n) = match format {
             Format::Srt if outputs.sdh => captions::sdh::srt(doc, layout, &labels),
             Format::Vtt if outputs.sdh => captions::sdh::vtt(doc, layout, &labels),
             Format::Ass if outputs.sdh => captions::sdh::ass(doc, layout, &outputs.ass, &labels),
+            Format::Sbv if outputs.sdh => captions::sdh::sbv(doc, layout, &labels),
             Format::Srt => captions::srt::build(cue_words, layout),
             Format::Vtt => vtt::build(cue_words, layout),
             Format::Ass => ass::build(cue_words, layout, &outputs.ass),
@@ -326,9 +336,18 @@ pub fn write_outputs(
             }
             Format::Capt => (doc.write(), 0),
         };
+        if n == 0 && format.has_cues() {
+            bail!(
+                "nothing to write in {}: no words, and --sdh adds sounds only to .srt, .vtt, .ass and .sbv",
+                path.display()
+            );
+        }
         if cues == 0 {
             cues = n;
         }
+        made.push((path, text));
+    }
+    for (path, text) in made {
         std::fs::write(path, text).with_context(|| format!("cannot write {}", path.display()))?;
         files.push(path.clone());
     }

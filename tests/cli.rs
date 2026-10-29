@@ -284,6 +284,26 @@ fn labels_without_sdh_are_refused() {
 }
 
 #[test]
+fn subtitles_with_nothing_to_show_are_not_written() {
+    let dir = tempfile::tempdir().unwrap();
+    let capt = dir.path().join("intro.capt");
+    std::fs::write(
+        &capt,
+        "CAPT 1
+
+00:00:00.000 --> 00:00:04.000 sound:music
+",
+    )
+    .unwrap();
+    // A file of sounds only, --sdh: the .srt has the sound, the .premiere.json has no words.
+    let out = sonisub(&["render".as_ref(), capt.as_os_str(), "-t".as_ref(), "srt,premiere".as_ref(), "--sdh".as_ref()])
+        .output()
+        .unwrap();
+    assert!(!out.status.success());
+    assert!(!dir.path().join("intro.srt").exists(), "nothing is written when one output fails");
+}
+
+#[test]
 fn render_writes_sbv() {
     let dir = tempfile::tempdir().unwrap();
     let capt = dir.path().join("dialog.capt");
@@ -293,4 +313,30 @@ fn render_writes_sbv() {
     assert!(out.status.success(), "{}", plain(&out));
     let written = std::fs::read_to_string(dir.path().join("dialog.sbv")).unwrap();
     assert_eq!(common::normalize(&written), common::golden("dialog.sbv"));
+}
+
+#[test]
+fn sdh_sbv_has_the_sounds_of_a_file_of_sounds_only() {
+    let dir = tempfile::tempdir().unwrap();
+    let capt = dir.path().join("intro.capt");
+    std::fs::write(
+        &capt,
+        "CAPT 1
+
+00:00:00.000 --> 00:00:04.000 sound:music
+",
+    )
+    .unwrap();
+    let out = sonisub(&["render".as_ref(), capt.as_os_str(), "-t".as_ref(), "srt,sbv".as_ref(), "--sdh".as_ref()])
+        .output()
+        .unwrap();
+    assert!(out.status.success(), "{}", plain(&out));
+    let sbv = std::fs::read_to_string(dir.path().join("intro.sbv")).unwrap();
+    assert_eq!(
+        sbv,
+        "0:00:00.000,0:00:04.000
+[music]
+
+"
+    );
 }
