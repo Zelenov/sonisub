@@ -23,6 +23,7 @@ parse(capt);                        // { speakers, languages, duration, words, s
 formats();                          // [{ name: "srt", extension, contentType, layout, options: [...] }, …]
 render(capt, "srt", {});            // { text, fileName: "clip.srt", contentType, count }
 render(capt, "ass", { karaoke: true, speakerLabels: true });
+render(capt, "srt", { speakerLabels: true, speakerLabelsEvery: true }); // "Speaker 1: " on every cue
 layout(capt, "ass", { karaoke: true }); // { kind: "cues", cues: [{ start, end, speaker, lines, position, style, words: [{ …, pieces }] }] }
 mergeSpeakers(capt, { 3: 1 });     // the CAPT text with speaker 3 made speaker 1
 ```
@@ -33,6 +34,10 @@ mergeSpeakers(capt, { 3: 1 });     // the CAPT text with speaker 3 made speaker 
 - `formats()`: every format with exactly the options its `captions` writer takes: `type` (`integer`,
   `number`, `boolean`, `string`, `string[]`, `map`, `enum`), `default` (from `captions`), `min`/`max`,
   `values` and a description. An option a format does not take is an error in `render` and `layout`.
+- Speaker names in subtitles are three choices: off (the default), `speakerLabels: true` (when the
+  speaker changes), and `speakerLabels: true, speakerLabelsEvery: true` (on every cue). Either way only
+  with several speakers and `bySpeaker` on (a cue of mixed speakers has no one name); the label counts
+  toward `maxLine`.
 - `render(capt, format, options)` (`{}` for the defaults): the file's text, a name for it (the
   file's media name, else `captions`, with the format's extension), its content type and the number
   of cues.

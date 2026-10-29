@@ -301,7 +301,7 @@ fn info(name: &str) -> Result<&'static Info, JsValue> {
 }
 
 /// `captions::Layout`'s fields, by their names here.
-const LAYOUT: [&str; 9] = [
+const LAYOUT: [&str; 10] = [
     "maxLine",
     "maxLines",
     "maxDuration",
@@ -309,6 +309,7 @@ const LAYOUT: [&str; 9] = [
     "minDuration",
     "bySpeaker",
     "speakerLabels",
+    "speakerLabelsEvery",
     "speakerNames",
     "wrapLines",
 ];
@@ -369,7 +370,13 @@ fn spec(f: Format, name: &str) -> Value {
             "boolean",
             json!(l.speaker_labels),
             json!({}),
-            "Prefix \"Speaker 1: \" (or the name) when the speaker changes; only with several speakers.",
+            "Prefix \"Speaker 1: \" (or the name) when the speaker changes; only with several speakers and bySpeaker.",
+        ),
+        "speakerLabelsEvery" => (
+            "boolean",
+            json!(l.speaker_labels_every),
+            json!({}),
+            "With speakerLabels: label every cue, not only the first after a speaker change (the label counts toward the line limits).",
         ),
         "speakerNames" => (
             "string[]",
@@ -480,6 +487,7 @@ fn settings(f: Format, options: &JsValue) -> Result<Settings, JsValue> {
             "minDuration" => s.layout.min_duration = num()?,
             "bySpeaker" => s.layout.by_speaker = flag()?,
             "speakerLabels" => s.layout.speaker_labels = flag()?,
+            "speakerLabelsEvery" => s.layout.speaker_labels_every = flag()?,
             "wrapLines" => s.layout.wrap_lines = flag()?,
             "speakerNames" => {
                 s.layout.speaker_names = value

@@ -244,3 +244,24 @@ fn merge_speakers_throws_for_itself_an_unknown_speaker_or_a_broken_file() {
     .unwrap_err();
     assert!(get(&e, "errors").is_object());
 }
+
+#[wasm_bindgen_test]
+fn speaker_labels_every_labels_every_cue_of_a_turn() {
+    let list = json(&formats());
+    let srt = list.as_array().unwrap().iter().find(|f| f["name"] == "srt").unwrap();
+    let option = srt["options"].as_array().unwrap().iter().find(|o| o["name"] == "speakerLabelsEvery").unwrap();
+    assert_eq!((option["type"].as_str(), option["default"].as_bool()), (Some("boolean"), Some(false)));
+
+    let capt = fixture("dialog.capt");
+    let prefixes = |options: &str| {
+        let l = json(&layout(&capt, "vtt", Some(JSON::parse(options).unwrap())).unwrap());
+        l["cues"].as_array().unwrap().iter().map(|c| c["prefix"].as_str().unwrap().to_string()).collect::<Vec<_>>()
+    };
+    let every = prefixes(r#"{"speakerLabels": true, "speakerLabelsEvery": true}"#);
+    assert!(every.iter().all(|p| p.starts_with("Speaker ")), "{every:?}");
+    // Speaker 2's long turn: labelled on every cue, not only at the change.
+    assert_eq!(every[2..5], ["Speaker 2: ", "Speaker 2: ", "Speaker 2: "]);
+    assert_eq!(prefixes(r#"{"speakerLabels": true}"#)[2..5], ["", "", ""]);
+    // Without speakerLabels it changes nothing.
+    assert!(prefixes(r#"{"speakerLabelsEvery": true}"#).iter().all(String::is_empty));
+}

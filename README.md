@@ -73,6 +73,7 @@ sonisub render clip.capt -t vtt,premiere  # other formats from a CAPT file or sa
 sonisub clip.MP4 --no-json                # don't keep clip.soniox.json
 sonisub clip.MP4 -u                       # no length limit: one cue per sentence
 sonisub clip.MP4 -s                       # "Speaker 1: ..." when the speaker changes
+sonisub clip.MP4 --speakers-every         # "Speaker 1: ..." on every subtitle
 sonisub clip.MP4 --speaker-names Eugene,Sasha
 sonisub clip.soniox.json -f --max-line 32 # re-cut subtitles from a saved transcript, no API call
 sonisub purge                             # list leftovers in the Soniox account (--yes deletes)

@@ -55,6 +55,31 @@ pub const CASES: &[Case] = &[
     case("marks", "marks", "ytt", "ytt", "{}", &[]),
     // Options that are not the defaults.
     case("dialog.speakers", "dialog", "srt", "srt", r#"{"speakerLabels": true}"#, &["-s"]),
+    // A label on every cue, counted toward the line limits.
+    case(
+        "dialog.every",
+        "dialog",
+        "srt",
+        "srt",
+        r#"{"speakerLabels": true, "speakerLabelsEvery": true}"#,
+        &["--speakers-every"],
+    ),
+    case(
+        "dialog.every",
+        "dialog",
+        "vtt",
+        "vtt",
+        r#"{"speakerLabels": true, "speakerLabelsEvery": true}"#,
+        &["--speakers-every"],
+    ),
+    case(
+        "dialog.every",
+        "dialog",
+        "ass",
+        "ass",
+        r#"{"speakerLabels": true, "speakerLabelsEvery": true}"#,
+        &["-s", "--speakers-every"],
+    ),
     case("dialog.wrap", "dialog", "srt", "srt", r#"{"wrapLines": true}"#, &["-w"]),
     case("dialog.unlimited", "dialog", "srt", "srt", r#"{"maxLine": 0, "maxDuration": 0}"#, &["-u"]),
     case(

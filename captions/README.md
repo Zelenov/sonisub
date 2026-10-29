@@ -25,7 +25,8 @@ let (ass, _) = ass::build(&words, &layout, &ass::Options { karaoke: true, ..Defa
 
 - `Word`: text with its punctuation, start and end in milliseconds, optional speaker, language and
   confidence (serde).
-- `Layout`: line length, lines per cue, cue duration (8 s by default), pause and speaker cuts, speaker labels.
+- `Layout`: line length, lines per cue, cue duration (8 s by default), pause and speaker cuts, speaker labels
+  (`speaker_labels`: when the speaker changes; with `speaker_labels_every` too: on every cue).
   A cue never mixes speakers and never runs past a sentence end; a long sentence is cut at punctuation
   first, at pauses next, between words last. `cues::cues` gives the cues themselves.
 - `srt`, `vtt`: the same cues in each format.
