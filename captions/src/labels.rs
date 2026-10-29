@@ -56,6 +56,11 @@ pub fn sound(code: &str, lang: &str) -> String {
     label(&SOUNDS, code, lang)
 }
 
+/// The name of a speaker no one is: `Unknown`, `Неизвестный`.
+pub fn unknown_speaker(lang: &str) -> String {
+    if for_language(Some(lang)) == "ru" { "Неизвестный" } else { "Unknown" }.to_string()
+}
+
 /// The label of a voice, put before the words said so (`whisper` -> `[whispering]`, `(шёпотом)`).
 pub fn voice(code: &str, lang: &str) -> String {
     label(&VOICES, code, lang)

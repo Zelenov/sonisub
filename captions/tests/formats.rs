@@ -282,3 +282,35 @@ fn an_adr_row_counts_its_labels_in_its_length() {
         assert!(dialogue.chars().count() <= 200, "{row}");
     }
 }
+
+#[test]
+fn another_speakers_speech_in_between_ends_an_adr_row_whatever_the_order_of_rows() {
+    let rows = adr("CAPT 1\nspeaker:1 name:Anna\nspeaker:2 name:Boris\n\n\
+                    00:00:00.000 --> 00:00:01.000 speaker:1\n{0}One.{100}\n\n\
+                    00:00:00.200 --> 00:00:00.800 speaker:2 sound:laughter\n\n\
+                    00:00:01.200 --> 00:00:02.000 speaker:1\n{0}Two.{80}\n\n\
+                    00:00:02.100 --> 00:00:03.000 speaker:2\n{0}Hey.{90}\n");
+    assert_eq!(rows.len(), 3, "{rows:?}");
+    assert!(rows[2].ends_with(r#""Boris","Hey.""#), "{rows:?}");
+}
+
+#[test]
+fn an_adr_row_keeps_room_for_its_voice_label_and_a_sound_stops_at_eight_seconds() {
+    let words: Vec<String> = (0..40).map(|i| format!("{{{}}}word{{{}}}", i * 10, i * 10 + 8)).collect();
+    let file = format!("CAPT 1\n\n00:00:00.000 --> 00:00:05.000 speaker:1 voice:whisper\n{}\n", words.join(" "));
+    for row in adr(&file) {
+        let dialogue = row.rsplit("\",\"").next().unwrap().trim_end_matches('"');
+        assert!(dialogue.chars().count() <= 200, "{row}");
+    }
+    let rows = adr("CAPT 1\n\n00:00:00.000 --> 00:00:07.500 speaker:1\n{0}Long{700} {710}one.{750}\n\n\
+                    00:00:07.000 --> 00:00:12.000 speaker:1 sound:laughter\n");
+    assert!(rows[0].contains(r#""01:00:00:00","01:00:08:00""#), "{rows:?}");
+}
+
+#[test]
+fn speech_of_no_one_among_named_speakers_is_unknown_in_the_labels_language() {
+    let file = "CAPT 1\nspeaker:1 name:Anna\n\n00:00:00.000 --> 00:00:01.000\n{0}Hm.{50}\n";
+    let doc = captions::capt::Doc::parse(file).unwrap();
+    let (csv, _) = captions::adr::build(&doc, &Layout::default(), &Default::default(), "ru").unwrap();
+    assert!(csv.contains(r#""Неизвестный","Hm.""#), "{csv}");
+}

@@ -346,3 +346,15 @@ fn an_adr_list_with_no_rows_is_not_written() {
     assert!(!out.status.success(), "{}", plain(&out));
     assert!(!dir.path().join("nospk.adr.csv").exists());
 }
+
+#[test]
+fn an_adr_list_takes_labels_without_sdh() {
+    let dir = tempfile::tempdir().unwrap();
+    let capt = dir.path().join("marks.capt");
+    std::fs::copy(common::fixture("marks.capt"), &capt).unwrap();
+    let args = ["render".as_ref(), capt.as_os_str(), "-t".as_ref(), "adr".as_ref(), "--labels".as_ref(), "ru".as_ref()];
+    let out = sonisub(&args).output().unwrap();
+    assert!(out.status.success(), "{}", plain(&out));
+    let csv = std::fs::read_to_string(dir.path().join("marks.adr.csv")).unwrap();
+    assert!(csv.contains("(смеётся)"), "{csv}");
+}

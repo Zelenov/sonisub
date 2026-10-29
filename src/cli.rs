@@ -224,12 +224,13 @@ pub struct SegArgs {
     #[arg(long, value_parser = captions::labels::LANGUAGES, help_heading = "Outputs")]
     pub labels: Option<String>,
 
-    /// Frame rate of the Fairlight timeline (-t adr): 23.976, 24, 25, 29.97, 30, 50, 59.94 or 60.
+    /// Frame rate of the Fairlight timeline (-t adr): 23.976, 24, 25, 29.97, 30, 50, 59.94 or 60; in Resolve, Project
+    /// Settings > Master Settings > Timeline frame rate.
     #[arg(long, default_value = "25", value_parser = captions::adr::Rate::parse, help_heading = "Fairlight ADR")]
     pub fps: captions::adr::Rate,
 
     /// Where the clip starts on the Fairlight timeline (-t adr), HH:MM:SS:FF, non-drop frame; usually the
-    /// timeline's own start.
+    /// timeline's own start (Timeline > Starting Timecode, 01:00:00:00 unless changed).
     #[arg(long, default_value = "01:00:00:00", value_parser = captions::adr::Timecode::parse, help_heading = "Fairlight ADR")]
     pub timeline_start: captions::adr::Timecode,
 }

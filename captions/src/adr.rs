@@ -128,9 +128,13 @@ impl Timecode {
         Ok(tc)
     }
 
-    /// The frame count at `rate`; an error when the frames do not exist at that rate.
+    /// The frame count at `rate`; an error when a field is out of its range (a timecode built by
+    /// hand) or the frames do not exist at that rate.
     pub fn frames_at(self, rate: Rate) -> Result<u64, String> {
         let fps = rate.frames();
+        if self.hours >= 24 || self.minutes >= 60 || self.seconds >= 60 {
+            return Err(format!("timecode {self}: hours run 00 to 23, minutes and seconds 00 to 59"));
+        }
         if self.frames >= fps {
             return Err(format!("timecode {self}: frames run 00 to {:02} at {fps} frames a second", fps - 1));
         }
@@ -203,8 +207,15 @@ struct Piece<'a> {
     end: u64,
     speaker: Option<&'a str>,
     heard: Vec<(u64, Heard<'a>)>,
-    /// Whether it has speech: only speech of another speaker ends a row.
-    speech: bool,
+    /// When it has speech, from its first word to its last: only another speaker's speech in
+    /// between ends a row.
+    spoken: Vec<(u64, u64)>,
+}
+
+impl Piece<'_> {
+    fn speech(&self) -> bool {
+        !self.spoken.is_empty()
+    }
 }
 
 /// The dialogue of a row: words, a sound's label where it is heard, a voice's where it starts.
@@ -243,8 +254,16 @@ fn dialogue(heard: &[(u64, Heard)], lang: &str) -> String {
 /// list that would run past 23:59:59 of the timeline.
 pub fn build(doc: &Doc, layout: &Layout, o: &Options, lang: &str) -> Result<(String, usize), String> {
     let start = o.start.frames_at(o.rate)?;
+    // Room in a row's characters for a voice label it may get (the longest in the file).
+    let room = doc
+        .to_words()
+        .iter()
+        .filter_map(|w| w.marks.voice.as_deref())
+        .map(|v| labels::voice(v, lang).chars().count() + 1)
+        .max()
+        .unwrap_or(0);
     let cut = Layout {
-        max_line: o.max_chars,
+        max_line: o.max_chars.saturating_sub(room).max(1),
         max_lines: 1,
         max_duration: o.max_duration,
         gap: o.max_gap,
@@ -264,17 +283,17 @@ pub fn build(doc: &Doc, layout: &Layout, o: &Options, lang: &str) -> Result<(Str
             end: c.end,
             speaker: c.speaker.as_deref(),
             heard: c.words.iter().map(|w| (w.start, Heard::Word(w))).collect(),
-            speech: true,
+            spoken: vec![(c.start, c.end)],
         })
         .collect();
     for b in doc.sounds() {
         let (Some(sp), Some(code)) = (b.speaker.as_deref(), b.sound.as_deref()) else { continue };
         let inside =
-            pieces.iter_mut().find(|p| p.speech && p.speaker == Some(sp) && p.start <= b.start && b.start < p.end);
+            pieces.iter_mut().find(|p| p.speech() && p.speaker == Some(sp) && p.start <= b.start && b.start < p.end);
         match inside {
             Some(p) => {
-                // The actor goes on laughing past the last word: so does the cue.
-                p.end = p.end.max(b.end);
+                // The actor goes on laughing past the last word: so does the cue, up to its limit.
+                p.end = p.end.max(b.end.min(p.start + (o.max_duration * 1000.0) as u64));
                 p.heard.push((b.start, Heard::Sound(code)));
             }
             None => pieces.push(Piece {
@@ -282,7 +301,7 @@ pub fn build(doc: &Doc, layout: &Layout, o: &Options, lang: &str) -> Result<(Str
                 end: b.end,
                 speaker: Some(sp),
                 heard: vec![(b.start, Heard::Sound(code))],
-                speech: false,
+                spoken: Vec::new(),
             }),
         }
     }
@@ -296,9 +315,15 @@ pub fn build(doc: &Doc, layout: &Layout, o: &Options, lang: &str) -> Result<(Str
     let mut rows: Vec<Piece> = Vec::new();
     let (gap_ms, max_ms) = ((o.max_gap * 1000.0) as u64, (o.max_duration * 1000.0) as u64);
     for piece in pieces {
-        // The speaker's last row, if no one else has spoken since.
+        // The speaker's last row, if no one else has spoken since it began, in time.
         let last = rows.iter().rposition(|r| r.speaker == piece.speaker);
-        let open = last.filter(|&i| rows[i + 1..].iter().all(|r| !r.speech));
+        let open = last.filter(|&i| {
+            let (from, to) = (rows[i].start, piece.start);
+            rows.iter()
+                .filter(|r| r.speaker != piece.speaker)
+                .flat_map(|r| &r.spoken)
+                .all(|&(s, e)| e <= from || s >= to)
+        });
         if let Some(i) = open
             && piece.start.saturating_sub(rows[i].end) <= gap_ms
             && piece.end.max(rows[i].end) - rows[i].start <= max_ms
@@ -307,7 +332,7 @@ pub fn build(doc: &Doc, layout: &Layout, o: &Options, lang: &str) -> Result<(Str
         {
             let row = &mut rows[i];
             row.end = row.end.max(piece.end);
-            row.speech |= piece.speech;
+            row.spoken.extend(piece.spoken);
             row.heard.extend(piece.heard);
             continue;
         }
@@ -326,11 +351,11 @@ pub fn build(doc: &Doc, layout: &Layout, o: &Options, lang: &str) -> Result<(Str
         let who = match r.speaker {
             Some(s) => speaker_name(doc, layout, s),
             None if doc.speakers.is_empty() => speaker_label("1", &layout.speaker_names),
-            None => "Unknown".to_string(),
+            None => labels::unknown_speaker(lang),
         };
         // A cue is at least a frame long, so Resolve shows it.
-        let (from, to) =
-            (o.rate.frame(r.start, false), o.rate.frame(r.end, true).max(o.rate.frame(r.start, false) + 1));
+        let from = o.rate.frame(r.start, false);
+        let to = o.rate.frame(r.end, true).max(from + 1);
         let row = [(n + 1).to_string(), tc(from)?, tc(to)?, who, dialogue(&r.heard, lang)];
         out.push_str(&row.iter().map(|f| quote(f)).collect::<Vec<_>>().join(","));
         out.push_str("\r\n");
