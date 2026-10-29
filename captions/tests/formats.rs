@@ -185,3 +185,42 @@ fn a_word_with_a_space_keeps_the_marks_of_its_cue() {
         ass::build(&doc.to_words(), &Layout::default(), &ass::Options { karaoke: true, ..Default::default() }).0;
     assert!(karaoke.contains(r"{\i1}{\k40}love {\i0}{\k70}New York {\k20}a"), "{karaoke}");
 }
+
+fn transcript(file: &str) -> String {
+    captions::transcript::build(&captions::capt::Doc::parse(file).unwrap(), &Layout::default(), "en")
+}
+
+#[test]
+fn a_transcript_keeps_a_sentence_whole_when_someone_else_talks_or_laughs_in_it() {
+    let overlap = "CAPT 1\nspeaker:1 name:Anna\nspeaker:2 name:Boris\n\n\
+                   00:00:01.000 --> 00:00:04.000 speaker:1\n{0}So{20} {50}I{70} {100}read{150} {200}twice.{300}\n\n\
+                   00:00:01.300 --> 00:00:02.500 speaker:2\n{0}Yeah{40} {60}right.{120}\n\n\
+                   00:00:02.000 --> 00:00:02.500 speaker:2 sound:laughter\n";
+    assert_eq!(
+        transcript(overlap),
+        "Anna  [00:00:01]\nSo I read twice.\n\nBoris  [00:00:01]\nYeah right. [laughs]\n\n"
+    );
+}
+
+#[test]
+fn a_sound_in_the_last_word_comes_right_after_that_sentence() {
+    let file = "CAPT 1\n\n00:00:01.000 --> 00:00:01.500\n{0}One{20} {30}two.{50}\n\n\
+                00:00:01.350 --> 00:00:01.900 sound:phone\n\n\
+                00:00:02.000 --> 00:00:02.500\n{0}Three{20} {30}four.{50}\n";
+    assert_eq!(transcript(file), "[00:00:01]\nOne two.\n\n[00:00:01]\n[phone ringing]\n\n[00:00:02]\nThree four.\n\n");
+}
+
+#[test]
+fn a_long_turn_is_cut_into_paragraphs_at_pauses() {
+    let file = "CAPT 1\n\n00:00:01.000 --> 00:00:02.000\n{0}Hello{30} {40}there.{90}\n\n\
+                00:01:10.000 --> 00:01:11.000\n{0}Much{30} {40}later.{90}\n\n\
+                00:01:12.000 --> 00:01:13.000\n{0}Right{30} {40}after.{90}\n";
+    assert_eq!(transcript(file), "[00:00:01]\nHello there.\n\n[00:01:10]\nMuch later. Right after.\n\n");
+}
+
+#[test]
+fn what_waits_for_a_sentence_that_never_ends_comes_after_it() {
+    let file = "CAPT 1\n\n00:00:01.000 --> 00:00:02.000 speaker:1\n{0}And{30} {40}so{90}\n\n\
+                00:00:01.500 --> 00:00:02.000 sound:phone\n";
+    assert_eq!(transcript(file), "Speaker 1  [00:00:01]\nAnd so\n\n[00:00:01]\n[phone ringing]\n\n");
+}

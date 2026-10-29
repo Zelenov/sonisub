@@ -168,7 +168,7 @@ file it writes.
 | SRT | `<i>` | | `{\anN}`, the nearest of nine | with `--sdh` | with `--sdh` |
 | WebVTT | `<i>` | `<lang xx>` | cue settings; a rectangle's width and top | with `--sdh` | with `--sdh` |
 | ASS | `{\i1}` | | alignment and margins; a rectangle's width and top | with `--sdh` | with `--sdh`, in the speaker's style |
-| Transcript (`.txt`) | | | | `[whispering]` | the speaker's in their paragraph; one of no one after the sentence it falls in |
+| Transcript (`.txt`) | | | | `[whispering]` | the speaker's in their paragraph; another's or no one's after the sentence it falls in |
 | Premiere | | | | | |
 
 With `--sdh` a voice is a label where it starts (`[whispering] please`), and every sound is a subtitle of its

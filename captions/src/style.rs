@@ -168,7 +168,8 @@ pub(crate) fn sounds(doc: &Doc, layout: &Layout, lang: &str) -> Vec<Sound> {
 }
 
 /// The name a speaker is shown by where no subtitle shows it next to speech (transcript turns):
-/// the file's name, else the layout's, else "Speaker N".
+/// the file's name, else the layout's, else "Speaker N". The command line puts `--speaker-names`
+/// into the file first, so both agree; a library caller should do the same (`job::name_speakers`).
 pub(crate) fn speaker_name(doc: &Doc, layout: &Layout, speaker: &str) -> String {
     doc.speakers
         .iter()
