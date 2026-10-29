@@ -231,24 +231,22 @@ fn a_ytt_line_starts_with_an_empty_section_and_never_at_zero() {
 }
 
 #[test]
-fn a_ytt_sound_during_speech_at_the_bottom_goes_to_the_top() {
-    let file = "CAPT 1\n\n00:00:01.000 --> 00:00:04.000\n{0}Hello{100} {110}there{200} {210}friend.{300}\n\n\
-                00:00:02.000 --> 00:00:03.000 sound:phone\n\n00:00:05.000 --> 00:00:06.000 sound:music\n";
-    let doc = captions::capt::Doc::parse(file).unwrap();
-    let ytt = captions::sdh::ytt(&doc, &Layout::default(), "en").0;
+fn a_ytt_line_during_speech_at_the_bottom_goes_to_the_top() {
+    let file = "CAPT 1\n\n00:00:01.000 --> 00:00:04.000 speaker:1\n{0}Hello{100} {110}there{200} {210}friend.{300}\n\n\
+                00:00:02.000 --> 00:00:03.000 speaker:2\n{0}Hi.{50}\n\n00:00:05.000 --> 00:00:06.000 speaker:2\n{0}Bye.{50}\n";
+    let ytt = ytt_of(file);
     let top = ytt.lines().find(|l| l.contains(r#"ap="1""#)).unwrap();
     let top_id = top.split("id=\"").nth(1).unwrap().split('"').next().unwrap();
-    assert!(ytt.contains(&format!("wp=\"{top_id}\" ws=\"1\">[phone ringing]")), "{ytt}");
-    // A sound alone stays at the bottom.
-    assert!(ytt.contains(r#"wp="1" ws="1">[music]"#), "{ytt}");
+    assert!(ytt.contains(&format!("wp=\"{top_id}\" ws=\"1\"><s>Speaker 2:</s>")), "{ytt}");
+    // A line alone stays at the bottom.
+    assert!(ytt.contains(r#"wp="1" ws="1">Bye."#), "{ytt}");
 }
 
 #[test]
 fn ytt_lines_at_the_same_time_never_share_a_window() {
-    let file = "CAPT 1\n\n00:00:01.000 --> 00:00:04.000\n{0}Hello{100} {110}there{200} {210}friend.{300}\n\n\
-                00:00:01.500 --> 00:00:03.000 sound:phone\n\n00:00:02.000 --> 00:00:03.500 sound:music\n";
-    let doc = captions::capt::Doc::parse(file).unwrap();
-    let ytt = captions::sdh::ytt(&doc, &Layout::default(), "en").0;
+    let file = "CAPT 1\n\n00:00:01.000 --> 00:00:04.000 speaker:1\n{0}Hello{100} {110}there{200} {210}friend.{300}\n\n\
+                00:00:01.500 --> 00:00:03.000 speaker:2\n{0}Hi.{50}\n\n00:00:02.000 --> 00:00:03.500 speaker:3\n{0}Hey.{50}\n";
+    let ytt = ytt_of(file);
     let ps: Vec<(u64, u64, String)> = ytt
         .lines()
         .filter(|l| l.starts_with("<p "))
@@ -258,18 +256,10 @@ fn ytt_lines_at_the_same_time_never_share_a_window() {
             (t, t + attr("d").parse::<u64>().unwrap(), attr("wp"))
         })
         .collect();
+    assert_eq!(ps.len(), 3, "{ytt}");
     for (i, a) in ps.iter().enumerate() {
         for b in &ps[i + 1..] {
             assert!(!(a.2 == b.2 && a.0 < b.1 && b.0 < a.1), "{a:?} and {b:?} share a window\n{ytt}");
         }
     }
-    // Sections start a millisecond apart at least, a voice label and its word too.
-    let voiced = {
-        let doc = captions::capt::Doc::parse(
-            "CAPT 1\n\n00:00:01.000 --> 00:00:02.000\n{0}Go{40} {50}now.{90}\n{50..90} voice:whisper\n",
-        )
-        .unwrap();
-        captions::sdh::ytt(&doc, &Layout::default(), "en").0
-    };
-    assert!(voiced.contains("<s t=\"500\"> [whispering] </s><s t=\"501\">now.</s>"), "{voiced}");
 }

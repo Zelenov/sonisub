@@ -63,9 +63,7 @@ sonisub . -t premiere                     # only the Premiere transcript; saved 
 sonisub clip.MP4 -t srt,vtt,ass           # also clip.vtt (WebVTT) and clip.ass (a style per speaker)
 sonisub clip.MP4 -t ass --karaoke         # each word lights up as it is spoken
 sonisub clip.MP4 -t srt,capt              # also clip.capt, the whole transcript as small text
-sonisub render clip.capt -t ytt --vertical # YouTube Shorts: word by word, clear of the buttons
-sonisub clip.MP4 -t ass,vtt --vertical    # Reels, Shorts, TikTok: short lines, clear of the app's buttons
-sonisub render clip.capt -t srt --sdh     # for the deaf and hard of hearing: sounds and voices marked in clip.capt
+sonisub render clip.capt -t ytt           # YouTube: word by word, like its own captions
 sonisub render clip.capt -t vtt,premiere  # other formats from a CAPT file or saved words, no Soniox
 sonisub clip.MP4 --no-json                # don't keep clip.soniox.json
 sonisub clip.MP4 -u                       # no length limit: one cue per sentence
@@ -132,12 +130,9 @@ orange, violet, red, then repeating), black outline, bottom centre. Every line n
 you restyle or rename a person in one place. Without diarization all lines use the `Default` style. `--karaoke` adds word-by-word
 highlight (`\k`).
 
-`-t ytt` writes YTT, YouTube's own timed text (`clip.ytt`, also called srv3): a time for every word, so an uploaded subtitle a time for every word, so YouTube can show it word by word like its own captions, plus places and italic; `--sdh` adds sounds and voices, `--vertical` keeps Shorts' buttons clear. Upload it in YouTube Studio as a subtitle file.
-
-`--sdh` makes `.srt`, `.vtt`, `.ass` and `.ytt` subtitles for the deaf and hard of hearing from the sounds and voices
-marked in a CAPT file (`sound:phone`, `voice:whisper` → `[phone ringing]`, `[whispering]`; `--labels en|ru`).
-Soniox reports no sounds, so a fresh transcript has none until they are added to `clip.capt`.
-For Reels, Shorts and TikTok add `--vertical`: short two-line subtitles cut where they read well; `.ass`, `.vtt` and `.ytt` also keep them clear of the app's buttons (`.srt` has no position).
+`-t ytt` writes YTT, YouTube's own timed text (`clip.ytt`, also called srv3): a time for every word, so YouTube can
+show an uploaded subtitle word by word like its own captions, plus places and italic. Upload it in YouTube Studio as
+a subtitle file.
 
 `sonisub render` makes the same files without Soniox: from a CAPT file (`-t capt` writes `clip.capt`, the whole
 transcript as small text you can read and edit, see [docs/capt.md](docs/capt.md)), or from words saved as JSON
