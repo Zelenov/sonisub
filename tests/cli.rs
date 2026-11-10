@@ -347,3 +347,45 @@ fn render_writes_ytt() {
     let written = std::fs::read_to_string(dir.path().join("marks.ytt")).unwrap();
     assert_eq!(common::normalize(&written), common::golden("marks.ytt"));
 }
+
+#[test]
+fn render_capt_in_the_library_writes_what_sonisub_render_writes() {
+    use sonisub::job::{self, Format, Outputs};
+    let dir = tempfile::tempdir().unwrap();
+    let mut doc = sonisub::soniox::capt(&common::transcript());
+    doc.name_speakers(&["Anna".into(), "Boris".into()], &Default::default());
+    let text = format!("\u{feff}{}", doc.write());
+    let capt = dir.path().join("dialog.capt");
+    std::fs::write(&capt, &text).unwrap();
+
+    let out =
+        sonisub(&["render".as_ref(), capt.as_os_str(), "-t".as_ref(), "srt".as_ref(), "-s".as_ref()]).output().unwrap();
+    assert!(out.status.success(), "{}", plain(&out));
+    let by_cli = std::fs::read_to_string(dir.path().join("dialog.srt")).unwrap();
+    assert!(by_cli.contains("Anna: Hi, today"), "{by_cli}");
+
+    let lib = tempfile::tempdir().unwrap();
+    let base = lib.path().join("dialog.srt");
+    let layout = sonisub::srt::Layout { speaker_labels: true, by_speaker: true, ..Default::default() };
+    let targets = [(Format::Srt, base.clone()), (Format::Premiere, Format::Premiere.path(&base))];
+    let (files, cues) =
+        job::render_capt(&text, "dialog.capt", &targets, &layout, &Outputs::default(), Some("en")).unwrap();
+    assert_eq!((files.len(), cues), (2, 10));
+    assert_eq!(std::fs::read_to_string(&base).unwrap(), by_cli, "the same subtitles as the command line");
+    // The file has no language: the caller's is the Premiere default.
+    let premiere = std::fs::read_to_string(Format::Premiere.path(&base)).unwrap();
+    assert!(premiere.contains("\"en\""), "{premiere}");
+
+    // A broken file is an error that names the file and the line.
+    let err = job::render_capt(
+        "CAPT 1\n\n00:00:01.000 --> 00:00:02.000\n{0}a{x}\n",
+        "bad.capt",
+        &targets,
+        &layout,
+        &Outputs::default(),
+        None,
+    )
+    .unwrap_err();
+    let err = format!("{err:#}");
+    assert!(err.contains("bad.capt is not a valid CAPT file") && err.contains("line 4"), "{err}");
+}

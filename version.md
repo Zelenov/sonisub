@@ -1,3 +1,7 @@
+# 0.10.0
+## Added
+- Library: `job::render_capt` makes the formats of a CAPT file's text without Soniox, exactly as `sonisub render clip.capt` does (the file's speaker names, languages and cut points; the caller's speaker names win; a broken file is an error that lists its lines). `sonisub render` calls it, so the command line and the library cannot differ. frename uses it to make subtitles from a saved `clip.capt`.
+
 # 0.9.1
 ## Added
 - `captions-wasm`: the subtitle formats in the browser. Every release carries `captions-wasm-<version>.tgz`, an npm package (ES module with TypeScript types, WebAssembly) that makes every format from a CAPT file, byte for byte what `sonisub render` writes, lists each format's options with their defaults, gives a preview the cues with every word and piece timed, and merges speakers recognition split (`mergeSpeakers(capt, { 3: 1 })` gives the CAPT text with speaker 3 made speaker 1). `npm i https://github.com/Zelenov/sonisub/releases/download/v0.9.1/captions-wasm-0.3.1.tgz`.

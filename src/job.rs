@@ -358,6 +358,46 @@ pub fn write_outputs(
     Ok((files, cues))
 }
 
+/// The formats of `targets` made from the text of a CAPT file, no Soniox: what `sonisub render clip.capt`
+/// does. `name` is what the file is called in messages and, without an id in the file, the seed of the
+/// Premiere ids. A broken file is an error that lists its lines; a file without words is one too, unless
+/// a text transcript is wanted and the file has sounds.
+///
+/// Speaker names in `layout.speaker_names` or `outputs.ass.names` win over the file's and go into a CAPT
+/// written; without them the file's own are used. The language is the file's, else `fallback_language`
+/// (for the Premiere transcript). Returns what [`write_outputs`] does.
+pub fn render_capt(
+    text: &str,
+    name: &str,
+    targets: &[(Format, PathBuf)],
+    layout: &srt::Layout,
+    outputs: &Outputs,
+    fallback_language: Option<&str>,
+) -> Result<(Vec<PathBuf>, usize)> {
+    let text = text.strip_prefix('\u{feff}').unwrap_or(text);
+    let mut doc = captions::capt::Doc::parse(text).map_err(|errors| {
+        let list: Vec<String> = errors.0.iter().map(|e| format!("  {e}")).collect();
+        anyhow!("{name} is not a valid CAPT file:\n{}", list.join("\n"))
+    })?;
+    let words = doc.to_words();
+    // A file of sounds only still has a transcript.
+    let sounds = doc.sounds().next().is_some();
+    if words.is_empty() && !(targets.iter().any(|(f, _)| *f == Format::Transcript) && sounds) {
+        bail!("{name} has no words");
+    }
+    let mut layout = layout.clone();
+    let mut outputs = outputs.clone();
+    if layout.speaker_names.is_empty() {
+        layout.speaker_names = speaker_names(&doc);
+    } else {
+        name_speakers(&mut doc, &layout, &outputs.ass);
+    }
+    outputs.ass.names = doc.speakers.iter().filter_map(|s| Some((s.id.clone(), s.name.clone()?))).collect();
+    let seed = doc.id.clone().unwrap_or_else(|| name.to_string());
+    let language = doc.lang.clone().or_else(|| fallback_language.map(str::to_string));
+    write_outputs(targets, &words, &words, &doc, &layout, &outputs, language.as_deref(), &seed)
+}
+
 fn read_transcript(path: &Path) -> Result<Value> {
     let text = std::fs::read_to_string(path).with_context(|| format!("cannot read {}", path.display()))?;
     if text.trim().is_empty() {
