@@ -435,47 +435,44 @@ fn render(args: &RenderArgs) -> Result<()> {
     let text = text.strip_prefix('\u{feff}').unwrap_or(&text);
     let name = input.file_name().map_or_else(|| input.display().to_string(), |n| n.to_string_lossy().into_owned());
     let is_capt = input.extension().is_some_and(|e| e.eq_ignore_ascii_case("capt")) || text.starts_with("CAPT ");
-    let (words, doc) = if is_capt {
-        let doc = Doc::parse(text).map_err(|errors| {
-            let list: Vec<String> = errors.0.iter().map(|e| format!("  {e}")).collect();
-            anyhow!("{} is not a valid CAPT file:\n{}", input.display(), list.join("\n"))
-        })?;
-        (doc.to_words(), Some(doc))
-    } else {
-        let words: Vec<sonisub::captions::Word> = serde_json::from_str(text)
-            .with_context(|| format!("{} is neither a CAPT file nor a JSON list of words", input.display()))?;
-        (words, None)
-    };
-    // A file of sounds only still has a transcript.
-    let sounds = doc.as_ref().is_some_and(|d| d.sounds().next().is_some());
-    if words.is_empty() && !(args.formats.contains(&job::Format::Transcript) && sounds) {
-        bail!("{} has no words", input.display());
-    }
     let output = job::output_base(args.output.as_deref().unwrap_or(input));
     let targets = job::missing_outputs(&output, &args.formats, args.force);
+    if is_capt {
+        // The same call frename makes, so the command line and the library cannot differ.
+        let what = |cues: usize| if cues > 0 { format!("{cues} cues") } else { "transcript".into() };
+        let layout = args.seg.layout(true);
+        let outputs = args.seg.outputs();
+        if targets.is_empty() {
+            eprintln!("· {name} — skipped, {} (--force to redo)", exists_label(&args.formats));
+            return Ok(());
+        }
+        // --speaker-names win over a CAPT file's names, and go into the CAPT written.
+        let (files, cues) = job::render_capt(text, &name, &targets, &layout, &outputs, None)?;
+        let paths: Vec<String> = files.iter().map(|f| f.display().to_string()).collect();
+        eprintln!("✓ {name} — {} -> {}", what(cues), paths.join(", "));
+        return Ok(());
+    }
+    let words: Vec<sonisub::captions::Word> = serde_json::from_str(text)
+        .with_context(|| format!("{} is neither a CAPT file nor a JSON list of words", input.display()))?;
+    if words.is_empty() {
+        bail!("{} has no words", input.display());
+    }
     if targets.is_empty() {
         eprintln!("· {name} — skipped, {} (--force to redo)", exists_label(&args.formats));
         return Ok(());
     }
     let mut layout = args.seg.layout(true);
     let mut outputs = args.seg.outputs();
-    let given = !layout.speaker_names.is_empty();
     // Saved words are laid out as they are; they become a CAPT file without an id (the input's
     // name only seeds the Premiere ids) for `-t capt`.
-    let cue_words = if is_capt { None } else { Some(words.clone()) };
-    let mut doc = doc.unwrap_or_else(|| Doc::from_words(&words, None));
-    if given {
-        // --speaker-names win over a CAPT file's names, and go into the CAPT written.
+    let mut doc = Doc::from_words(&words, None);
+    if !layout.speaker_names.is_empty() {
         job::name_speakers(&mut doc, &layout, &outputs.ass);
     } else {
         layout.speaker_names = job::speaker_names(&doc);
     }
     outputs.ass.names = doc.speakers.iter().filter_map(|s| Some((s.id.clone(), s.name.clone()?))).collect();
-    let seed = doc.id.clone().unwrap_or_else(|| name.clone());
-    let language = if is_capt { doc.lang.clone() } else { None };
-    let cue_words = cue_words.unwrap_or_else(|| words.clone());
-    let (files, cues) =
-        job::write_outputs(&targets, &cue_words, &words, &doc, &layout, &outputs, language.as_deref(), &seed)?;
+    let (files, cues) = job::write_outputs(&targets, &words, &words, &doc, &layout, &outputs, None, &name)?;
     let what = if cues > 0 { format!("{cues} cues") } else { "transcript".into() };
     let paths: Vec<String> = files.iter().map(|f| f.display().to_string()).collect();
     eprintln!("✓ {name} — {what} -> {}", paths.join(", "));
