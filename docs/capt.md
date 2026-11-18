@@ -73,6 +73,7 @@ The same on every line: `key:value`, separated by single spaces.
 | `voice` | | ✓ | ✓ | how the words are said: `laughter`, `whisper`, `phone`… |
 | `style` | | | ✓ | `italic`: a title, a foreign word, a stressed word |
 | `sentence` | | | ✓ | `end` or `continues` after the last covered word, against its punctuation |
+| `alone` | | | ✓ | `yes`: burned-in (animated) captions show the covered word on its own, even a mark such as `-` or `»` that they otherwise join to its neighbour (`{30..40} alone:yes`) |
 | `conf` | | | ✓ | confidence of each covered piece; 1 where no span says otherwise |
 | `alt` | | | ✓ | another reading of the span and its confidence; may repeat |
 
@@ -115,7 +116,7 @@ A word without a language takes its block's, else the file's.
 `from` is a mark where a piece starts; `to` a later mark, where a piece starts or a word ends. The
 span covers every piece that starts at `from` or later and before `to`: `{0..18}` is "H", not
 "i," which starts at 18; `{0..18}` and `{18..24}` meet without overlapping; a whole word is
-`{word start..word end}`. `lang`, `pos`, `voice`, `style` and `sentence` cover whole words only.
+`{word start..word end}`. `lang`, `pos`, `voice`, `style`, `sentence` and `alone` cover whole words only.
 Spans are tied to marks, not to word numbers, so they survive edits to other words.
 
 ## Position
